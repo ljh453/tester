@@ -15,6 +15,8 @@ SENT_CHANNEL_1_STOP_ID = 22
 SENT_CHANNEL_2_STOP_ID = 32
 SENT_CHANNEL_1_FAST_TRANSMIT_ID = 41
 SENT_CHANNEL_2_FAST_TRANSMIT_ID = 51
+SENT_CHANNEL_1_SLOW_TRANSMIT_ID = 42
+SENT_CHANNEL_2_SLOW_TRANSMIT_ID = 52
 
 
 class MachSentGatewayError(ValueError):
@@ -131,6 +133,8 @@ def build_sent_gateway_command(action: str, args: Mapping[str, Any]) -> bytes:
         payload = build_sent_channel_config(args)
     elif normalized_action == "transmit_fast":
         payload = build_sent_fast_frame_payload(args)
+    elif normalized_action == "transmit_slow":
+        payload = build_sent_slow_frame_payload(args)
     elif normalized_action in {"start", "stop"}:
         payload = b""
     else:
@@ -201,6 +205,40 @@ def build_sent_fast_frame_payload(args: Mapping[str, Any]) -> bytes:
     return bytes(payload)
 
 
+def build_sent_slow_frame_payload(args: Mapping[str, Any]) -> bytes:
+    message_id_value = args.get("slow_message_id", args.get("message_id"))
+    if message_id_value is None:
+        raise MachSentGatewayError("SENT transmit_slow requires slow_message_id.")
+    slow_message_id = _byte(message_id_value, "slow_message_id")
+
+    data_value = args.get("data", args.get("slow_data"))
+    if data_value is None:
+        raise MachSentGatewayError("SENT transmit_slow requires data.")
+    data = _uint16(data_value, "data")
+
+    crc_received = _six_bit(args.get("crc_received", args.get("crc", 0)), "crc_received")
+    slow_frame_type_value = args.get("slow_frame_type", args.get("frame_type"))
+    if slow_frame_type_value is None:
+        slow_frame_type = 1 if _slow_channel_mode(args.get("slow_channel_mode", 0)) == 2 else 0
+    else:
+        slow_frame_type = _slow_frame_type(slow_frame_type_value)
+    enhanced_format = 1 if _truthy(
+        args.get(
+            "enhanced_format",
+            args.get("enhanced_config_bit", args.get("enhanced_serial_format", False)),
+        )
+    ) else 0
+    crc_calculated = _six_bit(args.get("crc_calculated", 0), "crc_calculated")
+
+    return bytes([
+        slow_message_id,
+        data & 0xFF,
+        (data >> 8) & 0xFF,
+        crc_received | (slow_frame_type << 6) | (enhanced_format << 7),
+        crc_calculated,
+    ])
+
+
 def parse_gateway_ack(frame: GatewayFrame, expected_message_id: int) -> bool:
     if frame.message_id != expected_message_id:
         raise MachSentGatewayError(
@@ -257,6 +295,10 @@ def _command_message_id(action: str, channel: int) -> int:
         "transmit_fast": {
             1: SENT_CHANNEL_1_FAST_TRANSMIT_ID,
             2: SENT_CHANNEL_2_FAST_TRANSMIT_ID,
+        },
+        "transmit_slow": {
+            1: SENT_CHANNEL_1_SLOW_TRANSMIT_ID,
+            2: SENT_CHANNEL_2_SLOW_TRANSMIT_ID,
         },
     }
     try:
@@ -346,10 +388,57 @@ def _data_nibbles(value: Any) -> List[int]:
 
 
 def _nibble(value: Any, name: str) -> int:
-    numeric = int(value)
+    numeric = _integer(value, name)
     if numeric < 0 or numeric > 0x0F:
         raise MachSentGatewayError(f"{name} must fit in one nibble.")
     return numeric
+
+
+def _byte(value: Any, name: str) -> int:
+    numeric = _integer(value, name)
+    if numeric < 0 or numeric > 0xFF:
+        raise MachSentGatewayError(f"{name} must fit in one byte.")
+    return numeric
+
+
+def _uint16(value: Any, name: str) -> int:
+    numeric = _integer(value, name)
+    if numeric < 0 or numeric > 0xFFFF:
+        raise MachSentGatewayError(f"{name} must fit in 16 bits.")
+    return numeric
+
+
+def _six_bit(value: Any, name: str) -> int:
+    numeric = _integer(value, name)
+    if numeric < 0 or numeric > 0x3F:
+        raise MachSentGatewayError(f"{name} must fit in 6 bits.")
+    return numeric
+
+
+def _slow_frame_type(value: Any) -> int:
+    text = str(value).strip().lower().replace("-", "_")
+    mapping = {
+        "0": 0,
+        "short": 0,
+        "short_serial": 0,
+        "1": 1,
+        "enhanced": 1,
+        "enhanced_serial": 1,
+    }
+    if text not in mapping:
+        raise MachSentGatewayError(
+            "Mach SENT Gateway slow_frame_type must be short_serial or enhanced_serial."
+        )
+    return mapping[text]
+
+
+def _integer(value: Any, name: str) -> int:
+    try:
+        if isinstance(value, str):
+            return int(value.strip(), 0)
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise MachSentGatewayError(f"{name} must be an integer.") from exc
 
 
 def _truthy(value: Any) -> bool:

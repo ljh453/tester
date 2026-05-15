@@ -10,7 +10,6 @@ from embsw_tester.devices.mach_sent_gateway import (
     SENT_CHANNEL_2_FAST_FRAME_ID,
     GatewayFrame,
     MachSentGatewayError,
-    build_sent_fast_frame_payload,
     build_sent_gateway_command,
     command_message_id,
     parse_gateway_ack,
@@ -261,11 +260,8 @@ def _execute_mach_sent_gateway_control(
         "frame": frame.to_dict(),
         "serial": serial_steps,
     }
-    if action.replace("-", "_") == "transmit_fast":
-        try:
-            outputs["payload_hex"] = build_sent_fast_frame_payload(command_args).hex().upper()
-        except MachSentGatewayError as exc:
-            raise DeviceCommandError(str(exc)) from exc
+    if action.replace("-", "_").startswith("transmit_"):
+        outputs["payload_hex"] = frame.data.hex().upper()
     if ack_value is not None:
         outputs["ack"] = ack_value
         outputs["ack_frame"] = ack_frame.to_dict() if ack_frame is not None else None
