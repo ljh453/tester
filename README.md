@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 22: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 23: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -49,6 +49,8 @@
 - 미구현 장비가 `pending` profile을 사용할 경우 compile error로 차단
 - `run.json`, `resolved-package.yaml`, testcase result JSON, `summary.html` 리포트 생성
 - pytest 기반 회귀 테스트
+- `.NET` 기반 GUI Workbench MVP skeleton
+- GUI core의 workspace scan, engine subprocess bridge, workbench ViewModel 테스트 harness
 
 ## 프로젝트 구조
 
@@ -59,6 +61,17 @@ docs/
   superpowers/
     plans/
       2026-05-15-embedded-sw-tester-phase1.md
+apps/
+  TesterWorkbench/
+    TesterWorkbench/
+      App.xaml
+      MainWindow.xaml
+    TesterWorkbench.Core/
+      Engine/
+      ViewModels/
+      Workspace/
+    TesterWorkbench.Tests/
+      Program.cs
 samples/
   boot-smoke.yaml
   libs/
@@ -121,6 +134,8 @@ tests/
 
 Python 3.9 이상이 필요합니다.
 
+GUI workbench를 빌드하려면 .NET SDK 10 이상이 필요합니다. 현재 GUI project는 `net10.0` core/test project와 `net10.0-windows` WPF shell로 구성되어 있습니다.
+
 macOS/Linux:
 
 ```bash
@@ -154,6 +169,31 @@ Windows PowerShell:
 ```powershell
 .\.venv\Scripts\python -m pytest
 ```
+
+GUI core test harness:
+
+```bash
+DOTNET_CLI_HOME=$PWD/.dotnet-home DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+  dotnet run --project apps/TesterWorkbench/TesterWorkbench.Tests/TesterWorkbench.Tests.csproj
+```
+
+GUI WPF shell build:
+
+```bash
+DOTNET_CLI_HOME=$PWD/.dotnet-home DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+  dotnet build apps/TesterWorkbench/TesterWorkbench/TesterWorkbench.csproj
+```
+
+Windows에서 GUI 실행:
+
+```powershell
+$env:DOTNET_CLI_HOME = "$PWD\.dotnet-home"
+$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "1"
+$env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
+dotnet run --project apps\TesterWorkbench\TesterWorkbench\TesterWorkbench.csproj
+```
+
+GUI는 Python 엔진을 subprocess로 호출합니다. 소스 트리에서 실행하면 workbench가 repository root의 `src`를 `PYTHONPATH`에 추가합니다. Python 실행 파일을 지정해야 하면 `EMBSW_TESTER_PYTHON` 환경변수를 설정합니다.
 
 ## 샘플 YAML 컴파일
 
@@ -674,11 +714,12 @@ testcases:
 - Phase 20 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase20-vupower-k-power-supply.md`
 - Phase 21 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase21-mach-sent-commands.md`
 - Phase 22 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase22-mach-sent-slow-frame.md`
+- Phase 23 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase23-gui-workbench-mvp.md`
 
 ## 다음 구현 단계
 
 다음 단계는 Windows 장비 smoke 경로와 실제 장비별 추가 명령을 좁혀가는 쪽이 좋습니다.
 
-- VuPower K 실제 장비 연결 smoke test
+- GUI Execution Trace / Variables 상세 table 연결
+- GUI Report HTML viewer 연결
 - Mach Systems SENT Gateway slow message multiplex buffer 명령 추가
-- Windows 장비 연결 smoke test

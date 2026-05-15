@@ -536,6 +536,18 @@ UI는 일반 대시보드형 앱이 아니라 Eclipse 스타일 개발자용 IDE
 
 YAML이 유효하지 않거나 정규화가 불가능한 경우 GUI 편집기는 read-only 상태로 전환하고 Problems view에 진단을 표시한다.
 
+### 14.1 GUI Workbench MVP 구현 기준
+
+1차 GUI 구현은 `apps/TesterWorkbench`의 WPF shell로 시작한다. 완전한 도킹 프레임워크와 GUI Testcase Editor를 한 번에 구현하지 않고, 고정 split layout으로 Project Explorer, YAML Editor, Outline / Properties, Problems, Console, Execution Trace, Variables, Report 영역을 먼저 제공한다.
+
+GUI의 테스트 가능한 핵심 로직은 `TesterWorkbench.Core`에 둔다.
+
+- `WorkspaceScanner`: workspace 폴더에서 YAML, JSON, HTML 리소스를 탐색한다.
+- `TesterEngineBridge`: Python CLI를 subprocess로 호출해 compile/run JSON을 수집한다.
+- `MainWorkbenchViewModel`: workspace, 선택 파일, editor text, diagnostics, run status, report path를 관리한다.
+
+초기 engine 연동은 CLI subprocess를 사용한다. GUI는 Python module을 직접 import하지 않으며, repository root의 `src`를 `PYTHONPATH`에 추가해 source tree 실행을 지원한다. JSON-RPC over stdio streaming은 현재 구조를 유지한 채 `TesterEngineBridge` 뒤에 추가할 수 있는 다음 단계로 둔다.
+
 ## 15. 리포트 및 증적 구조
 
 리포트는 사람용 요약과 기계용 원본을 함께 남긴다.
