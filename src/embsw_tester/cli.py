@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Sequence
 
 from embsw_tester.dsl.compiler import compile_file
+from embsw_tester.reports import write_report
 from embsw_tester.runtime import run_package
 
 
@@ -20,6 +21,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("yaml_file", type=Path)
     run_parser.add_argument("--json", action="store_true", dest="json_output")
+    run_parser.add_argument("--run-id")
+    run_parser.add_argument("--reports-root", type=Path)
 
     args = parser.parse_args(argv)
     if args.command == "compile":
@@ -33,8 +36,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "run":
         package = compile_file(args.yaml_file)
-        result = run_package(package)
+        result = run_package(package, run_id=args.run_id)
         payload = result.to_dict()
+        if args.reports_root is not None:
+            artifacts = write_report(package, result, reports_root=args.reports_root)
+            payload["report"] = artifacts.to_dict()
         if args.json_output:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
@@ -59,6 +65,8 @@ def _print_run_summary(payload: dict) -> None:
     print(f"testcases: {len(payload['testcase_results'])}")
     for testcase_result in payload["testcase_results"]:
         print(f"- {testcase_result['name']}: {testcase_result['status']}")
+    if "report" in payload:
+        print(f"report: {payload['report']['report_dir']}")
 
 
 if __name__ == "__main__":
