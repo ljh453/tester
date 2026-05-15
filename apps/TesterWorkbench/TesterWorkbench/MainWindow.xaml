@@ -15,6 +15,12 @@
             <Button Content="Compile" Click="Compile_Click" />
             <Button Content="Run" Click="Run_Click" />
             <TextBlock x:Name="RunStatusText" Text="Idle" VerticalAlignment="Center" Margin="14,0,0,0" />
+            <Separator />
+            <CheckBox x:Name="AutoFocusLineCheckBox"
+                      Content="Auto Focus Line"
+                      Checked="AutoFocusLine_Changed"
+                      Unchecked="AutoFocusLine_Changed"
+                      VerticalAlignment="Center" />
         </ToolBar>
 
         <Grid>

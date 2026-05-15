@@ -8,6 +8,7 @@ await RunMainWorkbenchViewModelTest();
 await RunMainWorkbenchViewModelStreamingTest();
 await RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest();
 await RunMainWorkbenchLineNumbersTest();
+await RunMainWorkbenchAutoFocusSettingTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
 
@@ -400,6 +401,23 @@ static async Task RunMainWorkbenchLineNumbersTest()
         string.Join(Environment.NewLine, "1", "2", "3"),
         viewModel.EditorLineNumbersText,
         "editor line numbers");
+}
+
+static Task RunMainWorkbenchAutoFocusSettingTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            "/repo",
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    AssertTrue(viewModel.AutoFocusExecutionLine, "auto focus execution line defaults on");
+    viewModel.SetAutoFocusExecutionLine(false);
+    AssertFalse(viewModel.AutoFocusExecutionLine, "auto focus execution line can be disabled");
+    viewModel.SetAutoFocusExecutionLine(true);
+    AssertTrue(viewModel.AutoFocusExecutionLine, "auto focus execution line can be enabled");
+    return Task.CompletedTask;
 }
 
 static void AssertEqual<T>(T expected, T actual, string label)

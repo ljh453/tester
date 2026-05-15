@@ -45,6 +45,8 @@ public sealed class MainWorkbenchViewModel
 
     public string ConsoleText { get; private set; } = string.Empty;
 
+    public bool AutoFocusExecutionLine { get; private set; } = true;
+
     public Task OpenWorkspaceAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -119,6 +121,11 @@ public sealed class MainWorkbenchViewModel
     {
         EditorText = editorText;
         EditorLineNumbersText = BuildLineNumbersText(editorText);
+    }
+
+    public void SetAutoFocusExecutionLine(bool enabled)
+    {
+        AutoFocusExecutionLine = enabled;
     }
 
     public void SelectExecutionTraceEvent(EngineRunEvent? runEvent)

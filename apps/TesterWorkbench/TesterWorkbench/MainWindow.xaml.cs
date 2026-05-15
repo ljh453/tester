@@ -26,6 +26,7 @@ public partial class MainWindow : Window
                 repositoryRoot,
                 new ProcessEngineRunner()));
         WorkspacePathBox.Text = repositoryRoot;
+        AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
         RefreshView();
     }
 
@@ -68,6 +69,11 @@ public partial class MainWindow : Window
     {
         await RunUiAction(() => _viewModel.RunAsync(
             onExecutionChanged: QueueRuntimeRefresh));
+    }
+
+    private void AutoFocusLine_Changed(object sender, RoutedEventArgs e)
+    {
+        _viewModel.SetAutoFocusExecutionLine(AutoFocusLineCheckBox.IsChecked == true);
     }
 
     private void ExecutionTraceGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -129,6 +135,7 @@ public partial class MainWindow : Window
 
         EditorBox.Text = _viewModel.EditorText;
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
+        AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
         SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
         RefreshRuntimeViews();
         ConsoleBox.Text = _viewModel.ConsoleText;
@@ -182,6 +189,11 @@ public partial class MainWindow : Window
 
     private void HighlightCurrentExecutionLine()
     {
+        if (!_viewModel.AutoFocusExecutionLine)
+        {
+            return;
+        }
+
         var lineNumber = _viewModel.CurrentLineNumber;
         if (lineNumber <= 0 || string.IsNullOrEmpty(EditorBox.Text))
         {
