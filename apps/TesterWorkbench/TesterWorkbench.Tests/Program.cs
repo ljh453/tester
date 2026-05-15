@@ -7,6 +7,7 @@ await RunEngineBridgeTest();
 await RunMainWorkbenchViewModelTest();
 await RunMainWorkbenchViewModelStreamingTest();
 await RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest();
+await RunMainWorkbenchViewModelShowsLogEventsInConsoleTest();
 await RunMainWorkbenchLineNumbersTest();
 await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
@@ -67,6 +68,19 @@ static async Task RunEngineBridgeTest()
                       "source_file": "/repo/samples/boot-smoke.yaml",
                       "source_line": 12,
                       "local_variables": {"power_ready": true, "rpm": 1200},
+                      "outputs": {"passed": true},
+                      "error": null
+                    },
+                    {
+                      "testcase": "boot_smoke",
+                      "phase": "steps",
+                      "command_path": ["testcases", 0, "steps", 2],
+                      "command_type": "log.text",
+                      "status": "passed",
+                      "source_file": "/repo/samples/boot-smoke.yaml",
+                      "source_line": 14,
+                      "local_variables": {"power_ready": true, "rpm": 1200},
+                      "outputs": {"text": "Boot smoke finished"},
                       "error": null
                     }
                   ]
@@ -93,7 +107,7 @@ static async Task RunEngineBridgeTest()
     AssertEqual(0, run.ExitCode, "run exit code");
     AssertEqual("passed", run.Status, "run status");
     AssertEqual("reports/gui-run", run.ReportDirectory, "report directory");
-    AssertEqual(1, run.Events.Count, "run event count");
+    AssertEqual(2, run.Events.Count, "run event count");
     AssertEqual("boot_smoke", run.Events[0].Testcase, "run event testcase");
     AssertEqual("steps", run.Events[0].Phase, "run event phase");
     AssertEqual("assert.eq", run.Events[0].CommandType, "run event command type");
@@ -105,6 +119,9 @@ static async Task RunEngineBridgeTest()
     AssertEqual(2, run.Events[0].LocalVariables.Count, "run event local variable count");
     AssertEqual("power_ready", run.Events[0].LocalVariables[0].Name, "run event first local variable name");
     AssertEqual("true", run.Events[0].LocalVariables[0].Value, "run event first local variable value");
+    AssertEqual("passed: true", run.Events[0].Detail, "run event detail");
+    AssertEqual("Boot smoke finished", run.Events[1].Detail, "log event detail");
+    AssertEqual("[boot_smoke/steps L14] Boot smoke finished", run.Events[1].LogText, "log event console text");
     AssertEqual(2, run.Variables.Count, "run variable count");
     AssertEqual("power_ready", run.Variables[0].Name, "first variable name");
     AssertEqual("true", run.Variables[0].Value, "first variable value");
@@ -382,6 +399,68 @@ static async Task RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFail
     AssertEqual(1, viewModel.ExecutionTrace.Count, "refresh callback failure trace count");
     AssertEqual(1, viewModel.Variables.Count, "refresh callback failure variables count");
     AssertEqual("rpm", viewModel.Variables[0].Name, "refresh callback failure variable name");
+}
+
+static async Task RunMainWorkbenchViewModelShowsLogEventsInConsoleTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/logs.yaml", "testcases:\n  - name: log_case\n    steps: []"));
+    var yamlPath = Path.Combine(root, "tests", "logs.yaml");
+    var runner = new FakeEngineProcessRunner(
+        new EngineProcessResult(
+            0,
+            """
+            {
+              "run_id": "log-run",
+              "status": "passed",
+              "testcase_results": [
+                {
+                  "name": "log_case",
+                  "status": "passed",
+                  "variables": {"rpm": 700},
+                  "events": [
+                    {
+                      "testcase": "log_case",
+                      "phase": "steps",
+                      "command_path": ["testcases", 0, "steps", 0],
+                      "command_type": "log.text",
+                      "status": "passed",
+                      "source_file": "/repo/tests/logs.yaml",
+                      "source_line": 4,
+                      "local_variables": {"rpm": 700},
+                      "outputs": {"text": "Engine warmed up"},
+                      "error": null
+                    },
+                    {
+                      "testcase": "log_case",
+                      "phase": "steps",
+                      "command_path": ["testcases", 0, "steps", 1],
+                      "command_type": "log.value",
+                      "status": "passed",
+                      "source_file": "/repo/tests/logs.yaml",
+                      "source_line": 6,
+                      "local_variables": {"rpm": 700},
+                      "outputs": {"name": "rpm", "value": 700},
+                      "error": null
+                    }
+                  ]
+                }
+              ],
+              "report": {"report_dir": "reports/log-run"}
+            }
+            """,
+            ""));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+
+    await viewModel.OpenFileAsync(yamlPath);
+    await viewModel.RunAsync("log-run");
+
+    AssertTrue(viewModel.ConsoleText.Contains("[log_case/steps L4] Engine warmed up"), "console includes log.text");
+    AssertTrue(viewModel.ConsoleText.Contains("[log_case/steps L6] rpm = 700"), "console includes log.value");
+    AssertEqual("Engine warmed up", viewModel.ExecutionTrace[0].Detail, "log text trace detail");
+    AssertEqual("rpm = 700", viewModel.ExecutionTrace[1].Detail, "log value trace detail");
 }
 
 static async Task RunMainWorkbenchLineNumbersTest()

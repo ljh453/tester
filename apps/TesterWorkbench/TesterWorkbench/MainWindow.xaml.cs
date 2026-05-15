@@ -100,12 +100,19 @@ public partial class MainWindow : Window
 
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         SyncLineNumberScroll();
+        UpdateCurrentExecutionLineMarker();
     }
 
     private void EditorBox_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
         _editorVerticalOffset = e.VerticalOffset;
         SyncLineNumberScroll();
+        UpdateCurrentExecutionLineMarker();
+    }
+
+    private void EditorBox_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateCurrentExecutionLineMarker();
     }
 
     private void EditorBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -224,15 +231,32 @@ public partial class MainWindow : Window
 
     private void HighlightCurrentExecutionLine()
     {
-        if (!_viewModel.AutoFocusExecutionLine)
+        if (!TryGetCurrentExecutionLineIndex(out var lineIndex))
         {
+            HideCurrentExecutionLineMarker();
             return;
         }
 
+        if (_viewModel.AutoFocusExecutionLine)
+        {
+            var start = EditorBox.GetCharacterIndexFromLineIndex(lineIndex);
+            var length = EditorBox.GetLineLength(lineIndex);
+            EditorBox.Focus();
+            EditorBox.Select(start, length);
+            EditorBox.ScrollToLine(lineIndex);
+            SyncLineNumberScroll();
+        }
+
+        UpdateCurrentExecutionLineMarker(lineIndex);
+    }
+
+    private bool TryGetCurrentExecutionLineIndex(out int lineIndex)
+    {
+        lineIndex = -1;
         var lineNumber = _viewModel.CurrentLineNumber;
         if (lineNumber <= 0 || string.IsNullOrEmpty(EditorBox.Text))
         {
-            return;
+            return false;
         }
 
         if (!string.IsNullOrWhiteSpace(_viewModel.CurrentSourceFile)
@@ -241,21 +265,16 @@ public partial class MainWindow : Window
                 Path.GetFullPath(_viewModel.SelectedFilePath),
                 StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            return false;
         }
 
-        var lineIndex = lineNumber - 1;
+        lineIndex = lineNumber - 1;
         if (lineIndex < 0 || lineIndex >= EditorBox.LineCount)
         {
-            return;
+            return false;
         }
 
-        var start = EditorBox.GetCharacterIndexFromLineIndex(lineIndex);
-        var length = EditorBox.GetLineLength(lineIndex);
-        EditorBox.Focus();
-        EditorBox.Select(start, length);
-        EditorBox.ScrollToLine(lineIndex);
-        SyncLineNumberScroll();
+        return true;
     }
 
     private void SyncLineNumberScroll()
@@ -281,12 +300,63 @@ public partial class MainWindow : Window
 
         ApplyEditorFontSize();
         SyncLineNumberScroll();
+        UpdateCurrentExecutionLineMarker();
     }
 
     private void ApplyEditorFontSize()
     {
         EditorBox.FontSize = _viewModel.EditorFontSize;
         LineNumbersTextBlock.FontSize = _viewModel.EditorFontSize;
+    }
+
+    private void UpdateCurrentExecutionLineMarker()
+    {
+        if (TryGetCurrentExecutionLineIndex(out var lineIndex))
+        {
+            UpdateCurrentExecutionLineMarker(lineIndex);
+            return;
+        }
+
+        HideCurrentExecutionLineMarker();
+    }
+
+    private void UpdateCurrentExecutionLineMarker(int lineIndex)
+    {
+        ShowCurrentExecutionLineBadge();
+        var characterIndex = EditorBox.GetCharacterIndexFromLineIndex(lineIndex);
+        var lineRectangle = EditorBox.GetRectFromCharacterIndex(characterIndex);
+        if (lineRectangle.IsEmpty
+            || lineRectangle.Bottom < 0
+            || lineRectangle.Top > EditorBox.ActualHeight)
+        {
+            HideCurrentExecutionLineHighlight();
+            return;
+        }
+
+        CurrentExecutionLineMarker.Width = Math.Max(0, EditorBox.ActualWidth);
+        CurrentExecutionLineMarker.Height = lineRectangle.Height > 0
+            ? lineRectangle.Height
+            : EditorBox.FontSize * 1.4;
+        Canvas.SetLeft(CurrentExecutionLineMarker, 0);
+        Canvas.SetTop(CurrentExecutionLineMarker, lineRectangle.Top);
+        CurrentExecutionLineMarker.Visibility = Visibility.Visible;
+    }
+
+    private void HideCurrentExecutionLineMarker()
+    {
+        HideCurrentExecutionLineHighlight();
+        CurrentExecutionLineBadge.Visibility = Visibility.Collapsed;
+    }
+
+    private void HideCurrentExecutionLineHighlight()
+    {
+        CurrentExecutionLineMarker.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowCurrentExecutionLineBadge()
+    {
+        CurrentExecutionLineBadgeText.Text = _viewModel.CurrentLocationText;
+        CurrentExecutionLineBadge.Visibility = Visibility.Visible;
     }
 
     private static TreeViewItem CreateTreeItem(WorkspaceNode node)

@@ -166,7 +166,9 @@ public sealed class TesterEngineBridge
             GetInt(runEvent, "source_line"),
             localVariables,
             HasVariableObject(runEvent, "local_variables"),
-            GetNullableString(runEvent, "error"));
+            GetNullableString(runEvent, "error"),
+            FormatEventDetail(runEvent),
+            FormatLogText(runEvent));
     }
 
     private static IReadOnlyList<EngineVariableValue> ParseVariables(JsonElement root)
@@ -233,6 +235,58 @@ public sealed class TesterEngineBridge
         return string.Join(
             "/",
             pathElement.EnumerateArray().Select(FormatJsonValue));
+    }
+
+    private static string FormatEventDetail(JsonElement runEvent)
+    {
+        var commandType = GetString(runEvent, "command_type");
+        if (!runEvent.TryGetProperty("outputs", out var outputsElement)
+            || outputsElement.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        if (commandType == "log.text"
+            && outputsElement.TryGetProperty("text", out var textElement))
+        {
+            return FormatJsonValue(textElement);
+        }
+
+        if (commandType == "log.value"
+            && outputsElement.TryGetProperty("name", out var nameElement)
+            && outputsElement.TryGetProperty("value", out var valueElement))
+        {
+            return $"{FormatJsonValue(nameElement)} = {FormatJsonValue(valueElement)}";
+        }
+
+        return string.Join(
+            ", ",
+            outputsElement.EnumerateObject()
+                .Select(property => $"{property.Name}: {FormatJsonValue(property.Value)}"));
+    }
+
+    private static string FormatLogText(JsonElement runEvent)
+    {
+        if (GetString(runEvent, "status") != "passed")
+        {
+            return string.Empty;
+        }
+
+        var commandType = GetString(runEvent, "command_type");
+        if (commandType is not ("log.text" or "log.value"))
+        {
+            return string.Empty;
+        }
+
+        var detail = FormatEventDetail(runEvent);
+        if (string.IsNullOrWhiteSpace(detail))
+        {
+            return string.Empty;
+        }
+
+        var lineNumber = GetInt(runEvent, "source_line");
+        var lineText = lineNumber > 0 ? $" L{lineNumber}" : string.Empty;
+        return $"[{GetString(runEvent, "testcase")}/{GetString(runEvent, "phase")}{lineText}] {detail}";
     }
 
     private static string GetString(JsonElement element, string propertyName, string fallback)

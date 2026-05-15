@@ -63,21 +63,43 @@
                                    Padding="4,2,8,0"
                                    TextAlignment="Right" />
                     </ScrollViewer>
-                    <TextBox x:Name="EditorBox"
-                             Grid.Column="1"
-                             AcceptsReturn="True"
-                             AcceptsTab="True"
-                             FontFamily="Consolas"
-                             FontSize="13"
-                             HorizontalScrollBarVisibility="Auto"
-                             Padding="4,2,4,2"
-                             PreviewKeyDown="EditorBox_PreviewKeyDown"
-                             SelectionBrush="#FBBF24"
-                             SelectionOpacity="0.8"
-                             TextChanged="EditorBox_TextChanged"
-                             TextWrapping="NoWrap"
-                             VerticalScrollBarVisibility="Auto"
-                             ScrollViewer.ScrollChanged="EditorBox_ScrollChanged" />
+                    <Grid Grid.Column="1">
+                        <TextBox x:Name="EditorBox"
+                                 AcceptsReturn="True"
+                                 AcceptsTab="True"
+                                 FontFamily="Consolas"
+                                 FontSize="13"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 Padding="4,2,4,2"
+                                 PreviewKeyDown="EditorBox_PreviewKeyDown"
+                                 SelectionBrush="#FBBF24"
+                                 SelectionOpacity="0.8"
+                                 SizeChanged="EditorBox_SizeChanged"
+                                 TextChanged="EditorBox_TextChanged"
+                                 TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.ScrollChanged="EditorBox_ScrollChanged" />
+                        <Canvas x:Name="EditorOverlayCanvas"
+                                ClipToBounds="True"
+                                IsHitTestVisible="False">
+                            <Border x:Name="CurrentExecutionLineMarker"
+                                    Background="#FBBF24"
+                                    Opacity="0.28"
+                                    Visibility="Collapsed" />
+                            <Border x:Name="CurrentExecutionLineBadge"
+                                    Canvas.Top="6"
+                                    Canvas.Right="22"
+                                    Background="#111827"
+                                    CornerRadius="3"
+                                    Opacity="0.88"
+                                    Padding="8,4"
+                                    Visibility="Collapsed">
+                                <TextBlock x:Name="CurrentExecutionLineBadgeText"
+                                           Foreground="White"
+                                           FontSize="12" />
+                            </Border>
+                        </Canvas>
+                    </Grid>
                 </Grid>
             </GroupBox>
 
@@ -127,6 +149,7 @@
                             <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" />
                             <DataGridTextColumn Header="Line" Binding="{Binding SourceLine}" Width="70" />
                             <DataGridTextColumn Header="Path" Binding="{Binding CommandPath}" Width="220" />
+                            <DataGridTextColumn Header="Detail" Binding="{Binding Detail}" Width="240" />
                             <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="*" />
                         </DataGrid.Columns>
                     </DataGrid>

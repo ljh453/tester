@@ -35,7 +35,9 @@ public sealed record EngineRunEvent(
     int SourceLine,
     IReadOnlyList<EngineVariableValue> LocalVariables,
     bool HasLocalVariables,
-    string Error);
+    string Error,
+    string Detail,
+    string LogText);
 
 public sealed record EngineVariableValue(
     string Testcase,

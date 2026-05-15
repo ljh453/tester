@@ -99,6 +99,7 @@ public sealed class MainWorkbenchViewModel
         ExecutionTrace = Array.Empty<EngineRunEvent>();
         _runVariables = Array.Empty<EngineVariableValue>();
         Variables = Array.Empty<EngineVariableValue>();
+        ConsoleText = $"Run '{effectiveRunId}' started.";
         ClearCurrentExecutionLocation();
         NotifyExecutionChanged(onExecutionChanged);
 
@@ -115,12 +116,19 @@ public sealed class MainWorkbenchViewModel
         RunStatus = result.Status;
         ReportDirectory = result.ReportDirectory;
         var streamedEvents = ExecutionTrace;
+        var hadStreamedEvents = streamedEvents.Count > 0;
         ExecutionTrace = result.Events.Count > 0 ? result.Events : streamedEvents;
+        if (!hadStreamedEvents)
+        {
+            AppendLogEvents(ExecutionTrace);
+        }
+
         _runVariables = result.Variables;
         SelectExecutionTraceEvent(ExecutionTrace.LastOrDefault());
-        ConsoleText = string.IsNullOrWhiteSpace(result.StandardError)
-            ? $"Run '{effectiveRunId}' exited with status {result.Status}."
-            : result.StandardError;
+        AppendConsoleLine(
+            string.IsNullOrWhiteSpace(result.StandardError)
+                ? $"Run '{effectiveRunId}' exited with status {result.Status}."
+                : result.StandardError);
     }
 
     public void UpdateEditorText(string editorText)
@@ -182,6 +190,35 @@ public sealed class MainWorkbenchViewModel
 
         ExecutionTrace = events;
         SelectExecutionTraceEvent(runEvent);
+        AppendLogEvent(runEvent);
+    }
+
+    private void AppendLogEvents(IEnumerable<EngineRunEvent> runEvents)
+    {
+        foreach (var runEvent in runEvents)
+        {
+            AppendLogEvent(runEvent);
+        }
+    }
+
+    private void AppendLogEvent(EngineRunEvent runEvent)
+    {
+        if (!string.IsNullOrWhiteSpace(runEvent.LogText))
+        {
+            AppendConsoleLine(runEvent.LogText);
+        }
+    }
+
+    private void AppendConsoleLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return;
+        }
+
+        ConsoleText = string.IsNullOrWhiteSpace(ConsoleText)
+            ? line
+            : $"{ConsoleText}{Environment.NewLine}{line}";
     }
 
     private static void NotifyExecutionChanged(Action? onExecutionChanged)
