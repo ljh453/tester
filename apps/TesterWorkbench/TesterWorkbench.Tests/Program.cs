@@ -6,6 +6,7 @@ await RunWorkspaceScannerTest();
 await RunEngineBridgeTest();
 await RunMainWorkbenchViewModelTest();
 await RunMainWorkbenchViewModelStreamingTest();
+await RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest();
 await RunMainWorkbenchLineNumbersTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
@@ -323,6 +324,62 @@ static async Task RunMainWorkbenchViewModelStreamingTest()
         new[] { "-m", "embsw_tester.cli", "run", yamlPath, "--json", "--run-id", "gui-run", "--reports-root", Path.Combine(root, "reports"), "--events-jsonl" },
         runner.Calls[1].Arguments,
         "streaming run args");
+}
+
+static async Task RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/refresh-error.yaml", "testcases:\n  - name: refresh_error_case\n    steps: []"));
+    var yamlPath = Path.Combine(root, "tests", "refresh-error.yaml");
+    var eventJson =
+        """
+        {
+          "testcase": "refresh_error_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 0],
+          "command_type": "set",
+          "status": "passed",
+          "source_file": "/repo/tests/refresh-error.yaml",
+          "source_line": 4,
+          "local_variables": {"rpm": 700},
+          "error": null
+        }
+        """;
+    var runner = new FakeEngineProcessRunner(
+        (
+            new EngineProcessResult(
+                0,
+                """
+                {
+                  "run_id": "refresh-error-run",
+                  "status": "passed",
+                  "testcase_results": [
+                    {
+                      "name": "refresh_error_case",
+                      "status": "passed",
+                      "variables": {"rpm": 700},
+                      "events": []
+                    }
+                  ],
+                  "report": {"report_dir": "reports/refresh-error-run"}
+                }
+                """,
+                ""),
+            new[] { eventJson }
+        ));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+
+    await viewModel.OpenFileAsync(yamlPath);
+    await viewModel.RunAsync(
+        "refresh-error-run",
+        () => throw new InvalidOperationException("UI refresh failed."));
+
+    AssertEqual("passed", viewModel.RunStatus, "refresh callback failure run status");
+    AssertEqual(1, viewModel.ExecutionTrace.Count, "refresh callback failure trace count");
+    AssertEqual(1, viewModel.Variables.Count, "refresh callback failure variables count");
+    AssertEqual("rpm", viewModel.Variables[0].Name, "refresh callback failure variable name");
 }
 
 static async Task RunMainWorkbenchLineNumbersTest()

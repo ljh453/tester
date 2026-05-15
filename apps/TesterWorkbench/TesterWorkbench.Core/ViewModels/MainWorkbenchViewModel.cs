@@ -92,7 +92,7 @@ public sealed class MainWorkbenchViewModel
         _runVariables = Array.Empty<EngineVariableValue>();
         Variables = Array.Empty<EngineVariableValue>();
         ClearCurrentExecutionLocation();
-        onExecutionChanged?.Invoke();
+        NotifyExecutionChanged(onExecutionChanged);
 
         var result = await _engineBridge.RunAsync(
             SelectedFilePath!,
@@ -102,7 +102,7 @@ public sealed class MainWorkbenchViewModel
             runEvent =>
             {
                 AppendExecutionTraceEvent(runEvent);
-                onExecutionChanged?.Invoke();
+                NotifyExecutionChanged(onExecutionChanged);
             });
         RunStatus = result.Status;
         ReportDirectory = result.ReportDirectory;
@@ -159,6 +159,18 @@ public sealed class MainWorkbenchViewModel
 
         ExecutionTrace = events;
         SelectExecutionTraceEvent(runEvent);
+    }
+
+    private static void NotifyExecutionChanged(Action? onExecutionChanged)
+    {
+        try
+        {
+            onExecutionChanged?.Invoke();
+        }
+        catch
+        {
+            // UI refresh callbacks should not cancel or corrupt an engine run.
+        }
     }
 
     private IReadOnlyList<EngineVariableValue> LatestLocalVariablesOrRunVariables()

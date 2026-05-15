@@ -11,6 +11,7 @@ namespace TesterWorkbench;
 public partial class MainWindow : Window
 {
     private readonly MainWorkbenchViewModel _viewModel;
+    private double _editorVerticalOffset;
 
     public MainWindow()
     {
@@ -66,7 +67,7 @@ public partial class MainWindow : Window
     private async void Run_Click(object sender, RoutedEventArgs e)
     {
         await RunUiAction(() => _viewModel.RunAsync(
-            onExecutionChanged: () => Dispatcher.Invoke(RefreshRuntimeViews)));
+            onExecutionChanged: QueueRuntimeRefresh));
     }
 
     private void ExecutionTraceGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -89,12 +90,13 @@ public partial class MainWindow : Window
             _viewModel.UpdateEditorText(EditorBox.Text);
         }
 
-        LineNumbersBox.Text = _viewModel.EditorLineNumbersText;
+        LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         SyncLineNumberScroll();
     }
 
     private void EditorBox_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
+        _editorVerticalOffset = e.VerticalOffset;
         SyncLineNumberScroll();
     }
 
@@ -126,7 +128,7 @@ public partial class MainWindow : Window
         }
 
         EditorBox.Text = _viewModel.EditorText;
-        LineNumbersBox.Text = _viewModel.EditorLineNumbersText;
+        LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
         RefreshRuntimeViews();
         ConsoleBox.Text = _viewModel.ConsoleText;
@@ -153,6 +155,29 @@ public partial class MainWindow : Window
             ? "No report generated yet."
             : $"Report directory: {_viewModel.ReportDirectory}";
         HighlightCurrentExecutionLine();
+    }
+
+    private void QueueRuntimeRefresh()
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            SafeRefreshRuntimeViews();
+            return;
+        }
+
+        Dispatcher.BeginInvoke(SafeRefreshRuntimeViews);
+    }
+
+    private void SafeRefreshRuntimeViews()
+    {
+        try
+        {
+            RefreshRuntimeViews();
+        }
+        catch (Exception ex)
+        {
+            ConsoleBox.Text = ex.Message;
+        }
     }
 
     private void HighlightCurrentExecutionLine()
@@ -193,11 +218,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var firstVisibleLineIndex = EditorBox.GetFirstVisibleLineIndex();
-        if (firstVisibleLineIndex >= 0)
-        {
-            LineNumbersBox.ScrollToLine(firstVisibleLineIndex);
-        }
+        LineNumbersScrollViewer.ScrollToVerticalOffset(_editorVerticalOffset);
     }
 
     private static TreeViewItem CreateTreeItem(WorkspaceNode node)

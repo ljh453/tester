@@ -43,19 +43,20 @@
                         <ColumnDefinition Width="54" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBox x:Name="LineNumbersBox"
-                             Grid.Column="0"
-                             Background="#F3F4F6"
-                             BorderThickness="0"
-                             FontFamily="Consolas"
-                             FontSize="13"
-                             Foreground="#6B7280"
-                             HorizontalContentAlignment="Right"
-                             IsHitTestVisible="False"
-                             IsReadOnly="True"
-                             Padding="4,2,8,0"
-                             TextAlignment="Right"
-                             VerticalScrollBarVisibility="Hidden" />
+                    <ScrollViewer x:Name="LineNumbersScrollViewer"
+                                  Grid.Column="0"
+                                  Background="#F3F4F6"
+                                  Focusable="False"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  IsHitTestVisible="False"
+                                  VerticalScrollBarVisibility="Hidden">
+                        <TextBlock x:Name="LineNumbersTextBlock"
+                                   FontFamily="Consolas"
+                                   FontSize="13"
+                                   Foreground="#6B7280"
+                                   Padding="4,2,8,0"
+                                   TextAlignment="Right" />
+                    </ScrollViewer>
                     <TextBox x:Name="EditorBox"
                              Grid.Column="1"
                              AcceptsReturn="True"
@@ -63,6 +64,7 @@
                              FontFamily="Consolas"
                              FontSize="13"
                              HorizontalScrollBarVisibility="Auto"
+                             Padding="4,2,4,2"
                              SelectionBrush="#FBBF24"
                              SelectionOpacity="0.8"
                              TextChanged="EditorBox_TextChanged"
