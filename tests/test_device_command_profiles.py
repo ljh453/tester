@@ -261,6 +261,130 @@ testcases:
     assert sent_event.outputs["serial"][0]["command_type"] == "serial.read_bytes"
 
 
+def test_runtime_executes_vupower_apply_and_output_commands(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    psu:
+      device_type: power_supply
+      port: COM3
+      baudrate: 9600
+      command_profile: vupower_k_usb
+command_profiles:
+  vupower_k_usb:
+    commands:
+      power_supply.command:
+        protocol: vupower_k_usb
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "psu-vupower.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: psu_vupower_case
+    steps:
+      - power_supply.command:
+          device: psu
+          action: apply
+          channel: 1
+          voltage: 12
+          current: 1.234
+      - power_supply.command:
+          device: psu
+          action: output
+          channel: P1
+          state: on
+""".strip(),
+        encoding="utf-8",
+    )
+    package = compile_file(test_file)
+    assert package.diagnostics == []
+    created_ports = {}
+
+    def port_factory(settings):
+        port = FakeSerialPort(rx_lines=[])
+        created_ports[settings.logical_name] = port
+        return port
+
+    registry = create_adapter_registry_from_tool_profile(
+        package.tool_profile_snapshot,
+        evidence_root=tmp_path / "reports" / "psu-vupower",
+        serial_port_factory=port_factory,
+    )
+
+    result = run_package(package, run_id="psu-vupower-run", adapter_registry=registry)
+
+    testcase = result.testcase_results[0]
+    assert result.status == "passed"
+    assert created_ports["psu"].tx_lines == ["APPL P1,12.000,1.234", "OUTP:STAT P1,ON"]
+    assert testcase.events[0].outputs["protocol"] == "vupower_k_usb"
+    assert testcase.events[0].outputs["command"] == "APPL P1,12.000,1.234"
+    assert testcase.events[1].outputs["command"] == "OUTP:STAT P1,ON"
+
+
+def test_runtime_reads_vupower_measurement_response(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    psu:
+      device_type: power_supply
+      port: COM3
+      baudrate: 9600
+      command_profile: vupower_k_usb
+command_profiles:
+  vupower_k_usb:
+    commands:
+      power_supply.command:
+        protocol: vupower_k_usb
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "psu-measure.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: psu_measure_case
+    steps:
+      - power_supply.command:
+          device: psu
+          action: measure_voltage
+          channel: 1
+          average: true
+          timeout_ms: 25
+          save_as: measured_voltage
+      - assert.gt:
+          left: "${measured_voltage}"
+          right: 12
+""".strip(),
+        encoding="utf-8",
+    )
+    package = compile_file(test_file)
+    assert package.diagnostics == []
+    registry = create_adapter_registry_from_tool_profile(
+        package.tool_profile_snapshot,
+        evidence_root=tmp_path / "reports" / "psu-measure",
+        serial_port_factory=lambda settings: FakeSerialPort(rx_lines=["12.345"]),
+    )
+
+    result = run_package(package, run_id="psu-measure-run", adapter_registry=registry)
+
+    testcase = result.testcase_results[0]
+    psu_event = testcase.events[0]
+    assert result.status == "passed"
+    assert testcase.variables["measured_voltage"] == 12.345
+    assert psu_event.outputs["command"] == "MEAS:VOLTA? P1"
+    assert psu_event.outputs["value"] == 12.345
+    assert psu_event.outputs["serial"][0]["command_type"] == "serial.write"
+    assert psu_event.outputs["serial"][1]["command_type"] == "serial.read"
+
+
 def test_compile_reports_pending_power_supply_command_profile(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(

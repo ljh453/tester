@@ -13,6 +13,12 @@ from embsw_tester.devices.mach_sent_gateway import (
     parse_gateway_frame,
     parse_sent_fast_frame,
 )
+from embsw_tester.devices.vupower_k import (
+    VuPowerKError,
+    format_vupower_command,
+    is_vupower_query,
+    parse_vupower_response,
+)
 from embsw_tester.runtime.expressions import render_template
 
 
@@ -48,6 +54,16 @@ def execute_device_command(
 
     if command_definition.get("protocol") == "mach_sent_gateway":
         return _execute_mach_sent_gateway_command(
+            command_type,
+            device_name,
+            profile_name,
+            command_definition,
+            args,
+            adapter_registry,
+            adapter_context,
+        )
+    if command_definition.get("protocol") == "vupower_k_usb":
+        return _execute_vupower_k_command(
             command_type,
             device_name,
             profile_name,
@@ -218,6 +234,78 @@ def _sent_fast_frame_message_id(channel: int) -> int:
     if channel == 1:
         return SENT_CHANNEL_1_FAST_FRAME_ID
     return SENT_CHANNEL_2_FAST_FRAME_ID
+
+
+def _execute_vupower_k_command(
+    command_type: str,
+    device_name: str,
+    profile_name: str,
+    command_definition: Mapping[str, Any],
+    args: Mapping[str, Any],
+    adapter_registry: AdapterRegistry,
+    adapter_context: AdapterContext,
+) -> DeviceCommandExecution:
+    if command_type != "power_supply.command":
+        raise DeviceCommandError(
+            f"Protocol 'vupower_k_usb' does not support command '{command_type}'."
+        )
+
+    action = str(args.get("action", command_definition.get("action", "raw")))
+    command_args = {**dict(command_definition), **dict(args)}
+    try:
+        command_text = format_vupower_command(action, command_args)
+    except VuPowerKError as exc:
+        raise DeviceCommandError(str(exc)) from exc
+
+    serial_steps: List[Dict[str, Any]] = []
+    write_args = {
+        "port": device_name,
+        "text": command_text,
+    }
+    if "timeout_ms" in args:
+        write_args["timeout_ms"] = args["timeout_ms"]
+    write_result = _execute_serial(
+        adapter_registry,
+        "serial.write",
+        write_args,
+        adapter_context,
+    )
+    serial_steps.append(_serial_step("serial.write", write_args, write_result))
+
+    save_value: Optional[Any] = None
+    outputs: Dict[str, Any] = {
+        "device": device_name,
+        "command_profile": profile_name,
+        "protocol": "vupower_k_usb",
+        "action": action,
+        "command": command_text,
+        "serial": serial_steps,
+    }
+    channel = command_args.get("channel")
+    if channel is not None:
+        outputs["channel"] = channel
+
+    if is_vupower_query(action, command_args):
+        read_definition = _read_definition(command_definition)
+        read_args = _serial_read_args(device_name, read_definition, args)
+        read_result = _execute_serial(
+            adapter_registry,
+            "serial.read",
+            read_args,
+            adapter_context,
+        )
+        serial_steps.append(_serial_step("serial.read", read_args, read_result))
+        try:
+            save_value = parse_vupower_response(action, str(read_result.values["text"]))
+        except VuPowerKError as exc:
+            raise DeviceCommandError(str(exc)) from exc
+        outputs["value"] = save_value
+
+    return DeviceCommandExecution(
+        resolved_inputs=dict(args),
+        outputs=outputs,
+        save_value=save_value,
+    )
 
 
 def _device_config(
