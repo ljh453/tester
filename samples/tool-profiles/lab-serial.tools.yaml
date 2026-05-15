@@ -20,7 +20,10 @@ command_profiles:
         protocol: vupower_k_usb
         channel: P1
   mach_sent_gateway:
-    notes: "Mach Systems SENT Gateway protocol. Initial scope receives SENT fast frames from message id 100/200."
+    notes: "Mach Systems SENT Gateway protocol. Supports fast frame receive and basic TX control commands."
     commands:
       sent_usb.read:
         protocol: mach_sent_gateway
+      sent_usb.command:
+        protocol: mach_sent_gateway
+        read_ack: true

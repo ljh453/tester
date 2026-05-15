@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping, Sequence
 
 STX = 0x02
 ETX = 0x03
 SENT_CHANNEL_1_FAST_FRAME_ID = 100
 SENT_CHANNEL_2_FAST_FRAME_ID = 200
+SENT_CHANNEL_1_CONFIG_WRITE_ID = 2
+SENT_CHANNEL_2_CONFIG_WRITE_ID = 12
+SENT_CHANNEL_1_START_ID = 21
+SENT_CHANNEL_2_START_ID = 31
+SENT_CHANNEL_1_STOP_ID = 22
+SENT_CHANNEL_2_STOP_ID = 32
+SENT_CHANNEL_1_FAST_TRANSMIT_ID = 41
+SENT_CHANNEL_2_FAST_TRANSMIT_ID = 51
 
 
 class MachSentGatewayError(ValueError):
@@ -114,6 +122,103 @@ def parse_sent_fast_frame(frame: GatewayFrame) -> Dict[str, Any]:
     }
 
 
+def build_sent_gateway_command(action: str, args: Mapping[str, Any]) -> bytes:
+    normalized_action = _normalize_action(action)
+    channel = _channel(args.get("channel", 1))
+    message_id = _command_message_id(normalized_action, channel)
+
+    if normalized_action == "config":
+        payload = build_sent_channel_config(args)
+    elif normalized_action == "transmit_fast":
+        payload = build_sent_fast_frame_payload(args)
+    elif normalized_action in {"start", "stop"}:
+        payload = b""
+    else:
+        raise MachSentGatewayError(f"Unsupported Mach SENT Gateway action '{action}'.")
+    return encode_gateway_frame(message_id, payload)
+
+
+def build_sent_channel_config(args: Mapping[str, Any]) -> bytes:
+    auto_start = 1 if _truthy(args.get("autostart", args.get("auto_start", False))) else 0
+    direction = _direction(args.get("direction", "rx"))
+    crc_mode = _crc_mode(args.get("crc_mode", "hw"))
+    data_nibble_count = int(args.get("data_nibble_count", 6))
+    if data_nibble_count < 1 or data_nibble_count > 6:
+        raise MachSentGatewayError("SENT data_nibble_count must be in range 1..6.")
+
+    byte0 = (
+        auto_start
+        | (direction << 2)
+        | (crc_mode << 3)
+        | (data_nibble_count << 5)
+    )
+
+    pulse_pause_enabled = 1 if _truthy(args.get("pulse_pause_enabled", False)) else 0
+    forward_or_echo = int(args.get("rx_forward_mode", args.get("tx_echo_mode", 0)))
+    slow_channel_mode = _slow_channel_mode(args.get("slow_channel_mode", 0))
+    slow_crc_fault = 1 if _truthy(args.get("slow_channel_tx_crc_fault", False)) else 0
+    if forward_or_echo < 0 or forward_or_echo > 2:
+        raise MachSentGatewayError("rx_forward_mode/tx_echo_mode must be in range 0..2.")
+    byte1 = (
+        pulse_pause_enabled
+        | (forward_or_echo << 1)
+        | (slow_channel_mode << 3)
+        | (slow_crc_fault << 6)
+    )
+
+    unit_time = _time_us_to_spec_units(args.get("unit_time_us", 3.0), "unit_time_us")
+    pulse_pause_period = _time_us_to_spec_units(
+        args.get("pulse_pause_frame_period_us", 0),
+        "pulse_pause_frame_period_us",
+    )
+    swap_fast_data_nibbles = 1 if _truthy(args.get("swap_fast_data_nibbles", False)) else 0
+    return bytes([
+        byte0,
+        byte1,
+        unit_time & 0xFF,
+        (unit_time >> 8) & 0xFF,
+        pulse_pause_period & 0xFF,
+        (pulse_pause_period >> 8) & 0xFF,
+        swap_fast_data_nibbles,
+    ])
+
+
+def build_sent_fast_frame_payload(args: Mapping[str, Any]) -> bytes:
+    data_nibbles = _data_nibbles(args.get("data_nibbles", []))
+    if len(data_nibbles) < 1 or len(data_nibbles) > 6:
+        raise MachSentGatewayError("SENT transmit_fast data_nibbles must contain 1..6 nibbles.")
+    status = _nibble(args.get("status", args.get("status_nibble", 0)), "status")
+    crc = _nibble(args.get("crc", 0), "crc")
+    crc_calculated = _nibble(args.get("crc_calculated", 0), "crc_calculated")
+
+    payload = bytearray()
+    payload.append(status | (len(data_nibbles) << 4))
+    for index in range(0, len(data_nibbles), 2):
+        low = data_nibbles[index]
+        high = data_nibbles[index + 1] if index + 1 < len(data_nibbles) else 0
+        payload.append(low | (high << 4))
+    payload.append(crc | (crc_calculated << 4))
+    return bytes(payload)
+
+
+def parse_gateway_ack(frame: GatewayFrame, expected_message_id: int) -> bool:
+    if frame.message_id != expected_message_id:
+        raise MachSentGatewayError(
+            f"Expected ACK message id {expected_message_id}, got {frame.message_id}."
+        )
+    if len(frame.data) != 1:
+        raise MachSentGatewayError("Gateway ACK frame must contain one status byte.")
+    if frame.data[0] == 1:
+        return True
+    if frame.data[0] == 0:
+        raise MachSentGatewayError(f"Gateway returned ERR for message id {expected_message_id}.")
+    raise MachSentGatewayError(f"Gateway ACK status must be 0 or 1, got {frame.data[0]}.")
+
+
+def command_message_id(action: str, channel: int) -> int:
+    return _command_message_id(_normalize_action(action), _channel(channel))
+
+
 def _payload_nibbles(payload: bytes) -> List[int]:
     nibbles: List[int] = []
     for value in payload:
@@ -133,3 +238,121 @@ def _validate_byte(name: str, value: int) -> None:
 
 def _hex(payload: bytes) -> str:
     return payload.hex().upper()
+
+
+def _command_message_id(action: str, channel: int) -> int:
+    ids = {
+        "config": {
+            1: SENT_CHANNEL_1_CONFIG_WRITE_ID,
+            2: SENT_CHANNEL_2_CONFIG_WRITE_ID,
+        },
+        "start": {
+            1: SENT_CHANNEL_1_START_ID,
+            2: SENT_CHANNEL_2_START_ID,
+        },
+        "stop": {
+            1: SENT_CHANNEL_1_STOP_ID,
+            2: SENT_CHANNEL_2_STOP_ID,
+        },
+        "transmit_fast": {
+            1: SENT_CHANNEL_1_FAST_TRANSMIT_ID,
+            2: SENT_CHANNEL_2_FAST_TRANSMIT_ID,
+        },
+    }
+    try:
+        return ids[action][channel]
+    except KeyError as exc:
+        raise MachSentGatewayError(
+            f"Unsupported Mach SENT Gateway action/channel '{action}'/{channel}."
+        ) from exc
+
+
+def _normalize_action(action: str) -> str:
+    return str(action).strip().lower().replace("-", "_")
+
+
+def _channel(value: Any) -> int:
+    text = str(value).strip().upper()
+    if text in {"1", "SENT1", "CH1", "CHANNEL1"}:
+        return 1
+    if text in {"2", "SENT2", "CH2", "CHANNEL2"}:
+        return 2
+    raise MachSentGatewayError("Mach SENT Gateway channel must be 1 or 2.")
+
+
+def _direction(value: Any) -> int:
+    text = str(value).strip().lower()
+    if text in {"tx", "transmit", "0"}:
+        return 0
+    if text in {"rx", "receive", "1"}:
+        return 1
+    raise MachSentGatewayError("Mach SENT Gateway direction must be 'tx' or 'rx'.")
+
+
+def _crc_mode(value: Any) -> int:
+    text = str(value).strip().lower()
+    mapping = {
+        "off": 0,
+        "hw": 1,
+        "hardware": 1,
+        "sw": 2,
+        "software": 2,
+    }
+    if text in mapping:
+        return mapping[text]
+    try:
+        numeric = int(text)
+    except ValueError as exc:
+        raise MachSentGatewayError("Mach SENT Gateway crc_mode must be off, hw, or sw.") from exc
+    if numeric < 0 or numeric > 2:
+        raise MachSentGatewayError("Mach SENT Gateway crc_mode must be in range 0..2.")
+    return numeric
+
+
+def _slow_channel_mode(value: Any) -> int:
+    text = str(value).strip().lower().replace("-", "_")
+    mapping = {
+        "0": 0,
+        "fast": 0,
+        "fast_only": 0,
+        "1": 1,
+        "short": 1,
+        "short_serial": 1,
+        "2": 2,
+        "enhanced": 2,
+        "enhanced_serial": 2,
+    }
+    if text not in mapping:
+        raise MachSentGatewayError(
+            "Mach SENT Gateway slow_channel_mode must be fast_only, short_serial, or enhanced_serial."
+        )
+    return mapping[text]
+
+
+def _time_us_to_spec_units(value: Any, name: str) -> int:
+    numeric = float(value)
+    if numeric < 0:
+        raise MachSentGatewayError(f"{name} must be non-negative.")
+    units = int(round(numeric * 100))
+    if units > 0xFFFF:
+        raise MachSentGatewayError(f"{name} is too large.")
+    return units
+
+
+def _data_nibbles(value: Any) -> List[int]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise MachSentGatewayError("data_nibbles must be a sequence of integers.")
+    return [_nibble(item, "data_nibble") for item in value]
+
+
+def _nibble(value: Any, name: str) -> int:
+    numeric = int(value)
+    if numeric < 0 or numeric > 0x0F:
+        raise MachSentGatewayError(f"{name} must fit in one nibble.")
+    return numeric
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "on", "yes"}

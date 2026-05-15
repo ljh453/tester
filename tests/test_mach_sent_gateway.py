@@ -2,7 +2,11 @@ import pytest
 
 from embsw_tester.devices.mach_sent_gateway import (
     MachSentGatewayError,
+    build_sent_channel_config,
+    build_sent_fast_frame_payload,
+    build_sent_gateway_command,
     encode_gateway_frame,
+    parse_gateway_ack,
     parse_gateway_frame,
     parse_sent_fast_frame,
 )
@@ -39,3 +43,51 @@ def test_parse_sent_fast_frame_extracts_channel_1_nibbles_and_crc():
     assert parsed["data_nibbles"] == [1, 2, 3, 4, 5, 6]
     assert parsed["crc"] == 10
     assert parsed["crc_calculated"] == 11
+
+
+def test_build_sent_channel_config_for_tx_defaults():
+    config = build_sent_channel_config(
+        {
+            "direction": "tx",
+            "data_nibble_count": 6,
+            "unit_time_us": 3.0,
+        }
+    )
+
+    assert config.hex().upper() == "C8002C01000000"
+
+
+def test_build_sent_fast_frame_payload_matches_data_frame_layout():
+    payload = build_sent_fast_frame_payload(
+        {
+            "status": 3,
+            "data_nibbles": [1, 2, 3, 4, 5, 6],
+            "crc": 10,
+            "crc_calculated": 11,
+        }
+    )
+
+    assert payload.hex().upper() == "63214365BA"
+
+
+def test_build_sent_gateway_start_and_transmit_commands():
+    assert build_sent_gateway_command("start", {"channel": 2}).hex().upper() == "02011F2003"
+    assert build_sent_gateway_command(
+        "transmit_fast",
+        {
+            "channel": 1,
+            "status": 3,
+            "data_nibbles": [1, 2, 3, 4, 5, 6],
+            "crc": 10,
+            "crc_calculated": 11,
+        },
+    ).hex().upper() == "02062963214365BA1503"
+
+
+def test_parse_gateway_ack_requires_ok_status_and_expected_message_id():
+    frame = parse_gateway_frame(encode_gateway_frame(21, b"\x01"))
+
+    assert parse_gateway_ack(frame, 21) is True
+
+    with pytest.raises(MachSentGatewayError, match="ERR"):
+        parse_gateway_ack(parse_gateway_frame(encode_gateway_frame(21, b"\x00")), 21)

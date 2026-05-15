@@ -261,6 +261,140 @@ testcases:
     assert sent_event.outputs["serial"][0]["command_type"] == "serial.read_bytes"
 
 
+def test_runtime_configures_and_starts_mach_sent_gateway_channel(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: mach_sent_gateway
+command_profiles:
+  mach_sent_gateway:
+    commands:
+      sent_usb.command:
+        protocol: mach_sent_gateway
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "sent-control.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: sent_control_case
+    steps:
+      - sent_usb.command:
+          device: sent_usb
+          action: config
+          channel: 1
+          direction: tx
+          data_nibble_count: 6
+          unit_time_us: 3.0
+      - sent_usb.command:
+          device: sent_usb
+          action: start
+          channel: 1
+""".strip(),
+        encoding="utf-8",
+    )
+    package = compile_file(test_file)
+    assert package.diagnostics == []
+    created_ports = {}
+
+    def port_factory(settings):
+        port = FakeSerialPort(
+            rx_lines=[],
+            rx_bytes=[
+                encode_gateway_frame(2, b"\x01"),
+                encode_gateway_frame(21, b"\x01"),
+            ],
+        )
+        created_ports[settings.logical_name] = port
+        return port
+
+    registry = create_adapter_registry_from_tool_profile(
+        package.tool_profile_snapshot,
+        evidence_root=tmp_path / "reports" / "sent-control",
+        serial_port_factory=port_factory,
+    )
+
+    result = run_package(package, run_id="sent-control-run", adapter_registry=registry)
+
+    testcase = result.testcase_results[0]
+    config_event = testcase.events[0]
+    start_event = testcase.events[1]
+    assert result.status == "passed"
+    assert created_ports["sent_usb"].tx_bytes[0].hex().upper() == "020802C8002C01000000FF03"
+    assert created_ports["sent_usb"].tx_bytes[1].hex().upper() == "0201151603"
+    assert config_event.outputs["action"] == "config"
+    assert config_event.outputs["ack"] is True
+    assert config_event.outputs["message_id"] == 2
+    assert start_event.outputs["action"] == "start"
+    assert start_event.outputs["ack"] is True
+
+
+def test_runtime_transmits_mach_sent_gateway_fast_frame(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: mach_sent_gateway
+command_profiles:
+  mach_sent_gateway:
+    commands:
+      sent_usb.command:
+        protocol: mach_sent_gateway
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "sent-transmit.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: sent_transmit_case
+    steps:
+      - sent_usb.command:
+          device: sent_usb
+          action: transmit_fast
+          channel: 1
+          status: 3
+          data_nibbles: [1, 2, 3, 4, 5, 6]
+          crc: 10
+          crc_calculated: 11
+""".strip(),
+        encoding="utf-8",
+    )
+    package = compile_file(test_file)
+    assert package.diagnostics == []
+    registry = create_adapter_registry_from_tool_profile(
+        package.tool_profile_snapshot,
+        evidence_root=tmp_path / "reports" / "sent-transmit",
+        serial_port_factory=lambda settings: FakeSerialPort(
+            rx_lines=[],
+            rx_bytes=[encode_gateway_frame(41, b"\x01")],
+        ),
+    )
+
+    result = run_package(package, run_id="sent-transmit-run", adapter_registry=registry)
+
+    transmit_event = result.testcase_results[0].events[0]
+    assert result.status == "passed"
+    assert transmit_event.outputs["frame"]["raw_hex"] == "02062963214365BA1503"
+    assert transmit_event.outputs["payload_hex"] == "63214365BA"
+    assert transmit_event.outputs["ack"] is True
+    assert transmit_event.outputs["serial"][0]["command_type"] == "serial.write_bytes"
+
+
 def test_runtime_executes_vupower_apply_and_output_commands(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(

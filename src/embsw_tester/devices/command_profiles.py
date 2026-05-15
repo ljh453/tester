@@ -10,6 +10,10 @@ from embsw_tester.devices.mach_sent_gateway import (
     SENT_CHANNEL_2_FAST_FRAME_ID,
     GatewayFrame,
     MachSentGatewayError,
+    build_sent_fast_frame_payload,
+    build_sent_gateway_command,
+    command_message_id,
+    parse_gateway_ack,
     parse_gateway_frame,
     parse_sent_fast_frame,
 )
@@ -119,11 +123,37 @@ def _execute_mach_sent_gateway_command(
     adapter_registry: AdapterRegistry,
     adapter_context: AdapterContext,
 ) -> DeviceCommandExecution:
-    if command_type != "sent_usb.read":
-        raise DeviceCommandError(
-            f"Protocol 'mach_sent_gateway' does not support command '{command_type}'."
+    if command_type == "sent_usb.read":
+        return _execute_mach_sent_gateway_read(
+            device_name,
+            profile_name,
+            command_definition,
+            args,
+            adapter_registry,
+            adapter_context,
         )
+    if command_type == "sent_usb.command":
+        return _execute_mach_sent_gateway_control(
+            device_name,
+            profile_name,
+            command_definition,
+            args,
+            adapter_registry,
+            adapter_context,
+        )
+    raise DeviceCommandError(
+        f"Protocol 'mach_sent_gateway' does not support command '{command_type}'."
+    )
 
+
+def _execute_mach_sent_gateway_read(
+    device_name: str,
+    profile_name: str,
+    command_definition: Mapping[str, Any],
+    args: Mapping[str, Any],
+    adapter_registry: AdapterRegistry,
+    adapter_context: AdapterContext,
+) -> DeviceCommandExecution:
     channel = _sent_channel(args, command_definition)
     expected_message_id = _sent_fast_frame_message_id(channel)
     timeout_ms = int(args.get("timeout_ms", command_definition.get("timeout_ms", 1000)))
@@ -163,6 +193,87 @@ def _execute_mach_sent_gateway_command(
     got = "none" if last_frame is None else str(last_frame.message_id)
     raise DeviceCommandError(
         f"Expected SENT channel {channel} fast frame message id {expected_message_id}, got {got}."
+    )
+
+
+def _execute_mach_sent_gateway_control(
+    device_name: str,
+    profile_name: str,
+    command_definition: Mapping[str, Any],
+    args: Mapping[str, Any],
+    adapter_registry: AdapterRegistry,
+    adapter_context: AdapterContext,
+) -> DeviceCommandExecution:
+    action = str(args.get("action", command_definition.get("action", "")))
+    if not action:
+        raise DeviceCommandError(
+            "Mach SENT Gateway sent_usb.command requires an 'action'."
+        )
+    command_args = {**dict(command_definition), **dict(args)}
+    channel = _sent_channel(command_args, command_definition)
+    timeout_ms = int(args.get("timeout_ms", command_definition.get("timeout_ms", 1000)))
+    read_ack = _truthy(args.get("read_ack", command_definition.get("read_ack", True)))
+    serial_steps: List[Dict[str, Any]] = []
+
+    try:
+        frame_bytes = build_sent_gateway_command(action, command_args)
+        frame = parse_gateway_frame(frame_bytes)
+    except MachSentGatewayError as exc:
+        raise DeviceCommandError(str(exc)) from exc
+
+    write_args: Dict[str, Any] = {
+        "port": device_name,
+        "payload_hex": frame_bytes.hex().upper(),
+    }
+    if "timeout_ms" in args:
+        write_args["timeout_ms"] = args["timeout_ms"]
+    write_result = _execute_serial(
+        adapter_registry,
+        "serial.write_bytes",
+        write_args,
+        adapter_context,
+    )
+    serial_steps.append(_serial_step("serial.write_bytes", write_args, write_result))
+
+    ack_value: Optional[bool] = None
+    ack_frame: Optional[GatewayFrame] = None
+    expected_ack_message_id = command_message_id(action, channel)
+    if read_ack:
+        try:
+            ack_frame = _read_mach_gateway_frame(
+                device_name,
+                timeout_ms,
+                adapter_registry,
+                adapter_context,
+                serial_steps,
+            )
+            ack_value = parse_gateway_ack(ack_frame, expected_ack_message_id)
+        except MachSentGatewayError as exc:
+            raise DeviceCommandError(str(exc)) from exc
+
+    outputs: Dict[str, Any] = {
+        "device": device_name,
+        "command_profile": profile_name,
+        "protocol": "mach_sent_gateway",
+        "action": action,
+        "channel": channel,
+        "message_id": frame.message_id,
+        "frame": frame.to_dict(),
+        "serial": serial_steps,
+    }
+    if action.replace("-", "_") == "transmit_fast":
+        try:
+            outputs["payload_hex"] = build_sent_fast_frame_payload(command_args).hex().upper()
+        except MachSentGatewayError as exc:
+            raise DeviceCommandError(str(exc)) from exc
+    if ack_value is not None:
+        outputs["ack"] = ack_value
+        outputs["ack_frame"] = ack_frame.to_dict() if ack_frame is not None else None
+
+    return DeviceCommandExecution(
+        resolved_inputs=dict(args),
+        outputs=outputs,
+        save_value=ack_value,
     )
 
 
@@ -224,16 +335,25 @@ def _read_serial_bytes(
 
 
 def _sent_channel(args: Mapping[str, Any], command_definition: Mapping[str, Any]) -> int:
-    channel = int(args.get("channel", command_definition.get("channel", 1)))
-    if channel not in (1, 2):
-        raise DeviceCommandError("Mach SENT Gateway channel must be 1 or 2.")
-    return channel
+    value = args.get("channel", command_definition.get("channel", 1))
+    text = str(value).strip().upper()
+    if text in {"1", "SENT1", "CH1", "CHANNEL1"}:
+        return 1
+    if text in {"2", "SENT2", "CH2", "CHANNEL2"}:
+        return 2
+    raise DeviceCommandError("Mach SENT Gateway channel must be 1 or 2.")
 
 
 def _sent_fast_frame_message_id(channel: int) -> int:
     if channel == 1:
         return SENT_CHANNEL_1_FAST_FRAME_ID
     return SENT_CHANNEL_2_FAST_FRAME_ID
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "on", "yes"}
 
 
 def _execute_vupower_k_command(

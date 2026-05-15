@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 20: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive protocol, VuPower K USB-to-Serial power supply protocol, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 21: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control protocol, VuPower K USB-to-Serial power supply protocol, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -40,10 +40,11 @@
 - CLI `run --use-tool-profile-adapters` profile-backed 실행 모드
 - 확정 serial 대상: power supply, Mach Systems SENT-USB interface
 - `sent_usb.read` 장비 의미 명령을 profile 정의 기반 serial TX/RX 또는 Mach Systems SENT Gateway binary protocol로 실행
+- `sent_usb.command` 장비 의미 명령으로 Mach SENT channel config/start/stop/fast transmit 실행
 - `power_supply.command` 장비 의미 명령을 VuPower K USB-to-Serial protocol로 실행
 - 장비 profile의 `read.match` regex로 응답 pass/fail 판정
 - 장비 profile의 `read.extract` regex로 raw 응답에서 저장 값을 추출
-- Mach Systems SENT Gateway frame encode/decode와 SENT channel 1/2 fast frame 수신 파싱
+- Mach Systems SENT Gateway frame encode/decode, SENT channel 1/2 fast frame 수신/송신, ACK 파싱
 - VuPower K `APPL`, `OUTP:STAT`, `MEAS:*?`, `*IDN?`, `*RST`, `SYST:ERR?` 초기 명령 지원
 - 미구현 장비가 `pending` profile을 사용할 경우 compile error로 차단
 - `run.json`, `resolved-package.yaml`, testcase result JSON, `summary.html` 리포트 생성
@@ -495,10 +496,13 @@ command_profiles:
         protocol: vupower_k_usb
         channel: P1
   mach_sent_gateway:
-    notes: "Mach Systems SENT Gateway protocol. Initial scope receives SENT fast frames from message id 100/200."
+    notes: "Mach Systems SENT Gateway protocol. Supports fast frame receive and basic TX control commands."
     commands:
       sent_usb.read:
         protocol: mach_sent_gateway
+      sent_usb.command:
+        protocol: mach_sent_gateway
+        read_ack: true
 ```
 
 `psu`는 VuPower K Series power supply를 뜻하며, [VuPower K USB Manual Korea Ver3.2](http://www.vupower.com/download/K_USB_Manual_Korea_Ver3.2.pdf)의 USB-to-Serial SCPI 스타일 명령을 사용합니다. `sent_usb`는 Mach Systems의 SENT-USB interface를 뜻하고, [Mach Systems SENT Gateway Communication Protocol Specification](https://www.machsystems.cz/support/SENT%20Gateway-Communication%20Protocol%20Specification_latest.pdf)의 `STX LEN ID DATA CHKSUM ETX` frame을 기준으로 수신 프레임을 파싱합니다. compiler는 이 설정을 실행 직전 `tool_profile_snapshot`으로 고정해서 report의 `resolved-package.yaml`에도 남깁니다.
@@ -548,6 +552,25 @@ steps:
       channel: 1
       average: true
       save_as: measured_voltage
+  - sent_usb.command:
+      device: sent_usb
+      action: config
+      channel: 1
+      direction: tx
+      data_nibble_count: 6
+      unit_time_us: 3.0
+  - sent_usb.command:
+      device: sent_usb
+      action: start
+      channel: 1
+  - sent_usb.command:
+      device: sent_usb
+      action: transmit_fast
+      channel: 1
+      status: 3
+      data_nibbles: [1, 2, 3, 4, 5, 6]
+      crc: 10
+      crc_calculated: 11
   - sent_usb.read:
       device: sent_usb
       channel: 1
@@ -557,7 +580,9 @@ steps:
 
 `power_supply.command`는 `protocol: vupower_k_usb`일 때 VuPower K manual의 line protocol을 사용합니다. 명령은 LF로 종료되며 현재 action은 `apply`, `set_voltage`, `set_current`, `output`, `read_output`, `measure_voltage`, `measure_current`, `read_voltage`, `read_current`, `mode`, `identify`, `reset`, `system_error`, `raw`를 지원합니다. 예를 들어 `apply`는 `APPL P1,12.000,1.234`, `output`은 `OUTP:STAT P1,ON`, 평균 전압 측정은 `MEAS:VOLTA? P1`로 변환됩니다. 측정/조회 action은 serial read 응답을 float, bool, mode 문자열 등으로 파싱해 `save_as`에 저장합니다.
 
-`sent_usb.read`는 `sent_usb` 장비의 `command_profile`을 찾아 `sent_usb.read` mapping을 실행합니다. `protocol: mach_sent_gateway`이면 Mach Systems SENT Gateway binary frame을 `serial.read_bytes`로 읽고, channel 1은 message id `100`, channel 2는 message id `200`인 SENT fast frame으로 해석합니다. 저장 값은 status nibble, data nibble count, data nibbles, received CRC, calculated CRC를 포함한 dict입니다. 현재 구현 범위는 receive-side SENT fast frame이며, channel configuration/start/stop/transmit 명령은 후속 단계에서 추가합니다.
+`sent_usb.command`는 `protocol: mach_sent_gateway`일 때 Mach Systems SENT Gateway binary frame을 `serial.write_bytes`로 전송합니다. 현재 action은 `config`, `start`, `stop`, `transmit_fast`를 지원합니다. channel 1/2 message id는 config `2/12`, start `21/31`, stop `22/32`, fast transmit `41/51`입니다. 기본값으로 ACK frame을 읽어 one-byte status `1`을 OK로 처리하고, `0`이면 실패로 보고합니다. SENT channel configuration은 7-byte payload로 직렬화하며, fast transmit payload는 status nibble, data nibble count, data nibbles, CRC nibble layout을 사용합니다.
+
+`sent_usb.read`는 `sent_usb` 장비의 `command_profile`을 찾아 `sent_usb.read` mapping을 실행합니다. `protocol: mach_sent_gateway`이면 Mach Systems SENT Gateway binary frame을 `serial.read_bytes`로 읽고, channel 1은 message id `100`, channel 2는 message id `200`인 SENT fast frame으로 해석합니다. 저장 값은 status nibble, data nibble count, data nibbles, received CRC, calculated CRC를 포함한 dict입니다.
 
 기존 line 기반 profile도 계속 사용할 수 있습니다. profile에 `write`/`read` mapping을 두면 `write` template을 전송하고 `read.until` substring, `read.match` regex, 선택적 `read.extract` regex로 응답을 판정합니다. named group `value`가 있으면 그 값을 저장하고, named group이 없으면 첫 번째 capture group, capture group도 없으면 전체 match를 저장합니다. raw serial evidence와 nested serial output은 그대로 남습니다.
 
@@ -637,11 +662,12 @@ testcases:
 - Phase 18 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase18-profile-backed-run-cli.md`
 - Phase 19 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase19-mach-sent-gateway-protocol.md`
 - Phase 20 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase20-vupower-k-power-supply.md`
+- Phase 21 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase21-mach-sent-commands.md`
 
 ## 다음 구현 단계
 
 다음 단계는 Windows 장비 smoke 경로와 실제 장비별 추가 명령을 좁혀가는 쪽이 좋습니다.
 
 - VuPower K 실제 장비 연결 smoke test
-- Mach Systems SENT Gateway channel config/start/stop/transmit 명령 추가
+- Mach Systems SENT Gateway slow frame/buffer 명령 추가
 - Windows 장비 연결 smoke test
