@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 15: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 16: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -23,7 +23,7 @@
 - 테스트 가능한 `Trace32Adapter`, `RclTrace32Transport`, `UdpTrace32Transport`, `FakeTrace32Transport`
 - 테스트 가능한 `CanoeAdapter`
 - 테스트 가능한 `IncaAdapter`
-- INCA 32bit helper request/response schema
+- INCA 32bit helper request/response schema와 JSON line process transport
 - `serial.write`, `serial.read`, `serial.read.save_as` 지원
 - `serial.read.match` regex 기반 응답 판정
 - `trace32.command` 지원
@@ -90,9 +90,11 @@ src/
       profile.py
 tests/
   test_adapters.py
+  test_catalog.py
   test_cli.py
   test_compiler.py
   test_reports.py
+  test_inca_bridge_transport.py
   test_runtime.py
   test_serial_adapter.py
   test_serial_factory.py
@@ -330,7 +332,34 @@ package = compile_file("tests/inca.yaml")
 result = run_package(package, adapter_registry=registry)
 ```
 
-`IncaBridgeRequest`와 `IncaBridgeResponse`는 향후 64bit 실행 엔진과 32bit Python INCA helper 프로세스 사이의 RPC payload schema입니다. 실제 INCA COM API 호출은 이 schema와 같은 `execute(command_type, args, context)` 의미를 유지하면서 Windows 32bit helper 뒤에 붙입니다.
+`IncaBridgeRequest`와 `IncaBridgeResponse`는 64bit 실행 엔진과 32bit Python INCA helper 프로세스 사이의 RPC payload schema입니다. 실제 INCA COM API 호출은 이 schema와 같은 `execute(command_type, args, context)` 의미를 유지하면서 Windows 32bit helper 뒤에 붙입니다.
+
+Windows 실제 실행 경로에서는 JSON line stdio transport를 `IncaAdapter`에 주입합니다.
+
+```python
+from embsw_tester.adapters import (
+    AdapterRegistry,
+    IncaAdapter,
+    create_inca_bridge_process_transport,
+)
+from embsw_tester.dsl.compiler import compile_file
+from embsw_tester.runtime import run_package
+
+transport = create_inca_bridge_process_transport(
+    [
+        r"C:\Python32\python.exe",
+        r"C:\tools\inca_helper.py",
+    ]
+)
+
+registry = AdapterRegistry()
+registry.register("inca", IncaAdapter(bridge_transport=transport))
+
+package = compile_file("tests/inca.yaml")
+result = run_package(package, adapter_registry=registry)
+```
+
+helper 프로세스는 stdin에서 `IncaBridgeRequest` JSON 한 줄을 읽고, stdout으로 같은 `request_id`를 가진 `IncaBridgeResponse` JSON 한 줄을 반환해야 합니다. `timeout_ms`는 request의 top-level field로 전달되며, command args에서는 제거됩니다.
 
 ## Serial Adapter
 
@@ -516,12 +545,13 @@ testcases:
 - Phase 13 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase13-trace32-rcl-udp-fallback.md`
 - Phase 14 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase14-trace32-transports.md`
 - Phase 15 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase15-trace32-profile-factory.md`
+- Phase 16 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase16-inca-bridge-transport.md`
 
 ## 다음 구현 단계
 
-다음 단계는 Windows 장비 smoke 경로와 나머지 tool adapter transport를 좁혀가는 쪽이 좋습니다.
+다음 단계는 Windows 장비 smoke 경로와 나머지 tool adapter 구성을 좁혀가는 쪽이 좋습니다.
 
-- INCA 32bit Python helper 프로세스 transport(JSON line 또는 stdio RPC)
+- INCA helper process command를 tool profile에서 구성하는 factory
 - power supply 입력 포맷 확정 후 command profile 구현
 - Mach Systems SENT-USB 실제 line protocol로 sample mapping 교체
 - Windows 장비 연결 smoke test

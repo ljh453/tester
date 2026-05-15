@@ -74,24 +74,26 @@ COMMAND_SPECS: Dict[str, CommandSpec] = {
     "inca.calibration.set": CommandSpec(
         type="inca.calibration.set",
         required_args=frozenset({"parameter", "value"}),
+        optional_args=frozenset({"timeout_ms"}),
         category="adapter",
         adapter="inca",
     ),
     "inca.measure.read": CommandSpec(
         type="inca.measure.read",
         required_args=frozenset({"variable"}),
-        optional_args=frozenset({"save_as"}),
+        optional_args=frozenset({"save_as", "timeout_ms"}),
         category="adapter",
         adapter="inca",
     ),
     "inca.recording.start": CommandSpec(
         type="inca.recording.start",
-        optional_args=frozenset({"name", "output_dir"}),
+        optional_args=frozenset({"name", "output_dir", "timeout_ms"}),
         category="adapter",
         adapter="inca",
     ),
     "inca.recording.stop": CommandSpec(
         type="inca.recording.stop",
+        optional_args=frozenset({"timeout_ms"}),
         category="adapter",
         adapter="inca",
     ),

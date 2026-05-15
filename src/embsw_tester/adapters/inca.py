@@ -3,6 +3,17 @@ from __future__ import annotations
 from typing import Any, Dict, Mapping, Optional
 
 from embsw_tester.adapters.base import AdapterContext, AdapterResult
+from embsw_tester.adapters.inca_bridge import IncaBridgeTransport
+
+
+SUPPORTED_INCA_COMMANDS = frozenset(
+    {
+        "inca.measure.read",
+        "inca.calibration.set",
+        "inca.recording.start",
+        "inca.recording.stop",
+    }
+)
 
 
 class IncaAdapter:
@@ -12,9 +23,11 @@ class IncaAdapter:
         self,
         measurements: Optional[Mapping[str, Any]] = None,
         calibrations: Optional[Mapping[str, Any]] = None,
+        bridge_transport: Optional[IncaBridgeTransport] = None,
     ):
         self.measurements: Dict[str, Any] = dict(measurements or {})
         self.calibrations: Dict[str, Any] = dict(calibrations or {})
+        self.bridge_transport = bridge_transport
         self.recording_active = False
         self.recording_name: Optional[str] = None
         self.recording_output_dir: Optional[str] = None
@@ -25,6 +38,8 @@ class IncaAdapter:
         args: Dict[str, Any],
         context: AdapterContext,
     ) -> AdapterResult:
+        if self.bridge_transport is not None and command_type in SUPPORTED_INCA_COMMANDS:
+            return self._execute_bridge(command_type, args)
         if command_type == "inca.measure.read":
             return self._read_measurement(args)
         if command_type == "inca.calibration.set":
@@ -38,6 +53,15 @@ class IncaAdapter:
             status="failed",
             message=f"Unsupported INCA command '{command_type}'.",
         )
+
+    def _execute_bridge(self, command_type: str, args: Mapping[str, Any]) -> AdapterResult:
+        timeout_ms = int(args.get("timeout_ms", 1000))
+        bridge_args = {
+            key: value
+            for key, value in args.items()
+            if key != "timeout_ms"
+        }
+        return self.bridge_transport.execute(command_type, bridge_args, timeout_ms)
 
     def _read_measurement(self, args: Mapping[str, Any]) -> AdapterResult:
         variable = _required_text(args, "variable")

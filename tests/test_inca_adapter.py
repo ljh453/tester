@@ -1,5 +1,16 @@
 from embsw_tester.adapters import AdapterContext
+from embsw_tester.adapters.base import AdapterResult
 from embsw_tester.adapters.inca import IncaAdapter
+
+
+class FakeIncaBridgeTransport:
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    def execute(self, command_type, args, timeout_ms):
+        self.calls.append((command_type, dict(args), timeout_ms))
+        return self.result
 
 
 def test_inca_adapter_reads_measurement_and_sets_calibration():
@@ -43,3 +54,29 @@ def test_inca_adapter_controls_recording_state():
     assert start_result.values["output_dir"] == "reports/boot"
     assert stop_result.success is True
     assert stop_result.values["recording_active"] is False
+
+
+def test_inca_adapter_delegates_to_bridge_transport_when_configured():
+    bridge = FakeIncaBridgeTransport(
+        AdapterResult(
+            success=True,
+            status="passed",
+            message="bridge read",
+            values={"variable": "EngineSpeed", "value": 900},
+        )
+    )
+    adapter = IncaAdapter(bridge_transport=bridge)
+    context = AdapterContext(run_id="inca-run", testcase="case", phase="steps")
+
+    result = adapter.execute(
+        "inca.measure.read",
+        {"variable": "EngineSpeed", "timeout_ms": 2500},
+        context,
+    )
+
+    assert bridge.calls == [
+        ("inca.measure.read", {"variable": "EngineSpeed"}, 2500)
+    ]
+    assert result.success is True
+    assert result.message == "bridge read"
+    assert result.values["value"] == 900
