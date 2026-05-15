@@ -237,10 +237,11 @@ command_profiles:
         write: "READ SENT {{ channel }}"
         read:
           until: "VALUE"
+          match: "VALUE:.+"
           extract: "VALUE:(?P<value>.+)"
 ```
 
-`read.extract`는 `save_as`에 저장할 값을 raw serial 응답에서 추출할 때 사용한다. named group `value`가 있으면 그 값을 저장하고, named group이 없으면 첫 번째 capture group, capture group도 없으면 전체 match를 저장한다. raw serial evidence와 실행 이벤트의 nested serial output은 그대로 유지한다. 이 구조는 장비별 serial protocol이 확정되면 YAML profile만 교체해도 같은 테스트 의미를 유지하기 위한 경계다.
+`read.until`은 substring 포함 여부를 확인하고, `read.match`는 regex search로 응답 pass/fail을 판정한다. 둘 다 제공되면 둘 다 통과해야 한다. `read.extract`는 `save_as`에 저장할 값을 raw serial 응답에서 추출할 때 사용한다. named group `value`가 있으면 그 값을 저장하고, named group이 없으면 첫 번째 capture group, capture group도 없으면 전체 match를 저장한다. raw serial evidence와 실행 이벤트의 nested serial output은 그대로 유지한다. 이 구조는 장비별 serial protocol이 확정되면 YAML profile만 교체해도 같은 테스트 의미를 유지하기 위한 경계다.
 
 ## 9. 파싱, 검증, 컴파일
 
@@ -269,6 +270,7 @@ command_profiles:
 - 선언되지 않은 serial device
 - `pending` command profile을 참조하는 장비 의미 명령
 - 존재하지 않는 command profile 또는 profile 내 command 누락
+- 잘못된 `read.match` regex
 - 잘못된 `read.extract` regex
 
 ## 10. 명령 카탈로그

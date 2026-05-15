@@ -139,6 +139,67 @@ testcases:
     assert sent_event.outputs["serial"][1]["outputs"]["values"]["text"] == "VALUE:123"
 
 
+def test_runtime_applies_device_profile_response_match(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: sent_usb_line
+command_profiles:
+  sent_usb_line:
+    commands:
+      sent_usb.read:
+        write: "READ SENT {{ channel }}"
+        read:
+          match: 'VALUE:{{ channel }}:\\d+'
+          extract: 'VALUE:{{ channel }}:(?P<value>\\d+)'
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "sent-match.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: sent_match_case
+    steps:
+      - sent_usb.read:
+          device: sent_usb
+          channel: 1
+          save_as: sent_value
+      - assert.eq:
+          left: "${sent_value}"
+          right: "123"
+""".strip(),
+        encoding="utf-8",
+    )
+    package = compile_file(test_file)
+    assert package.diagnostics == []
+    registry = create_adapter_registry_from_tool_profile(
+        package.tool_profile_snapshot,
+        evidence_root=tmp_path / "reports" / "sent-match",
+        serial_port_factory=lambda settings: FakeSerialPort(rx_lines=["VALUE:1:123"]),
+    )
+
+    result = run_package(
+        package,
+        run_id="sent-match-run",
+        adapter_registry=registry,
+    )
+
+    sent_event = result.testcase_results[0].events[0]
+    serial_read = sent_event.outputs["serial"][1]
+    assert result.status == "passed"
+    assert result.testcase_results[0].variables["sent_value"] == "123"
+    assert serial_read["resolved_inputs"]["match"] == r"VALUE:1:\d+"
+    assert serial_read["outputs"]["values"]["match"] == r"VALUE:1:\d+"
+
+
 def test_compile_reports_pending_power_supply_command_profile(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(
@@ -213,4 +274,46 @@ testcases:
     package = compile_file(test_file)
 
     assert [diagnostic.code for diagnostic in package.diagnostics] == ["INVALID_RESPONSE_EXTRACTOR"]
+    assert "sent_usb.read" in package.diagnostics[0].message
+
+
+def test_compile_reports_invalid_response_matcher(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: sent_usb_line
+command_profiles:
+  sent_usb_line:
+    commands:
+      sent_usb.read:
+        write: "READ SENT {{ channel }}"
+        read:
+          match: "VALUE:("
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "sent-invalid-match.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: sent_invalid_match_case
+    steps:
+      - sent_usb.read:
+          device: sent_usb
+          channel: 1
+          save_as: sent_value
+""".strip(),
+        encoding="utf-8",
+    )
+
+    package = compile_file(test_file)
+
+    assert [diagnostic.code for diagnostic in package.diagnostics] == ["INVALID_RESPONSE_MATCHER"]
     assert "sent_usb.read" in package.diagnostics[0].message

@@ -20,4 +20,5 @@ command_profiles:
         write: "READ SENT {{ channel }}"
         read:
           until: "VALUE"
+          match: "VALUE:.+"
           extract: "VALUE:(?P<value>.+)"

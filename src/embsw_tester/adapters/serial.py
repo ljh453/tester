@@ -123,16 +123,47 @@ class SerialAdapter:
                 message=f"Serial response did not contain expected text '{expected}'.",
                 values={"port": port_name, "text": text, "timeout_ms": timeout_ms},
             )
+        match_pattern = args.get("match")
+        if match_pattern is not None:
+            try:
+                matched = re.search(str(match_pattern), text)
+            except re.error as exc:
+                return AdapterResult(
+                    success=False,
+                    status="failed",
+                    message=f"Serial response regex match is invalid: {exc}.",
+                    values={
+                        "port": port_name,
+                        "text": text,
+                        "timeout_ms": timeout_ms,
+                        "match": str(match_pattern),
+                    },
+                )
+            if matched is None:
+                return AdapterResult(
+                    success=False,
+                    status="failed",
+                    message=f"Serial response did not match regex '{match_pattern}'.",
+                    values={
+                        "port": port_name,
+                        "text": text,
+                        "timeout_ms": timeout_ms,
+                        "match": str(match_pattern),
+                    },
+                )
         evidence_ref = self._append_evidence(context, f"RX {text}\n")
+        values = {
+            "port": port_name,
+            "text": text,
+            "timeout_ms": timeout_ms,
+        }
+        if match_pattern is not None:
+            values["match"] = str(match_pattern)
         return AdapterResult(
             success=True,
             status="passed",
             message=f"Read from serial port '{port_name}'.",
-            values={
-                "port": port_name,
-                "text": text,
-                "timeout_ms": timeout_ms,
-            },
+            values=values,
             raw_evidence_ref=evidence_ref,
         )
 

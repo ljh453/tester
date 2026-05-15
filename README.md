@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 9: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter + Tool Profile + Serial Profile Factory + Device Command Profiles + Response Extraction**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, tool profile snapshot, profile 기반 SerialAdapter factory, 장비 의미 명령 profile, 응답 값 추출, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 10: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter + Tool Profile + Serial Profile Factory + Device Command Profiles + Response Matching/Extraction**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, tool profile snapshot, profile 기반 SerialAdapter factory, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -21,11 +21,13 @@
 - Serial/Trace32/CANoe/INCA용 기본 mock adapter 등록
 - 테스트 가능한 `SerialAdapter`, `SerialPort`, `FakeSerialPort`
 - `serial.write`, `serial.read`, `serial.read.save_as` 지원
+- `serial.read.match` regex 기반 응답 판정
 - Serial TX/RX raw evidence 파일 기록
 - tool profile 기반 serial device 선언과 resolved package snapshot
 - tool profile snapshot에서 `SerialAdapter`/`AdapterRegistry` 구성
 - 확정 serial 대상: power supply, Mach Systems SENT-USB interface
 - `sent_usb.read` 장비 의미 명령을 profile 정의 기반 serial TX/RX로 실행
+- 장비 profile의 `read.match` regex로 응답 pass/fail 판정
 - 장비 profile의 `read.extract` regex로 raw 응답에서 저장 값을 추출
 - `power_supply.command`는 입력 포맷 확정 전 `pending` profile 사용 시 compile error로 차단
 - `run.json`, `resolved-package.yaml`, testcase result JSON, `summary.html` 리포트 생성
@@ -256,6 +258,7 @@ command_profiles:
         write: "READ SENT {{ channel }}"
         read:
           until: "VALUE"
+          match: "VALUE:.+"
           extract: "VALUE:(?P<value>.+)"
 ```
 
@@ -293,7 +296,7 @@ steps:
       save_as: sent_value
 ```
 
-위 명령은 `sent_usb` 장비의 `command_profile`을 찾아 `sent_usb.read` mapping을 실행합니다. 샘플 profile에서는 placeholder로 `READ SENT {{ channel }}`을 전송하고, 응답에 `VALUE`가 포함될 때 read 성공으로 처리합니다. `read.extract`가 있으면 raw 응답에서 저장할 값만 regex로 추출합니다. named group `value`가 있으면 그 값을 저장하고, named group이 없으면 첫 번째 capture group, capture group도 없으면 전체 match를 저장합니다. raw serial evidence와 nested serial output은 그대로 남습니다. Mach Systems SENT-USB의 실제 입력 포맷이 확정되면 `samples/tool-profiles/lab-serial.tools.yaml`의 mapping만 교체하면 됩니다.
+위 명령은 `sent_usb` 장비의 `command_profile`을 찾아 `sent_usb.read` mapping을 실행합니다. 샘플 profile에서는 placeholder로 `READ SENT {{ channel }}`을 전송하고, 응답에 `VALUE`가 포함될 때 read 성공으로 처리합니다. `read.until`은 substring 포함 여부를 확인하고, `read.match`는 regex search로 pass/fail을 판정합니다. 둘 다 있으면 둘 다 통과해야 합니다. `read.extract`가 있으면 raw 응답에서 저장할 값만 regex로 추출합니다. named group `value`가 있으면 그 값을 저장하고, named group이 없으면 첫 번째 capture group, capture group도 없으면 전체 match를 저장합니다. raw serial evidence와 nested serial output은 그대로 남습니다. Mach Systems SENT-USB의 실제 입력 포맷이 확정되면 `samples/tool-profiles/lab-serial.tools.yaml`의 mapping만 교체하면 됩니다.
 
 Power supply는 아직 입력 포맷이 미확정이므로 샘플 profile에서 `command_profile: pending`입니다. 이 상태에서 `power_supply.command`를 쓰면 compiler가 `PENDING_COMMAND_PROFILE` 진단으로 실행을 차단합니다.
 
@@ -360,6 +363,7 @@ testcases:
 - Phase 7 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase7-serial-profile-factory.md`
 - Phase 8 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase8-device-command-profiles.md`
 - Phase 9 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase9-device-response-extraction.md`
+- Phase 10 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase10-serial-response-matching.md`
 
 ## 다음 구현 단계
 
@@ -368,4 +372,4 @@ testcases:
 - power supply 입력 포맷 확정 후 command profile 구현
 - Mach Systems SENT-USB 실제 line protocol로 sample mapping 교체
 - Windows 장비 연결 smoke test
-- timeout/응답 매칭 정책 확장
+- Windows 장비 실행 모드 CLI 진입점 추가

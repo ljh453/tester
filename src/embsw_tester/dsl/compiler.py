@@ -541,10 +541,10 @@ def _validate_device_command(
         )
         return
 
-    _validate_response_extractor(command, profile_name, command_definition, diagnostics)
+    _validate_response_patterns(command, profile_name, command_definition, diagnostics)
 
 
-def _validate_response_extractor(
+def _validate_response_patterns(
     command: NormalizedCommand,
     profile_name: str,
     command_definition: Mapping[str, Any],
@@ -567,18 +567,44 @@ def _validate_response_extractor(
         )
         return
 
-    extract_pattern = read_definition.get("extract")
-    if extract_pattern is None:
+    _validate_response_pattern(
+        command,
+        profile_name,
+        read_definition,
+        "match",
+        "INVALID_RESPONSE_MATCHER",
+        diagnostics,
+    )
+    _validate_response_pattern(
+        command,
+        profile_name,
+        read_definition,
+        "extract",
+        "INVALID_RESPONSE_EXTRACTOR",
+        diagnostics,
+    )
+
+
+def _validate_response_pattern(
+    command: NormalizedCommand,
+    profile_name: str,
+    read_definition: Mapping[str, Any],
+    field_name: str,
+    diagnostic_code: str,
+    diagnostics: List[Diagnostic],
+) -> None:
+    pattern = read_definition.get(field_name)
+    if pattern is None or "{{" in str(pattern):
         return
     try:
-        re.compile(str(extract_pattern))
+        re.compile(str(pattern))
     except re.error as exc:
         diagnostics.append(
             Diagnostic(
-                code="INVALID_RESPONSE_EXTRACTOR",
+                code=diagnostic_code,
                 message=(
                     f"Command profile '{profile_name}' command '{command.type}' "
-                    f"has invalid read.extract: {exc}."
+                    f"has invalid read.{field_name}: {exc}."
                 ),
                 path=command.path,
                 source_file=command.source_file,

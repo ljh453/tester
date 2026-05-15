@@ -58,7 +58,7 @@ def execute_device_command(
             adapter_context,
         )
         serial_steps.append(_serial_step("serial.read", read_args, read_result))
-        save_value = _read_save_value(read_result.values, read_definition)
+        save_value = _read_save_value(read_result.values, read_definition, args)
 
     outputs: Dict[str, Any] = {
         "device": device_name,
@@ -146,6 +146,9 @@ def _serial_read_args(
     until = args.get("until", read_definition.get("until"))
     if until is not None:
         read_args["until"] = render_template(str(until), args)
+    match = args.get("match", read_definition.get("match"))
+    if match is not None:
+        read_args["match"] = render_template(str(match), args)
     return read_args
 
 
@@ -181,20 +184,25 @@ def _serial_step(
     }
 
 
-def _read_save_value(values: Mapping[str, Any], read_definition: Mapping[str, Any]) -> Any:
+def _read_save_value(
+    values: Mapping[str, Any],
+    read_definition: Mapping[str, Any],
+    args: Mapping[str, Any],
+) -> Any:
     raw_value = _save_value(values)
     extract_pattern = read_definition.get("extract")
     if extract_pattern is None:
         return raw_value
 
     text = str(values.get("text", raw_value))
+    rendered_pattern = render_template(str(extract_pattern), args)
     try:
-        match = re.search(str(extract_pattern), text)
+        match = re.search(rendered_pattern, text)
     except re.error as exc:
-        raise DeviceCommandError(f"Invalid response extractor '{extract_pattern}': {exc}.") from exc
+        raise DeviceCommandError(f"Invalid response extractor '{rendered_pattern}': {exc}.") from exc
     if match is None:
         raise DeviceCommandError(
-            f"Serial response did not match extractor '{extract_pattern}'."
+            f"Serial response did not match extractor '{rendered_pattern}'."
         )
     if "value" in match.groupdict():
         return match.group("value")
