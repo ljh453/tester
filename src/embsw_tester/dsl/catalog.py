@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, FrozenSet
+from typing import Dict, FrozenSet, Optional
 
 
 @dataclass(frozen=True)
@@ -10,6 +10,7 @@ class CommandSpec:
     required_args: FrozenSet[str] = field(default_factory=frozenset)
     optional_args: FrozenSet[str] = field(default_factory=frozenset)
     category: str = "runtime"
+    adapter: Optional[str] = None
 
 
 COMMAND_SPECS: Dict[str, CommandSpec] = {
@@ -53,6 +54,7 @@ COMMAND_SPECS: Dict[str, CommandSpec] = {
         type="serial.write",
         required_args=frozenset({"port", "text"}),
         category="adapter",
+        adapter="serial",
     ),
     "set": CommandSpec(
         type="set",

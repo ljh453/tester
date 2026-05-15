@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 3: Python DSL Compiler + Runtime Core + Report Pipeline**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 4: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -16,7 +16,9 @@
 - `set`, `call`, `assert.eq`, `assert.gt`, `assert.fail`, `log.*`, `delay` 실행
 - testcase/function frame과 local variable scope
 - command event와 testcase result JSON 출력
-- adapter-category 명령의 mock event 처리
+- 공통 adapter interface와 adapter registry
+- adapter-category 명령의 registry 기반 dispatch
+- Serial/Trace32/CANoe/INCA용 기본 mock adapter 등록
 - `run.json`, `resolved-package.yaml`, testcase result JSON, `summary.html` 리포트 생성
 - pytest 기반 회귀 테스트
 
@@ -36,6 +38,10 @@ samples/
 src/
   embsw_tester/
     cli.py
+    adapters/
+      base.py
+      mock.py
+      registry.py
     dsl/
       catalog.py
       compiler.py
@@ -48,6 +54,7 @@ src/
       models.py
       runner.py
 tests/
+  test_adapters.py
   test_cli.py
   test_compiler.py
   test_reports.py
@@ -122,7 +129,32 @@ Windows PowerShell:
 .\.venv\Scripts\embsw-tester run samples\boot-smoke.yaml --json
 ```
 
-정상 실행되면 `status`가 `passed`이고, `testcase_results`에 실행된 command event와 최종 local variable snapshot이 포함됩니다. 현재 외부 툴 adapter 명령은 실제 장비를 제어하지 않고 mock event로 기록됩니다.
+정상 실행되면 `status`가 `passed`이고, `testcase_results`에 실행된 command event와 최종 local variable snapshot이 포함됩니다. 현재 외부 툴 adapter 명령은 adapter registry를 통해 실행되며, CLI 기본값은 실제 장비를 제어하지 않는 mock adapter입니다.
+
+## Adapter Framework
+
+adapter-category 명령은 command catalog의 adapter metadata를 통해 adapter registry로 라우팅됩니다. 현재 기본 registry는 아래 adapter 이름에 mock adapter를 등록합니다.
+
+- `serial`
+- `trace32`
+- `canoe`
+- `inca`
+
+runtime API에서 테스트용 adapter를 직접 주입할 수 있습니다.
+
+```python
+from embsw_tester.adapters import AdapterRegistry, MockAdapter
+from embsw_tester.dsl.compiler import compile_file
+from embsw_tester.runtime import run_package
+
+registry = AdapterRegistry()
+registry.register("serial", MockAdapter("serial"))
+
+package = compile_file("samples/boot-smoke.yaml")
+result = run_package(package, adapter_registry=registry)
+```
+
+실제 Serial, Trace32, CANoe, INCA 연동은 이 adapter contract 뒤에 붙이는 방식으로 확장합니다.
 
 ## 리포트 생성
 
@@ -181,12 +213,13 @@ testcases:
 - Phase 1 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase1.md`
 - Phase 2 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase2-runtime.md`
 - Phase 3 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase3-report-pipeline.md`
+- Phase 4 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase4-adapter-framework.md`
 
 ## 다음 구현 단계
 
-다음 단계는 Adapter Framework입니다.
+다음 단계는 Serial Adapter입니다.
 
-- 공통 adapter interface 정의
-- adapter-category 명령 dispatch 구조화
 - Serial mock/real adapter 분리
+- `serial.write`, `serial.read` command catalog 확장
+- timeout과 raw tx/rx evidence 저장
 - raw evidence 저장 연동

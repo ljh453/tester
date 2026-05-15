@@ -5,6 +5,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
+from embsw_tester.adapters import AdapterContext, AdapterRegistry, create_default_adapter_registry
 from embsw_tester.dsl.catalog import COMMAND_SPECS
 from embsw_tester.dsl.models import FunctionDef, NormalizedCommand, ResolvedPackage, TestcaseDef
 from embsw_tester.runtime.expressions import ExpressionError, evaluate_value
@@ -25,12 +26,14 @@ class RuntimeContext:
     run_id: str
     package: ResolvedPackage
     sleep_fn: Callable[[float], None]
+    adapter_registry: AdapterRegistry
 
 
 def run_package(
     package: ResolvedPackage,
     run_id: Optional[str] = None,
     sleep_fn: Callable[[float], None] = time.sleep,
+    adapter_registry: Optional[AdapterRegistry] = None,
 ) -> RunResult:
     resolved_run_id = run_id or str(uuid.uuid4())
     diagnostics = [diagnostic.to_dict() for diagnostic in package.diagnostics]
@@ -46,6 +49,7 @@ def run_package(
         run_id=resolved_run_id,
         package=package,
         sleep_fn=sleep_fn,
+        adapter_registry=adapter_registry or create_default_adapter_registry(),
     )
     testcase_results = [
         _run_testcase(context, testcase)
@@ -180,10 +184,36 @@ def _dispatch_command(
 
     spec = COMMAND_SPECS.get(command.type)
     if spec is not None and spec.category == "adapter":
-        resolved_inputs = evaluate_value(command.args, frame.variables)
-        return resolved_inputs, {"mode": "mock", "command_type": command.type}
+        return _execute_adapter_command(context, testcase_name, phase, command, frame)
 
     raise CommandFailed(f"Unsupported command '{command.type}'.")
+
+
+def _execute_adapter_command(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    frame: Frame,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    spec = COMMAND_SPECS[command.type]
+    if spec.adapter is None:
+        raise CommandFailed(f"Command '{command.type}' does not declare an adapter.")
+
+    resolved_inputs = evaluate_value(command.args, frame.variables)
+    adapter = context.adapter_registry.get(spec.adapter)
+    adapter_result = adapter.execute(
+        command.type,
+        resolved_inputs,
+        AdapterContext(
+            run_id=context.run_id,
+            testcase=testcase_name,
+            phase=phase,
+        ),
+    )
+    if not adapter_result.success:
+        raise CommandFailed(adapter_result.message or f"Adapter '{spec.adapter}' failed.")
+    return resolved_inputs, adapter_result.to_outputs()
 
 
 def _execute_call(
