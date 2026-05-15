@@ -11,6 +11,7 @@ from embsw_tester.adapters.serial_factory import (
     create_adapter_registry_from_tool_profile,
     create_serial_adapter_from_profile,
 )
+from embsw_tester.adapters.trace32_factory import create_trace32_adapter_from_profile
 from embsw_tester.adapters.trace32 import (
     FakeTrace32Transport,
     RclTrace32Transport,
@@ -42,4 +43,5 @@ __all__ = [
     "create_default_adapter_registry",
     "create_adapter_registry_from_tool_profile",
     "create_serial_adapter_from_profile",
+    "create_trace32_adapter_from_profile",
 ]

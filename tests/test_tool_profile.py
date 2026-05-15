@@ -33,6 +33,40 @@ serial:
     assert profile["serial"]["devices"]["sent_usb"]["baudrate"] == 115200
 
 
+def test_load_tool_profile_normalizes_trace32_settings(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+trace32:
+  rcl:
+    enabled: true
+    client_factory: lab_trace32:create_client
+    command_method: command
+    client_args:
+      node: TRACE32-A
+  udp:
+    enabled: true
+    host: 127.0.0.1
+    port: 20000
+    terminator: "\\n"
+    response_bytes: 2048
+""".strip(),
+        encoding="utf-8",
+    )
+
+    profile = load_tool_profile(profile_file)
+
+    assert profile["trace32"]["rcl"]["enabled"] is True
+    assert profile["trace32"]["rcl"]["client_factory"] == "lab_trace32:create_client"
+    assert profile["trace32"]["rcl"]["command_method"] == "command"
+    assert profile["trace32"]["rcl"]["client_args"] == {"node": "TRACE32-A"}
+    assert profile["trace32"]["udp"]["enabled"] is True
+    assert profile["trace32"]["udp"]["host"] == "127.0.0.1"
+    assert profile["trace32"]["udp"]["port"] == 20000
+    assert profile["trace32"]["udp"]["terminator"] == "\n"
+    assert profile["trace32"]["udp"]["response_bytes"] == 2048
+
+
 def test_compile_file_includes_tool_profile_snapshot(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(

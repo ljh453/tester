@@ -428,6 +428,18 @@ testcase와 function call마다 독립 프레임을 생성한다.
 
 `RclTrace32Transport`는 주입된 RCL client의 command method를 호출하는 wrapper다. RCL Python 패키지별 세부 API 차이는 client factory 또는 `command_method` 설정으로 흡수한다. `UdpTrace32Transport`는 UDP socket으로 command 문자열과 terminator를 전송하고 응답 datagram을 읽는다. 두 transport 모두 `Trace32CommandTransport.execute_command(command, timeout_ms)` 경계를 만족하며, DSL command type과 AdapterResult shape는 유지한다.
 
+Trace32 tool profile은 아래 하위 섹션을 가진다.
+
+- `trace32.rcl.enabled`: RCL transport 사용 여부
+- `trace32.rcl.client_factory`: 선택 사항인 `module:attribute` 형식의 RCL client factory
+- `trace32.rcl.command_method`: RCL client에서 command를 실행할 method 이름, 기본 `cmd`
+- `trace32.rcl.client_args`: RCL client factory에 전달할 keyword argument snapshot
+- `trace32.udp.enabled`: UDP fallback transport 사용 여부
+- `trace32.udp.host`, `trace32.udp.port`: UDP endpoint
+- `trace32.udp.terminator`, `trace32.udp.encoding`, `trace32.udp.response_bytes`: UDP command framing과 응답 크기
+
+IDE나 테스트 harness는 import path 대신 RCL client factory를 직접 주입할 수 있다. 이 경로는 Windows 장비 smoke에서 실제 RCL package 생성 책임을 adapter 내부가 아니라 외부 composition layer에 둔다.
+
 ### 13.2 CANoe/CANalyzer Adapter Contract
 
 1차 구현의 CANoe/CANalyzer adapter는 Windows COM API를 직접 호출하지 않는 in-memory contract adapter로 시작한다. 목적은 DSL 명령, adapter result 구조, runtime `save_as` 동작, report event schema를 먼저 고정하는 것이다.

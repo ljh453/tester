@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 14: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, INCA 32bit helper RPC schema, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 15: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -28,6 +28,7 @@
 - `serial.read.match` regex 기반 응답 판정
 - `trace32.command` 지원
 - Trace32 RCL 기본 실행 및 UDP command fallback
+- tool profile snapshot에서 `Trace32Adapter` 구성
 - `canoe.measurement.start`, `canoe.measurement.stop` 지원
 - `canoe.sysvar.set`, `canoe.sysvar.read`, `canoe.signal.read` 지원
 - `inca.measure.read`, `inca.calibration.set` 지원
@@ -71,6 +72,7 @@ src/
       serial.py
       serial_factory.py
       trace32.py
+      trace32_factory.py
     devices/
       command_profiles.py
     dsl/
@@ -94,6 +96,7 @@ tests/
   test_runtime.py
   test_serial_adapter.py
   test_serial_factory.py
+  test_trace32_factory.py
   test_device_command_profiles.py
   test_tool_profile.py
 ```
@@ -234,6 +237,26 @@ result = run_package(package, adapter_registry=registry)
 ```
 
 `transport: udp`를 명시하면 UDP만 사용합니다. 기본값은 RCL 우선이며, `fallback: false`를 지정하면 RCL 실패 시 UDP fallback을 시도하지 않습니다. `RclTrace32Transport`는 주입된 RCL client의 `cmd(command)` 메서드를 호출하는 wrapper입니다. 사용하는 RCL 패키지의 메서드명이 다르면 `command_method`로 바꿀 수 있습니다. `UdpTrace32Transport`는 stdlib UDP socket으로 command와 terminator를 전송하고 한 번의 응답 datagram을 읽습니다.
+
+tool profile에서 Trace32 adapter를 구성할 수도 있습니다.
+
+```yaml
+trace32:
+  rcl:
+    enabled: true
+    client_factory: lab_trace32:create_client
+    command_method: cmd
+    client_args:
+      node: TRACE32-A
+  udp:
+    enabled: true
+    host: 127.0.0.1
+    port: 20000
+    terminator: "\n"
+    response_bytes: 4096
+```
+
+`client_factory`는 `module:attribute` 형식의 Python callable입니다. factory는 `client_args`를 keyword argument로 받아 RCL client 객체를 반환해야 합니다. 테스트나 IDE 통합 경로에서는 import path 대신 `create_adapter_registry_from_tool_profile(..., trace32_rcl_client_factory=...)`로 factory를 직접 주입할 수 있습니다.
 
 ## CANoe/CANalyzer Adapter
 
@@ -387,7 +410,7 @@ command_profiles:
 
 `psu`는 power supply를 뜻하며, 입력 포맷이 아직 확정되지 않았기 때문에 `command_profile: pending`으로 둡니다. `sent_usb`는 Mach Systems의 SENT-USB interface를 뜻합니다. compiler는 이 설정을 실행 직전 `tool_profile_snapshot`으로 고정해서 report의 `resolved-package.yaml`에도 남깁니다.
 
-profile snapshot으로 실제 serial adapter registry를 구성할 수 있습니다. CLI 기본 실행은 장비 없이 동작하도록 mock adapter를 유지하며, 실제 장비 실행 경로에서는 아래 factory를 사용합니다.
+profile snapshot으로 실제 serial/Trace32 adapter registry를 구성할 수 있습니다. CLI 기본 실행은 장비 없이 동작하도록 mock adapter를 유지하며, 실제 장비 실행 경로에서는 아래 factory를 사용합니다.
 
 ```python
 from pathlib import Path
@@ -400,11 +423,12 @@ package = compile_file(Path("samples/boot-smoke.yaml"))
 registry = create_adapter_registry_from_tool_profile(
     package.tool_profile_snapshot,
     evidence_root=Path("reports/real-serial-run"),
+    trace32_rcl_client_factory=make_trace32_rcl_client_from_config,
 )
 result = run_package(package, run_id="real-serial-run", adapter_registry=registry)
 ```
 
-`create_adapter_registry_from_tool_profile`는 profile의 논리 장비 이름을 `SerialAdapter` port 이름으로 사용합니다. 예를 들어 YAML의 `port: psu`는 profile의 `serial.devices.psu.port: COM3`로 연결됩니다.
+`create_adapter_registry_from_tool_profile`는 profile의 논리 장비 이름을 `SerialAdapter` port 이름으로 사용합니다. 예를 들어 YAML의 `port: psu`는 profile의 `serial.devices.psu.port: COM3`로 연결됩니다. profile에 `trace32` 섹션이 있으면 `Trace32Adapter`도 함께 등록합니다.
 
 ## Device Command Profiles
 
@@ -491,12 +515,12 @@ testcases:
 - Phase 12 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase12-inca-adapter-contract.md`
 - Phase 13 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase13-trace32-rcl-udp-fallback.md`
 - Phase 14 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase14-trace32-transports.md`
+- Phase 15 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase15-trace32-profile-factory.md`
 
 ## 다음 구현 단계
 
-다음 단계는 Windows 장비 smoke 경로와 실제 tool profile 연결을 좁혀가는 쪽이 좋습니다.
+다음 단계는 Windows 장비 smoke 경로와 나머지 tool adapter transport를 좁혀가는 쪽이 좋습니다.
 
-- Trace32 RCL client factory와 tool profile 설정 연결
 - INCA 32bit Python helper 프로세스 transport(JSON line 또는 stdio RPC)
 - power supply 입력 포맷 확정 후 command profile 구현
 - Mach Systems SENT-USB 실제 line protocol로 sample mapping 교체

@@ -5,6 +5,12 @@ from typing import Any, Callable, Dict, Mapping, Optional
 
 from embsw_tester.adapters.registry import AdapterRegistry, create_default_adapter_registry
 from embsw_tester.adapters.serial import PySerialPort, SerialAdapter, SerialPort, SerialPortSettings
+from embsw_tester.adapters.trace32_factory import (
+    RclClientFactory,
+    UdpSocketFactory,
+    create_trace32_adapter_from_profile,
+    has_trace32_profile,
+)
 
 SerialPortFactory = Callable[[SerialPortSettings], SerialPort]
 
@@ -26,6 +32,8 @@ def create_adapter_registry_from_tool_profile(
     tool_profile_snapshot: Mapping[str, Any],
     evidence_root: Path,
     serial_port_factory: Optional[SerialPortFactory] = None,
+    trace32_rcl_client_factory: Optional[RclClientFactory] = None,
+    trace32_udp_socket_factory: Optional[UdpSocketFactory] = None,
 ) -> AdapterRegistry:
     registry = create_default_adapter_registry()
     if _has_serial_devices(tool_profile_snapshot):
@@ -35,6 +43,15 @@ def create_adapter_registry_from_tool_profile(
                 tool_profile_snapshot,
                 evidence_root=evidence_root,
                 port_factory=serial_port_factory,
+            ),
+        )
+    if has_trace32_profile(tool_profile_snapshot):
+        registry.register(
+            "trace32",
+            create_trace32_adapter_from_profile(
+                tool_profile_snapshot,
+                rcl_client_factory=trace32_rcl_client_factory,
+                udp_socket_factory=trace32_udp_socket_factory,
             ),
         )
     return registry
