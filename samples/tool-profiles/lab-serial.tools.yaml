@@ -1,0 +1,14 @@
+serial:
+  devices:
+    psu:
+      device_type: power_supply
+      port: COM3
+      baudrate: 9600
+      command_profile: pending
+      notes: "Power supply input format is not confirmed yet."
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: sent_usb_line
+      notes: "Mach Systems SENT-USB serial interface."

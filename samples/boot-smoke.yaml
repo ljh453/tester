@@ -1,3 +1,5 @@
+tool_profile: tool-profiles/lab-serial.tools.yaml
+
 imports:
   - libs/common-power-sequence.yaml
 

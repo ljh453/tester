@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 5: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 6: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter + Tool Profile**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, tool profile snapshot, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -22,6 +22,8 @@
 - 테스트 가능한 `SerialAdapter`, `SerialPort`, `FakeSerialPort`
 - `serial.write`, `serial.read`, `serial.read.save_as` 지원
 - Serial TX/RX raw evidence 파일 기록
+- tool profile 기반 serial device 선언과 resolved package snapshot
+- 확정 serial 대상: power supply, Mach Systems SENT-USB interface
 - `run.json`, `resolved-package.yaml`, testcase result JSON, `summary.html` 리포트 생성
 - pytest 기반 회귀 테스트
 
@@ -38,6 +40,8 @@ samples/
   boot-smoke.yaml
   libs/
     common-power-sequence.yaml
+  tool-profiles/
+    lab-serial.tools.yaml
 src/
   embsw_tester/
     cli.py
@@ -57,6 +61,8 @@ src/
       expressions.py
       models.py
       runner.py
+    tools/
+      profile.py
 tests/
   test_adapters.py
   test_cli.py
@@ -64,6 +70,7 @@ tests/
   test_reports.py
   test_runtime.py
   test_serial_adapter.py
+  test_tool_profile.py
 ```
 
 ## 개발 환경 준비
@@ -119,6 +126,7 @@ PYTHONPATH=src .venv/bin/python -m embsw_tester.cli compile samples/boot-smoke.y
 ```
 
 정상 컴파일되면 `diagnostics`가 빈 배열이고, import된 `power_on` function과 `boot_smoke` testcase가 포함된 resolved package JSON이 출력됩니다.
+샘플은 `tool_profile`도 참조하므로 compile output의 `tool_profile_snapshot`에 `psu`와 `sent_usb` 장비 선언이 함께 포함됩니다.
 
 ## 샘플 YAML 실행
 
@@ -198,6 +206,35 @@ steps:
 
 `serial.read.save_as`는 adapter 응답의 `text` 값을 현재 testcase local variable에 저장합니다. Serial adapter는 `raw-logs/serial/<run-id>/<testcase>.log` 형태의 TX/RX evidence를 기록합니다.
 
+## Tool Profile
+
+실행 YAML은 top-level `tool_profile`로 공통 장비 설정 파일을 참조할 수 있습니다.
+
+```yaml
+tool_profile: tool-profiles/lab-serial.tools.yaml
+```
+
+현재 샘플 profile은 serial 조작 대상을 두 개로 선언합니다.
+
+```yaml
+serial:
+  devices:
+    psu:
+      device_type: power_supply
+      port: COM3
+      baudrate: 9600
+      command_profile: pending
+      notes: "Power supply input format is not confirmed yet."
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: sent_usb_line
+      notes: "Mach Systems SENT-USB serial interface."
+```
+
+`psu`는 power supply를 뜻하며, 입력 포맷이 아직 확정되지 않았기 때문에 `command_profile: pending`으로 둡니다. `sent_usb`는 Mach Systems의 SENT-USB interface를 뜻합니다. compiler는 이 설정을 실행 직전 `tool_profile_snapshot`으로 고정해서 report의 `resolved-package.yaml`에도 남깁니다.
+
 ## 리포트 생성
 
 `run` 명령에 `--reports-root`를 지정하면 실행 결과를 파일로 저장합니다.
@@ -257,12 +294,13 @@ testcases:
 - Phase 3 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase3-report-pipeline.md`
 - Phase 4 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase4-adapter-framework.md`
 - Phase 5 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase5-serial-adapter.md`
+- Phase 6 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase6-tool-profile-serial-devices.md`
 
 ## 다음 구현 단계
 
 다음 단계는 실제 Serial 포트 연결입니다.
 
 - pyserial 기반 `SerialPort` 구현
-- tool profile에서 COM port 설정 로드
+- tool profile에서 COM port 설정으로 `SerialAdapter` 구성
 - Windows 장비 연결 smoke test
 - timeout/응답 매칭 정책 확장

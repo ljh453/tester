@@ -88,6 +88,7 @@ class ResolvedPackage:
     functions: Dict[str, FunctionDef]
     testcases: List[TestcaseDef]
     diagnostics: List[Diagnostic]
+    tool_profile_snapshot: Dict[str, Any] = field(default_factory=dict)
     schema_version: str = "0.1"
     engine_version: str = "0.1.0"
 
@@ -102,6 +103,7 @@ class ResolvedPackage:
                 name: function.to_dict()
                 for name, function in sorted(self.functions.items())
             },
+            "tool_profile_snapshot": self.tool_profile_snapshot,
             "testcases": [testcase.to_dict() for testcase in self.testcases],
             "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
         }

@@ -15,6 +15,7 @@ from embsw_tester.dsl.models import (
     ResolvedPackage,
     TestcaseDef,
 )
+from embsw_tester.tools.profile import load_tool_profile
 
 
 def compile_file(path: Path) -> ResolvedPackage:
@@ -24,8 +25,10 @@ def compile_file(path: Path) -> ResolvedPackage:
     document = _load_yaml_document(source_file, diagnostics)
     functions: Dict[str, FunctionDef] = {}
     imports: List[str] = []
+    tool_profile_snapshot: Dict[str, Any] = {}
 
     if isinstance(document, Mapping):
+        tool_profile_snapshot = _load_tool_profile_snapshot(source_file, document, diagnostics)
         for import_ref in _as_list(document.get("imports")):
             import_path = _resolve_import_path(source_file.parent, import_ref)
             imports.append(str(import_path))
@@ -50,7 +53,32 @@ def compile_file(path: Path) -> ResolvedPackage:
         functions=functions,
         testcases=testcases,
         diagnostics=diagnostics,
+        tool_profile_snapshot=tool_profile_snapshot,
     )
+
+
+def _load_tool_profile_snapshot(
+    source_file: Path,
+    document: Mapping[str, Any],
+    diagnostics: List[Diagnostic],
+) -> Dict[str, Any]:
+    profile_ref = document.get("tool_profile")
+    if profile_ref is None:
+        inline_tools = document.get("tools")
+        return dict(inline_tools) if isinstance(inline_tools, Mapping) else {}
+
+    profile_path = _resolve_import_path(source_file.parent, profile_ref)
+    try:
+        return load_tool_profile(profile_path)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        diagnostics.append(
+            Diagnostic(
+                code="INVALID_TOOL_PROFILE",
+                message=str(exc),
+                source_file=str(profile_path),
+            )
+        )
+        return {}
 
 
 def _load_imported_functions(
