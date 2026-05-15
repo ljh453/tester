@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 16: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 17: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -24,6 +24,7 @@
 - 테스트 가능한 `CanoeAdapter`
 - 테스트 가능한 `IncaAdapter`
 - INCA 32bit helper request/response schema와 JSON line process transport
+- tool profile snapshot에서 `IncaAdapter` 구성
 - `serial.write`, `serial.read`, `serial.read.save_as` 지원
 - `serial.read.match` regex 기반 응답 판정
 - `trace32.command` 지원
@@ -67,6 +68,7 @@ src/
       canoe.py
       inca.py
       inca_bridge.py
+      inca_factory.py
       mock.py
       registry.py
       serial.py
@@ -94,7 +96,10 @@ tests/
   test_cli.py
   test_compiler.py
   test_reports.py
+  test_inca_adapter.py
+  test_inca_bridge.py
   test_inca_bridge_transport.py
+  test_inca_factory.py
   test_runtime.py
   test_serial_adapter.py
   test_serial_factory.py
@@ -361,6 +366,34 @@ result = run_package(package, adapter_registry=registry)
 
 helper 프로세스는 stdin에서 `IncaBridgeRequest` JSON 한 줄을 읽고, stdout으로 같은 `request_id`를 가진 `IncaBridgeResponse` JSON 한 줄을 반환해야 합니다. `timeout_ms`는 request의 top-level field로 전달되며, command args에서는 제거됩니다.
 
+tool profile에서 INCA helper process command를 선언할 수도 있습니다.
+
+```yaml
+inca:
+  helper:
+    enabled: true
+    command:
+      - C:/Python32/python.exe
+      - C:/tools/inca_helper.py
+```
+
+profile snapshot 기반 registry factory는 `inca.helper.command`가 있으면 `IncaAdapter`를 helper-backed adapter로 등록합니다.
+
+```python
+from pathlib import Path
+
+from embsw_tester.adapters import create_adapter_registry_from_tool_profile
+from embsw_tester.dsl.compiler import compile_file
+from embsw_tester.runtime import run_package
+
+package = compile_file(Path("samples/boot-smoke.yaml"))
+registry = create_adapter_registry_from_tool_profile(
+    package.tool_profile_snapshot,
+    evidence_root=Path("reports/real-tools-run"),
+)
+result = run_package(package, run_id="real-tools-run", adapter_registry=registry)
+```
+
 ## Serial Adapter
 
 `SerialAdapter`는 `SerialPort` 추상화를 통해 `serial.write`와 `serial.read`를 실행합니다. 현재 저장소에는 물리 COM 포트 없이 테스트 가능한 `FakeSerialPort`가 포함되어 있습니다.
@@ -546,12 +579,12 @@ testcases:
 - Phase 14 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase14-trace32-transports.md`
 - Phase 15 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase15-trace32-profile-factory.md`
 - Phase 16 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase16-inca-bridge-transport.md`
+- Phase 17 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase17-inca-profile-factory.md`
 
 ## 다음 구현 단계
 
-다음 단계는 Windows 장비 smoke 경로와 나머지 tool adapter 구성을 좁혀가는 쪽이 좋습니다.
+다음 단계는 Windows 장비 smoke 경로와 실제 serial 장비 protocol을 좁혀가는 쪽이 좋습니다.
 
-- INCA helper process command를 tool profile에서 구성하는 factory
 - power supply 입력 포맷 확정 후 command profile 구현
 - Mach Systems SENT-USB 실제 line protocol로 sample mapping 교체
 - Windows 장비 연결 smoke test

@@ -21,8 +21,11 @@ def normalize_tool_profile(document: Mapping[str, Any]) -> Dict[str, Any]:
     trace32_section = document.get("trace32")
     if trace32_section is not None:
         normalized["trace32"] = _normalize_trace32_section(trace32_section)
+    inca_section = document.get("inca")
+    if inca_section is not None:
+        normalized["inca"] = _normalize_inca_section(inca_section)
     for key, value in document.items():
-        if key in {"serial", "trace32"}:
+        if key in {"serial", "trace32", "inca"}:
             continue
         normalized[str(key)] = value
     return normalized
@@ -128,6 +131,45 @@ def _normalize_trace32_udp(config: Any) -> Dict[str, Any]:
     normalized["encoding"] = str(normalized.get("encoding", "utf-8"))
     normalized["response_bytes"] = int(normalized.get("response_bytes", 4096))
     return normalized
+
+
+def _normalize_inca_section(section: Any) -> Dict[str, Any]:
+    if not isinstance(section, Mapping):
+        raise ValueError("'inca' profile section must be a mapping.")
+    normalized: Dict[str, Any] = {}
+    if "helper" in section:
+        normalized["helper"] = _normalize_inca_helper(section["helper"])
+    for key, value in section.items():
+        if key == "helper":
+            continue
+        normalized[str(key)] = value
+    return normalized
+
+
+def _normalize_inca_helper(config: Any) -> Dict[str, Any]:
+    if not isinstance(config, Mapping):
+        raise ValueError("'inca.helper' profile section must be a mapping.")
+    normalized = {
+        key: value
+        for key, value in config.items()
+        if key != "command"
+    }
+    normalized["enabled"] = _as_bool(normalized.get("enabled", True))
+    if normalized["enabled"]:
+        if "command" not in config:
+            raise ValueError("'inca.helper' requires 'command' when enabled.")
+        normalized["command"] = _normalize_command_sequence(config["command"])
+    elif "command" in config:
+        normalized["command"] = _normalize_command_sequence(config["command"])
+    return normalized
+
+
+def _normalize_command_sequence(value: Any) -> list[str]:
+    if isinstance(value, (str, bytes)) or not isinstance(value, list):
+        raise ValueError("'inca.helper.command' must be a YAML sequence.")
+    if not value:
+        raise ValueError("'inca.helper.command' must not be empty.")
+    return [str(item) for item in value]
 
 
 def _as_bool(value: Any) -> bool:

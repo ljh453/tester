@@ -3,6 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional
 
+from embsw_tester.adapters.inca_factory import (
+    PopenFactory,
+    RequestIdFactory,
+    create_inca_adapter_from_profile,
+    has_inca_profile,
+)
 from embsw_tester.adapters.registry import AdapterRegistry, create_default_adapter_registry
 from embsw_tester.adapters.serial import PySerialPort, SerialAdapter, SerialPort, SerialPortSettings
 from embsw_tester.adapters.trace32_factory import (
@@ -34,6 +40,8 @@ def create_adapter_registry_from_tool_profile(
     serial_port_factory: Optional[SerialPortFactory] = None,
     trace32_rcl_client_factory: Optional[RclClientFactory] = None,
     trace32_udp_socket_factory: Optional[UdpSocketFactory] = None,
+    inca_popen_factory: Optional[PopenFactory] = None,
+    inca_request_id_factory: Optional[RequestIdFactory] = None,
 ) -> AdapterRegistry:
     registry = create_default_adapter_registry()
     if _has_serial_devices(tool_profile_snapshot):
@@ -52,6 +60,15 @@ def create_adapter_registry_from_tool_profile(
                 tool_profile_snapshot,
                 rcl_client_factory=trace32_rcl_client_factory,
                 udp_socket_factory=trace32_udp_socket_factory,
+            ),
+        )
+    if has_inca_profile(tool_profile_snapshot):
+        registry.register(
+            "inca",
+            create_inca_adapter_from_profile(
+                tool_profile_snapshot,
+                popen_factory=inca_popen_factory,
+                request_id_factory=inca_request_id_factory,
             ),
         )
     return registry

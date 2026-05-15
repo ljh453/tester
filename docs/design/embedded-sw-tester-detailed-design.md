@@ -475,6 +475,13 @@ INCA COM API가 32bit Python에서만 사용 가능하므로, 실행 엔진은 `
 - response id 불일치, 빈 응답, invalid JSON, IO 오류는 failed `AdapterResult`로 변환한다.
 - `IncaAdapter`는 `bridge_transport`가 주입된 경우 초기 INCA 명령을 bridge로 위임하고, 주입되지 않은 경우 기존 in-memory contract adapter로 동작한다.
 
+INCA tool profile은 helper process 실행 command를 composition layer에서 구성할 수 있게 한다.
+
+- `inca.helper.enabled`: helper-backed INCA adapter 사용 여부
+- `inca.helper.command`: 32bit Python 실행 파일과 helper script/path argument를 포함하는 command sequence
+
+profile 기반 adapter registry는 `inca.helper`가 있으면 `create_inca_bridge_process_transport`로 helper process transport를 만들고 `IncaAdapter(bridge_transport=...)`를 등록한다. CLI 기본 실행은 계속 mock adapter를 사용하며, 실제 장비 실행 경로에서만 profile-backed registry를 명시적으로 구성한다.
+
 ## 14. IDE UX 및 워크벤치 구조
 
 UI는 일반 대시보드형 앱이 아니라 Eclipse 스타일 개발자용 IDE 워크벤치로 설계한다.

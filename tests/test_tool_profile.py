@@ -67,6 +67,29 @@ trace32:
     assert profile["trace32"]["udp"]["response_bytes"] == 2048
 
 
+def test_load_tool_profile_normalizes_inca_helper_settings(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+inca:
+  helper:
+    enabled: true
+    command:
+      - C:/Python32/python.exe
+      - C:/tools/inca_helper.py
+""".strip(),
+        encoding="utf-8",
+    )
+
+    profile = load_tool_profile(profile_file)
+
+    assert profile["inca"]["helper"]["enabled"] is True
+    assert profile["inca"]["helper"]["command"] == [
+        "C:/Python32/python.exe",
+        "C:/tools/inca_helper.py",
+    ]
+
+
 def test_compile_file_includes_tool_profile_snapshot(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(

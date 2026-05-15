@@ -10,6 +10,7 @@ from embsw_tester.adapters.inca_bridge import (
     JsonLineIncaBridgeTransport,
     create_inca_bridge_process_transport,
 )
+from embsw_tester.adapters.inca_factory import create_inca_adapter_from_profile
 from embsw_tester.adapters.mock import MockAdapter
 from embsw_tester.adapters.registry import AdapterRegistry, create_default_adapter_registry
 from embsw_tester.adapters.serial import FakeSerialPort, PySerialPort, SerialAdapter, SerialPort, SerialPortSettings
@@ -51,6 +52,7 @@ __all__ = [
     "create_default_adapter_registry",
     "create_adapter_registry_from_tool_profile",
     "create_inca_bridge_process_transport",
+    "create_inca_adapter_from_profile",
     "create_serial_adapter_from_profile",
     "create_trace32_adapter_from_profile",
 ]
