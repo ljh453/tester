@@ -6,6 +6,8 @@ functions:
       - set:
           var: next_total
           value: "${running_total + channel}"
+      - delay:
+          ms: 1000
       - set:
           var: channel_label
           value: "channel-{{ channel }}"
@@ -17,6 +19,8 @@ functions:
       - set:
           var: total_ok
           value: "${total == expected_total}"
+      - delay:
+          ms: 1000
       - set:
           var: summary_text
           value: "total={{ total }}, expected={{ expected_total }}"
@@ -28,15 +32,23 @@ testcases:
     preconditions:
       - log.text:
           text: "Preparing control-flow GUI demo"
+      - delay:
+          ms: 1000
       - set:
           var: expected_total
           value: 6
+      - delay:
+          ms: 1000
       - set:
           var: channels
           value: [1, 2, 3]
+      - delay:
+          ms: 1000
       - set:
           var: channel_sum
           value: 0
+      - delay:
+          ms: 1000
       - set:
           var: iterations
           value: 0
@@ -53,12 +65,20 @@ testcases:
                 out:
                   next_total: channel_sum
                   channel_label: last_channel_label
+            - delay:
+                ms: 1000
             - set:
                 var: iterations
                 value: "${iterations + 1}"
+            - delay:
+                ms: 1000
             - log.value:
                 name: loop_state
                 value: "{{ last_channel_label }} sum={{ channel_sum }}"
+            - delay:
+                ms: 1000
+      - delay:
+          ms: 1000
       - call:
           function: make_summary
           args:
@@ -67,9 +87,13 @@ testcases:
           out:
             summary_text: summary_text
             total_ok: total_ok
+      - delay:
+          ms: 1000
       - assert.eq:
           left: "${total_ok}"
           right: true
+      - delay:
+          ms: 1000
       - assert.eq:
           left: "${iterations}"
           right: 3
@@ -77,6 +101,8 @@ testcases:
       - log.value:
           name: summary_text
           value: "${summary_text}"
+      - delay:
+          ms: 1000
       - log.value:
           name: last_channel_label
           value: "${last_channel_label}"
