@@ -2,6 +2,7 @@ from pathlib import Path
 
 from embsw_tester.adapters import AdapterContext, AdapterRegistry, AdapterResult
 from embsw_tester.adapters.canoe import CanoeAdapter
+from embsw_tester.adapters.inca import IncaAdapter
 from embsw_tester.adapters.serial import FakeSerialPort, SerialAdapter
 from embsw_tester.dsl.compiler import compile_file
 from embsw_tester.runtime import run_package
@@ -209,3 +210,41 @@ testcases:
     assert testcase.variables["rpm"] == 850
     assert testcase.events[0].command_type == "canoe.measurement.start"
     assert testcase.events[-1].outputs["values"]["measurement_running"] is False
+
+
+def test_runtime_runs_inca_commands_through_adapter(tmp_path: Path):
+    test_file = tmp_path / "inca.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: inca_case
+    steps:
+      - inca.recording.start:
+          name: boot
+      - inca.measure.read:
+          variable: EngineSpeed
+          save_as: rpm
+      - inca.calibration.set:
+          parameter: IdleSpeedTarget
+          value: 850
+      - assert.gt:
+          left: "${rpm}"
+          right: 0
+      - inca.recording.stop: {}
+""".strip(),
+        encoding="utf-8",
+    )
+    registry = AdapterRegistry()
+    registry.register("inca", IncaAdapter(measurements={"EngineSpeed": 900}))
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="inca-runtime",
+        adapter_registry=registry,
+    )
+
+    testcase = result.testcase_results[0]
+    assert result.status == "passed"
+    assert testcase.variables["rpm"] == 900
+    assert testcase.events[0].command_type == "inca.recording.start"
+    assert testcase.events[-1].outputs["values"]["recording_active"] is False

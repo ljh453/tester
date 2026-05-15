@@ -312,6 +312,9 @@ command_profiles:
 - `canoe.sysvar.read`
 - `canoe.signal.read`
 - `inca.measure.read`
+- `inca.calibration.set`
+- `inca.recording.start`
+- `inca.recording.stop`
 
 ## 11. Resolved Run Package
 
@@ -421,6 +424,19 @@ testcase와 function call마다 독립 프레임을 생성한다.
 - `canoe.signal.read`: signal 값을 읽고 `save_as`로 저장 가능하다.
 
 실제 Vector CANoe/CANalyzer COM 연동은 같은 `execute(command_type, args, context)` 경계 뒤에 별도 구현으로 붙인다. 이때 DSL command type과 AdapterResult shape는 유지한다.
+
+### 13.2 INCA Adapter Contract
+
+1차 구현의 INCA adapter는 Windows 32bit Python COM helper를 직접 실행하지 않는 in-memory contract adapter로 시작한다. 목적은 DSL 명령, adapter result 구조, runtime `save_as` 동작, report event schema, 32bit helper RPC payload schema를 먼저 고정하는 것이다.
+
+초기 명령:
+
+- `inca.measure.read`: measurement variable 값을 읽고 `save_as`로 저장 가능하다.
+- `inca.calibration.set`: calibration parameter 값을 설정한다.
+- `inca.recording.start`: recording 상태를 시작하고 선택적으로 name/output directory를 기록한다.
+- `inca.recording.stop`: recording 상태를 중지한다.
+
+INCA COM API가 32bit Python에서만 사용 가능하므로, 실행 엔진은 향후 `IncaBridgeRequest`와 `IncaBridgeResponse` 형태의 직렬화 가능한 메시지를 32bit helper 프로세스에 전달한다. 실제 COM 세부사항은 helper 경계 밖으로 노출하지 않고, 런타임은 일반 `AdapterResult`만 받는다.
 
 ## 14. IDE UX 및 워크벤치 구조
 
