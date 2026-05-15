@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Forms = System.Windows.Forms;
 using TesterWorkbench.Core.Engine;
 using TesterWorkbench.Core.ViewModels;
@@ -27,6 +28,7 @@ public partial class MainWindow : Window
                 new ProcessEngineRunner()));
         WorkspacePathBox.Text = repositoryRoot;
         AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
+        ApplyEditorFontSize();
         RefreshView();
     }
 
@@ -106,6 +108,38 @@ public partial class MainWindow : Window
         SyncLineNumberScroll();
     }
 
+    private void EditorBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        if (e.Key is Key.Add or Key.OemPlus)
+        {
+            ZoomEditor(increase: true);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key is Key.Subtract or Key.OemMinus)
+        {
+            ZoomEditor(increase: false);
+            e.Handled = true;
+        }
+    }
+
+    private void YamlEditor_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        ZoomEditor(e.Delta > 0);
+        e.Handled = true;
+    }
+
     private async Task RunUiAction(Func<Task> action)
     {
         try
@@ -136,6 +170,7 @@ public partial class MainWindow : Window
         EditorBox.Text = _viewModel.EditorText;
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
+        ApplyEditorFontSize();
         SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
         RefreshRuntimeViews();
         ConsoleBox.Text = _viewModel.ConsoleText;
@@ -231,6 +266,27 @@ public partial class MainWindow : Window
         }
 
         LineNumbersScrollViewer.ScrollToVerticalOffset(_editorVerticalOffset);
+    }
+
+    private void ZoomEditor(bool increase)
+    {
+        if (increase)
+        {
+            _viewModel.ZoomEditorIn();
+        }
+        else
+        {
+            _viewModel.ZoomEditorOut();
+        }
+
+        ApplyEditorFontSize();
+        SyncLineNumberScroll();
+    }
+
+    private void ApplyEditorFontSize()
+    {
+        EditorBox.FontSize = _viewModel.EditorFontSize;
+        LineNumbersTextBlock.FontSize = _viewModel.EditorFontSize;
     }
 
     private static TreeViewItem CreateTreeItem(WorkspaceNode node)

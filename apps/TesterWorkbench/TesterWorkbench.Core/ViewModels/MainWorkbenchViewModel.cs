@@ -5,6 +5,10 @@ namespace TesterWorkbench.Core.ViewModels;
 
 public sealed class MainWorkbenchViewModel
 {
+    private const double MinimumEditorFontSize = 8.0;
+    private const double MaximumEditorFontSize = 32.0;
+    private const double EditorFontSizeStep = 1.0;
+
     private readonly WorkspaceScanner _workspaceScanner;
     private readonly TesterEngineBridge _engineBridge;
     private IReadOnlyList<EngineVariableValue> _runVariables = Array.Empty<EngineVariableValue>();
@@ -46,6 +50,8 @@ public sealed class MainWorkbenchViewModel
     public string ConsoleText { get; private set; } = string.Empty;
 
     public bool AutoFocusExecutionLine { get; private set; } = true;
+
+    public double EditorFontSize { get; private set; } = 13.0;
 
     public Task OpenWorkspaceAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
@@ -126,6 +132,16 @@ public sealed class MainWorkbenchViewModel
     public void SetAutoFocusExecutionLine(bool enabled)
     {
         AutoFocusExecutionLine = enabled;
+    }
+
+    public void ZoomEditorIn()
+    {
+        EditorFontSize = Math.Min(MaximumEditorFontSize, EditorFontSize + EditorFontSizeStep);
+    }
+
+    public void ZoomEditorOut()
+    {
+        EditorFontSize = Math.Max(MinimumEditorFontSize, EditorFontSize - EditorFontSizeStep);
     }
 
     public void SelectExecutionTraceEvent(EngineRunEvent? runEvent)

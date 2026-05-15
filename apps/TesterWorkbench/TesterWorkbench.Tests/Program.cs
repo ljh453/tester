@@ -9,6 +9,7 @@ await RunMainWorkbenchViewModelStreamingTest();
 await RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest();
 await RunMainWorkbenchLineNumbersTest();
 await RunMainWorkbenchAutoFocusSettingTest();
+await RunMainWorkbenchEditorZoomSettingTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
 
@@ -417,6 +418,35 @@ static Task RunMainWorkbenchAutoFocusSettingTest()
     AssertFalse(viewModel.AutoFocusExecutionLine, "auto focus execution line can be disabled");
     viewModel.SetAutoFocusExecutionLine(true);
     AssertTrue(viewModel.AutoFocusExecutionLine, "auto focus execution line can be enabled");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchEditorZoomSettingTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            "/repo",
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    AssertEqual(13.0, viewModel.EditorFontSize, "editor font size defaults to 13");
+    viewModel.ZoomEditorIn();
+    AssertEqual(14.0, viewModel.EditorFontSize, "editor zoom in increases font size");
+    viewModel.ZoomEditorOut();
+    AssertEqual(13.0, viewModel.EditorFontSize, "editor zoom out decreases font size");
+
+    for (var i = 0; i < 20; i++)
+    {
+        viewModel.ZoomEditorOut();
+    }
+    AssertEqual(8.0, viewModel.EditorFontSize, "editor zoom out clamps to minimum");
+
+    for (var i = 0; i < 40; i++)
+    {
+        viewModel.ZoomEditorIn();
+    }
+    AssertEqual(32.0, viewModel.EditorFontSize, "editor zoom in clamps to maximum");
     return Task.CompletedTask;
 }
 
