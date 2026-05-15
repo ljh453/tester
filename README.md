@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 12: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/CANoe/INCA adapter contract, INCA 32bit helper RPC schema, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 13: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL/UDP fallback transport contract, INCA 32bit helper RPC schema, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -20,11 +20,14 @@
 - adapter-category 명령의 registry 기반 dispatch
 - Serial/Trace32/CANoe/INCA용 기본 mock adapter 등록
 - 테스트 가능한 `SerialAdapter`, `SerialPort`, `FakeSerialPort`
+- 테스트 가능한 `Trace32Adapter`, `FakeTrace32Transport`
 - 테스트 가능한 `CanoeAdapter`
 - 테스트 가능한 `IncaAdapter`
 - INCA 32bit helper request/response schema
 - `serial.write`, `serial.read`, `serial.read.save_as` 지원
 - `serial.read.match` regex 기반 응답 판정
+- `trace32.command` 지원
+- Trace32 RCL 기본 실행 및 UDP command fallback contract
 - `canoe.measurement.start`, `canoe.measurement.stop` 지원
 - `canoe.sysvar.set`, `canoe.sysvar.read`, `canoe.signal.read` 지원
 - `inca.measure.read`, `inca.calibration.set` 지원
@@ -67,6 +70,7 @@ src/
       registry.py
       serial.py
       serial_factory.py
+      trace32.py
     devices/
       command_profiles.py
     dsl/
@@ -195,6 +199,46 @@ result = run_package(package, adapter_registry=registry)
 ```
 
 실제 Serial, Trace32, CANoe, INCA 연동은 이 adapter contract 뒤에 붙이는 방식으로 확장합니다.
+
+## Trace32 Adapter
+
+`Trace32Adapter`는 Lauterbach Trace32 연동을 위한 command transport contract입니다. 기본 경로는 RCL이고, RCL transport가 실패하면 UDP command transport로 fallback합니다.
+
+YAML 예시:
+
+```yaml
+steps:
+  - trace32.command:
+      command: "STATE()"
+      timeout_ms: 2500
+      save_as: trace32_response
+```
+
+테스트나 장비 없는 개발에서는 transport를 직접 주입합니다.
+
+```python
+from embsw_tester.adapters import AdapterRegistry, AdapterResult
+from embsw_tester.adapters.trace32 import FakeTrace32Transport, Trace32Adapter
+from embsw_tester.dsl.compiler import compile_file
+from embsw_tester.runtime import run_package
+
+rcl = FakeTrace32Transport(
+    name="rcl",
+    result=AdapterResult(success=False, status="failed", message="rcl unavailable"),
+)
+udp = FakeTrace32Transport(
+    name="udp",
+    result=AdapterResult(success=True, status="passed", values={"value": "STATE:HALTED"}),
+)
+
+registry = AdapterRegistry()
+registry.register("trace32", Trace32Adapter(rcl_transport=rcl, udp_transport=udp))
+
+package = compile_file("tests/trace32.yaml")
+result = run_package(package, adapter_registry=registry)
+```
+
+`transport: udp`를 명시하면 UDP만 사용합니다. 기본값은 RCL 우선이며, `fallback: false`를 지정하면 RCL 실패 시 UDP fallback을 시도하지 않습니다. 실제 RCL/UDP 구현은 `Trace32CommandTransport.execute_command(command, timeout_ms)` 경계 뒤에 붙입니다.
 
 ## CANoe/CANalyzer Adapter
 
@@ -450,12 +494,14 @@ testcases:
 - Phase 10 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase10-serial-response-matching.md`
 - Phase 11 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase11-canoe-adapter-contract.md`
 - Phase 12 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase12-inca-adapter-contract.md`
+- Phase 13 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase13-trace32-rcl-udp-fallback.md`
 
 ## 다음 구현 단계
 
-다음 단계는 Trace32 adapter contract를 잡거나, INCA 32bit helper 프로세스 transport를 구체화하는 쪽이 좋습니다.
+다음 단계는 실제 transport 구현과 Windows 장비 smoke 경로를 좁혀가는 쪽이 좋습니다.
 
-- Trace32 command catalog와 in-memory/test adapter contract
+- Trace32 실제 RCL transport 구현
+- Trace32 UDP command transport 구현
 - INCA 32bit Python helper 프로세스 transport(JSON line 또는 stdio RPC)
 - power supply 입력 포맷 확정 후 command profile 구현
 - Mach Systems SENT-USB 실제 line protocol로 sample mapping 교체

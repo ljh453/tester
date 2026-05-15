@@ -138,4 +138,11 @@ COMMAND_SPECS: Dict[str, CommandSpec] = {
         required_args=frozenset({"var", "value"}),
         category="runtime",
     ),
+    "trace32.command": CommandSpec(
+        type="trace32.command",
+        required_args=frozenset({"command"}),
+        optional_args=frozenset({"timeout_ms", "transport", "fallback", "save_as"}),
+        category="adapter",
+        adapter="trace32",
+    ),
 }

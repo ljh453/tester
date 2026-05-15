@@ -4,6 +4,7 @@ from embsw_tester.adapters import AdapterContext, AdapterRegistry, AdapterResult
 from embsw_tester.adapters.canoe import CanoeAdapter
 from embsw_tester.adapters.inca import IncaAdapter
 from embsw_tester.adapters.serial import FakeSerialPort, SerialAdapter
+from embsw_tester.adapters.trace32 import FakeTrace32Transport, Trace32Adapter
 from embsw_tester.dsl.compiler import compile_file
 from embsw_tester.runtime import run_package
 
@@ -248,3 +249,49 @@ testcases:
     assert testcase.variables["rpm"] == 900
     assert testcase.events[0].command_type == "inca.recording.start"
     assert testcase.events[-1].outputs["values"]["recording_active"] is False
+
+
+def test_runtime_runs_trace32_command_with_udp_fallback(tmp_path: Path):
+    test_file = tmp_path / "trace32.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: trace32_case
+    steps:
+      - trace32.command:
+          command: "STATE()"
+          save_as: trace32_response
+      - assert.eq:
+          left: "${trace32_response}"
+          right: "STATE:HALTED"
+""".strip(),
+        encoding="utf-8",
+    )
+    rcl = FakeTrace32Transport(
+        name="rcl",
+        result=AdapterResult(success=False, status="failed", message="rcl unavailable"),
+    )
+    udp = FakeTrace32Transport(
+        name="udp",
+        result=AdapterResult(
+            success=True,
+            status="passed",
+            message="udp ok",
+            values={"value": "STATE:HALTED"},
+        ),
+    )
+    registry = AdapterRegistry()
+    registry.register("trace32", Trace32Adapter(rcl_transport=rcl, udp_transport=udp))
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="trace32-runtime",
+        adapter_registry=registry,
+    )
+
+    testcase = result.testcase_results[0]
+    event = testcase.events[0]
+    assert result.status == "passed"
+    assert testcase.variables["trace32_response"] == "STATE:HALTED"
+    assert event.outputs["values"]["transport"] == "udp"
+    assert event.outputs["values"]["fallback_used"] is True
