@@ -91,3 +91,64 @@ def test_cli_run_writes_report_when_reports_root_is_set(tmp_path: Path):
     assert (report_dir / "run.json").is_file()
     assert (report_dir / "resolved-package.yaml").is_file()
     assert (report_dir / "summary.html").is_file()
+
+
+def test_cli_run_can_use_tool_profile_adapters(tmp_path: Path):
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    profile_file = tmp_path / "tools.yaml"
+    profile_file.write_text("trace32: {}\n", encoding="utf-8")
+    test_file = tmp_path / "trace32.yaml"
+    test_file.write_text(
+        """
+tool_profile: tools.yaml
+testcases:
+  - name: trace32_profile_path
+    steps:
+      - trace32.command:
+          command: "STATE()"
+          fallback: false
+""".strip(),
+        encoding="utf-8",
+    )
+
+    mock_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            str(test_file),
+            "--json",
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    profile_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            str(test_file),
+            "--json",
+            "--use-tool-profile-adapters",
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert mock_result.returncode == 0
+    assert json.loads(mock_result.stdout)["status"] == "passed"
+    assert profile_result.returncode == 1
+    payload = json.loads(profile_result.stdout)
+    assert payload["status"] == "failed"
+    event = payload["testcase_results"][0]["events"][0]
+    assert event["command_type"] == "trace32.command"
+    assert "transport is not configured" in event["error"]

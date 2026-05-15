@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 17: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 18: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -37,6 +37,7 @@
 - Serial TX/RX raw evidence 파일 기록
 - tool profile 기반 serial device 선언과 resolved package snapshot
 - tool profile snapshot에서 `SerialAdapter`/`AdapterRegistry` 구성
+- CLI `run --use-tool-profile-adapters` profile-backed 실행 모드
 - 확정 serial 대상: power supply, Mach Systems SENT-USB interface
 - `sent_usb.read` 장비 의미 명령을 profile 정의 기반 serial TX/RX로 실행
 - 장비 profile의 `read.match` regex로 응답 pass/fail 판정
@@ -184,6 +185,14 @@ Windows PowerShell:
 ```
 
 정상 실행되면 `status`가 `passed`이고, `testcase_results`에 실행된 command event와 최종 local variable snapshot이 포함됩니다. 현재 외부 툴 adapter 명령은 adapter registry를 통해 실행되며, CLI 기본값은 실제 장비를 제어하지 않는 mock adapter입니다.
+
+실제 tool profile 기반 adapter를 사용하려면 명시적으로 opt-in 합니다.
+
+```bash
+.venv/bin/embsw-tester run samples/boot-smoke.yaml --use-tool-profile-adapters --run-id real-tools-run --reports-root reports --json
+```
+
+이 모드에서는 resolved `tool_profile_snapshot`에서 Serial, Trace32, INCA adapter를 구성합니다. `--reports-root`와 `--run-id`가 함께 있으면 adapter raw evidence root도 같은 report run directory를 사용합니다.
 
 ## Adapter Framework
 
@@ -492,6 +501,8 @@ result = run_package(package, run_id="real-serial-run", adapter_registry=registr
 
 `create_adapter_registry_from_tool_profile`는 profile의 논리 장비 이름을 `SerialAdapter` port 이름으로 사용합니다. 예를 들어 YAML의 `port: psu`는 profile의 `serial.devices.psu.port: COM3`로 연결됩니다. profile에 `trace32` 섹션이 있으면 `Trace32Adapter`도 함께 등록합니다.
 
+CLI에서는 같은 경로를 `--use-tool-profile-adapters`로 사용할 수 있습니다. 이 옵션을 주지 않으면 `tool_profile`이 있어도 mock adapter registry를 사용합니다.
+
 ## Device Command Profiles
 
 장비 의미 명령은 테스트 YAML에서 raw serial 문자열 대신 장비 목적을 드러내는 명령을 쓰고, 실제 serial TX/RX는 tool profile의 `command_profiles`에서 결정하는 방식입니다.
@@ -580,6 +591,7 @@ testcases:
 - Phase 15 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase15-trace32-profile-factory.md`
 - Phase 16 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase16-inca-bridge-transport.md`
 - Phase 17 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase17-inca-profile-factory.md`
+- Phase 18 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase18-profile-backed-run-cli.md`
 
 ## 다음 구현 단계
 
@@ -588,4 +600,3 @@ testcases:
 - power supply 입력 포맷 확정 후 command profile 구현
 - Mach Systems SENT-USB 실제 line protocol로 sample mapping 교체
 - Windows 장비 연결 smoke test
-- Windows 장비 실행 모드 CLI 진입점 추가
