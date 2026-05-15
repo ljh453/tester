@@ -6,7 +6,7 @@
 
 **Architecture:** Add a testable `.NET` core library for workspace scanning, engine subprocess command construction, JSON result parsing, and the main workbench view model. Add a thin WPF project that binds to the core library. Keep the Python engine as a process boundary for now.
 
-**Tech Stack:** C# `net10.0` core/test projects, C# `net10.0-windows` WPF shell, existing Python CLI, no external NuGet packages.
+**Tech Stack:** C# `net8.0` core/test projects, C# `net8.0-windows` WPF shell, existing Python CLI, no external NuGet packages.
 
 ---
 
@@ -144,7 +144,7 @@ Expected: test harness passes.
 
 - [x] **Step 1: Add WPF project**
 
-Create a `net10.0-windows` WPF project with `UseWPF`, `EnableWindowsTargeting`, and a project reference to `TesterWorkbench.Core`.
+Create a `net8.0-windows` WPF project with `UseWPF`, `EnableWindowsTargeting`, and a project reference to `TesterWorkbench.Core`.
 
 - [x] **Step 2: Add fixed workbench layout**
 

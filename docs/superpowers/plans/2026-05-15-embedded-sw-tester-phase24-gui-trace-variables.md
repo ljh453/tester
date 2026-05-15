@@ -6,7 +6,7 @@
 
 **Architecture:** Extend the existing `TesterEngineBridge` run result parser with lightweight table models for command events and testcase variables. Expose those models through `MainWorkbenchViewModel`, then bind WPF DataGrid controls to the ViewModel collections.
 
-**Tech Stack:** C# `net10.0`, WPF `net10.0-windows`, existing Python run JSON schema, existing no-NuGet console test harness.
+**Tech Stack:** C# `net8.0`, WPF `net8.0-windows`, existing Python run JSON schema, existing no-NuGet console test harness.
 
 ---
 

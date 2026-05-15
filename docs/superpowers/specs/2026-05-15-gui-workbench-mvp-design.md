@@ -33,7 +33,7 @@ GUI 1차 작업은 기존 Python 실행 엔진을 버리지 않고 감싸는 Win
 
 ## 3. 권장 기술 방향
 
-최종 제품은 C#/.NET Windows IDE이다. 1차 GUI 구현은 현재 개발 환경의 SDK에 맞춰 `.NET 10` 기반 `WPF`로 시작하고, Python 엔진은 별도 프로세스로 호출한다.
+최종 제품은 C#/.NET Windows IDE이다. 1차 GUI 구현은 `.NET 8 LTS` 기반 `WPF`로 시작하고, Python 엔진은 별도 프로세스로 호출한다.
 
 초기 IPC는 CLI subprocess 호출을 사용한다. GUI가 `embsw-tester compile` 또는 `embsw-tester run`을 실행하고 JSON stdout 및 report output을 읽는다. 이후 실시간 streaming이 필요해지면 설계서의 JSON-RPC over stdio로 확장한다.
 

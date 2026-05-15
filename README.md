@@ -135,7 +135,7 @@ tests/
 
 Python 3.9 이상이 필요합니다.
 
-GUI workbench를 빌드하려면 .NET SDK 10 이상이 필요합니다. 현재 GUI project는 `net10.0` core/test project와 `net10.0-windows` WPF shell로 구성되어 있습니다.
+GUI workbench를 빌드하려면 .NET 8 LTS SDK 이상이 필요합니다. 현재 GUI project는 `net8.0` core/test project와 `net8.0-windows` WPF shell로 구성되어 있습니다.
 
 macOS/Linux:
 
