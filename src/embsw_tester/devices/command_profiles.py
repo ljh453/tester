@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional
 
@@ -48,7 +49,8 @@ def execute_device_command(
         serial_steps.append(_serial_step("serial.write", write_args, write_result))
 
     if "read" in command_definition:
-        read_args = _serial_read_args(device_name, command_definition, args)
+        read_definition = _read_definition(command_definition)
+        read_args = _serial_read_args(device_name, read_definition, args)
         read_result = _execute_serial(
             adapter_registry,
             "serial.read",
@@ -56,7 +58,7 @@ def execute_device_command(
             adapter_context,
         )
         serial_steps.append(_serial_step("serial.read", read_args, read_result))
-        save_value = _save_value(read_result.values)
+        save_value = _read_save_value(read_result.values, read_definition)
 
     outputs: Dict[str, Any] = {
         "device": device_name,
@@ -134,13 +136,9 @@ def _serial_write_args(
 
 def _serial_read_args(
     device_name: str,
-    command_definition: Mapping[str, Any],
+    read_definition: Mapping[str, Any],
     args: Mapping[str, Any],
 ) -> Dict[str, Any]:
-    read_definition = command_definition.get("read") or {}
-    if not isinstance(read_definition, Mapping):
-        raise DeviceCommandError("Device command read definition must be a mapping.")
-
     read_args: Dict[str, Any] = {"port": device_name}
     timeout_ms = args.get("timeout_ms", read_definition.get("timeout_ms"))
     if timeout_ms is not None:
@@ -149,6 +147,13 @@ def _serial_read_args(
     if until is not None:
         read_args["until"] = render_template(str(until), args)
     return read_args
+
+
+def _read_definition(command_definition: Mapping[str, Any]) -> Mapping[str, Any]:
+    read_definition = command_definition.get("read") or {}
+    if not isinstance(read_definition, Mapping):
+        raise DeviceCommandError("Device command read definition must be a mapping.")
+    return read_definition
 
 
 def _execute_serial(
@@ -174,6 +179,28 @@ def _serial_step(
         "resolved_inputs": resolved_inputs,
         "outputs": result.to_outputs(),
     }
+
+
+def _read_save_value(values: Mapping[str, Any], read_definition: Mapping[str, Any]) -> Any:
+    raw_value = _save_value(values)
+    extract_pattern = read_definition.get("extract")
+    if extract_pattern is None:
+        return raw_value
+
+    text = str(values.get("text", raw_value))
+    try:
+        match = re.search(str(extract_pattern), text)
+    except re.error as exc:
+        raise DeviceCommandError(f"Invalid response extractor '{extract_pattern}': {exc}.") from exc
+    if match is None:
+        raise DeviceCommandError(
+            f"Serial response did not match extractor '{extract_pattern}'."
+        )
+    if "value" in match.groupdict():
+        return match.group("value")
+    if match.lastindex:
+        return match.group(1)
+    return match.group(0)
 
 
 def _save_value(values: Mapping[str, Any]) -> Any:

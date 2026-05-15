@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
@@ -525,13 +526,59 @@ def _validate_device_command(
         return
 
     commands = profile.get("commands", {})
-    if not isinstance(commands, Mapping) or command.type not in commands:
+    command_definition = commands.get(command.type) if isinstance(commands, Mapping) else None
+    if not isinstance(command_definition, Mapping):
         diagnostics.append(
             Diagnostic(
                 code="UNKNOWN_COMMAND_PROFILE",
                 message=(
                     f"Command profile '{profile_name}' for device '{device_name}' "
                     f"does not define command '{command.type}'."
+                ),
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+        return
+
+    _validate_response_extractor(command, profile_name, command_definition, diagnostics)
+
+
+def _validate_response_extractor(
+    command: NormalizedCommand,
+    profile_name: str,
+    command_definition: Mapping[str, Any],
+    diagnostics: List[Diagnostic],
+) -> None:
+    read_definition = command_definition.get("read")
+    if read_definition is None:
+        return
+    if not isinstance(read_definition, Mapping):
+        diagnostics.append(
+            Diagnostic(
+                code="INVALID_RESPONSE_EXTRACTOR",
+                message=(
+                    f"Command profile '{profile_name}' command '{command.type}' "
+                    "read definition must be a mapping."
+                ),
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+        return
+
+    extract_pattern = read_definition.get("extract")
+    if extract_pattern is None:
+        return
+    try:
+        re.compile(str(extract_pattern))
+    except re.error as exc:
+        diagnostics.append(
+            Diagnostic(
+                code="INVALID_RESPONSE_EXTRACTOR",
+                message=(
+                    f"Command profile '{profile_name}' command '{command.type}' "
+                    f"has invalid read.extract: {exc}."
                 ),
                 path=command.path,
                 source_file=command.source_file,

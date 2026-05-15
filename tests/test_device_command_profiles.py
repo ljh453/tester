@@ -78,6 +78,67 @@ testcases:
     assert sent_event.outputs["serial"][1]["command_type"] == "serial.read"
 
 
+def test_runtime_extracts_sent_usb_response_value_from_profile(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: sent_usb_line
+command_profiles:
+  sent_usb_line:
+    commands:
+      sent_usb.read:
+        write: "READ SENT {{ channel }}"
+        read:
+          until: "VALUE"
+          extract: 'VALUE:(?P<value>\\d+)'
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "sent-extract.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: sent_extract_case
+    steps:
+      - sent_usb.read:
+          device: sent_usb
+          channel: 1
+          save_as: sent_value
+      - assert.eq:
+          left: "${sent_value}"
+          right: "123"
+""".strip(),
+        encoding="utf-8",
+    )
+    package = compile_file(test_file)
+    assert package.diagnostics == []
+    registry = create_adapter_registry_from_tool_profile(
+        package.tool_profile_snapshot,
+        evidence_root=tmp_path / "reports" / "sent-extract",
+        serial_port_factory=lambda settings: FakeSerialPort(rx_lines=["VALUE:123"]),
+    )
+
+    result = run_package(
+        package,
+        run_id="sent-extract-run",
+        adapter_registry=registry,
+    )
+
+    testcase = result.testcase_results[0]
+    sent_event = testcase.events[0]
+    assert result.status == "passed"
+    assert testcase.variables["sent_value"] == "123"
+    assert sent_event.outputs["value"] == "123"
+    assert sent_event.outputs["serial"][1]["outputs"]["values"]["text"] == "VALUE:123"
+
+
 def test_compile_reports_pending_power_supply_command_profile(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(
@@ -110,3 +171,46 @@ testcases:
 
     assert [diagnostic.code for diagnostic in package.diagnostics] == ["PENDING_COMMAND_PROFILE"]
     assert "psu" in package.diagnostics[0].message
+
+
+def test_compile_reports_invalid_response_extractor(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: sent_usb_line
+command_profiles:
+  sent_usb_line:
+    commands:
+      sent_usb.read:
+        write: "READ SENT {{ channel }}"
+        read:
+          until: "VALUE"
+          extract: "VALUE:("
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "sent-invalid-extract.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: sent_invalid_extract_case
+    steps:
+      - sent_usb.read:
+          device: sent_usb
+          channel: 1
+          save_as: sent_value
+""".strip(),
+        encoding="utf-8",
+    )
+
+    package = compile_file(test_file)
+
+    assert [diagnostic.code for diagnostic in package.diagnostics] == ["INVALID_RESPONSE_EXTRACTOR"]
+    assert "sent_usb.read" in package.diagnostics[0].message
