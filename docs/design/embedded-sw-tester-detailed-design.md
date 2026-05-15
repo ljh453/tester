@@ -543,10 +543,10 @@ YAML이 유효하지 않거나 정규화가 불가능한 경우 GUI 편집기는
 GUI의 테스트 가능한 핵심 로직은 `TesterWorkbench.Core`에 둔다.
 
 - `WorkspaceScanner`: workspace 폴더에서 YAML, JSON, HTML 리소스를 탐색한다.
-- `TesterEngineBridge`: Python CLI를 subprocess로 호출해 compile/run JSON을 수집한다.
-- `MainWorkbenchViewModel`: workspace, 선택 파일, editor text, diagnostics, run status, report path를 관리한다.
+- `TesterEngineBridge`: Python CLI를 subprocess로 호출해 compile/run JSON을 수집하고, run result의 command event와 testcase variable snapshot을 table model로 변환한다.
+- `MainWorkbenchViewModel`: workspace, 선택 파일, editor text, diagnostics, run status, report path, execution trace, variables를 관리한다.
 
-초기 engine 연동은 CLI subprocess를 사용한다. GUI는 Python module을 직접 import하지 않으며, repository root의 `src`를 `PYTHONPATH`에 추가해 source tree 실행을 지원한다. JSON-RPC over stdio streaming은 현재 구조를 유지한 채 `TesterEngineBridge` 뒤에 추가할 수 있는 다음 단계로 둔다.
+초기 engine 연동은 CLI subprocess를 사용한다. GUI는 Python module을 직접 import하지 않으며, repository root의 `src`를 `PYTHONPATH`에 추가해 source tree 실행을 지원한다. Execution Trace와 Variables는 우선 run 종료 후 JSON snapshot을 표시한다. JSON-RPC over stdio streaming은 현재 구조를 유지한 채 `TesterEngineBridge` 뒤에 추가할 수 있는 다음 단계로 둔다.
 
 ## 15. 리포트 및 증적 구조
 

@@ -81,14 +81,29 @@
                              VerticalScrollBarVisibility="Auto" />
                 </TabItem>
                 <TabItem Header="Execution Trace">
-                    <TextBlock Text="Execution event table will be expanded after JSON-RPC streaming is introduced."
-                               Margin="12"
-                               TextWrapping="Wrap" />
+                    <DataGrid x:Name="ExecutionTraceGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Testcase" Binding="{Binding Testcase}" Width="140" />
+                            <DataGridTextColumn Header="Phase" Binding="{Binding Phase}" Width="140" />
+                            <DataGridTextColumn Header="Command" Binding="{Binding CommandType}" Width="160" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" />
+                            <DataGridTextColumn Header="Path" Binding="{Binding CommandPath}" Width="220" />
+                            <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </TabItem>
                 <TabItem Header="Variables">
-                    <TextBlock Text="Runtime variables will be populated from run result snapshots."
-                               Margin="12"
-                               TextWrapping="Wrap" />
+                    <DataGrid x:Name="VariablesGrid"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Testcase" Binding="{Binding Testcase}" Width="160" />
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="180" />
+                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </TabItem>
                 <TabItem Header="Report">
                     <TextBlock x:Name="ReportTabText"

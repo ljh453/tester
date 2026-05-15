@@ -98,6 +98,8 @@ public partial class MainWindow : Window
         EditorBox.Text = _viewModel.EditorText;
         SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
         ProblemsGrid.ItemsSource = _viewModel.Problems;
+        ExecutionTraceGrid.ItemsSource = _viewModel.ExecutionTrace;
+        VariablesGrid.ItemsSource = _viewModel.Variables;
         RunStatusText.Text = _viewModel.RunStatus;
         ReportPathText.Text = _viewModel.ReportDirectory ?? "";
         ReportTabText.Text = _viewModel.ReportDirectory is null

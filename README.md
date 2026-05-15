@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 23: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 24: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton, GUI run trace/variables table에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -51,6 +51,7 @@
 - pytest 기반 회귀 테스트
 - `.NET` 기반 GUI Workbench MVP skeleton
 - GUI core의 workspace scan, engine subprocess bridge, workbench ViewModel 테스트 harness
+- GUI run JSON 기반 Execution Trace / Variables table 표시
 
 ## 프로젝트 구조
 
@@ -715,11 +716,12 @@ testcases:
 - Phase 21 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase21-mach-sent-commands.md`
 - Phase 22 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase22-mach-sent-slow-frame.md`
 - Phase 23 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase23-gui-workbench-mvp.md`
+- Phase 24 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase24-gui-trace-variables.md`
 
 ## 다음 구현 단계
 
 다음 단계는 Windows 장비 smoke 경로와 실제 장비별 추가 명령을 좁혀가는 쪽이 좋습니다.
 
-- GUI Execution Trace / Variables 상세 table 연결
 - GUI Report HTML viewer 연결
+- GUI 실행 이벤트 선택 시 resolved input/output detail 표시
 - Mach Systems SENT Gateway slow message multiplex buffer 명령 추가

@@ -30,6 +30,10 @@ public sealed class MainWorkbenchViewModel
 
     public string? ReportDirectory { get; private set; }
 
+    public IReadOnlyList<EngineRunEvent> ExecutionTrace { get; private set; } = Array.Empty<EngineRunEvent>();
+
+    public IReadOnlyList<EngineVariableValue> Variables { get; private set; } = Array.Empty<EngineVariableValue>();
+
     public string ConsoleText { get; private set; } = string.Empty;
 
     public Task OpenWorkspaceAsync(string workspacePath, CancellationToken cancellationToken = default)
@@ -75,6 +79,8 @@ public sealed class MainWorkbenchViewModel
             cancellationToken);
         RunStatus = result.Status;
         ReportDirectory = result.ReportDirectory;
+        ExecutionTrace = result.Events;
+        Variables = result.Variables;
         ConsoleText = string.IsNullOrWhiteSpace(result.StandardError)
             ? $"Run '{effectiveRunId}' exited with status {result.Status}."
             : result.StandardError;

@@ -20,5 +20,20 @@ public sealed record EngineRunResult(
     int ExitCode,
     string Status,
     string? ReportDirectory,
+    IReadOnlyList<EngineRunEvent> Events,
+    IReadOnlyList<EngineVariableValue> Variables,
     string StandardError,
     string RawJson);
+
+public sealed record EngineRunEvent(
+    string Testcase,
+    string Phase,
+    string CommandType,
+    string Status,
+    string CommandPath,
+    string Error);
+
+public sealed record EngineVariableValue(
+    string Testcase,
+    string Name,
+    string Value);

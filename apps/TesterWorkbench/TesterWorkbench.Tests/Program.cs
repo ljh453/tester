@@ -48,7 +48,21 @@ static async Task RunEngineBridgeTest()
               "run_id": "gui-run",
               "status": "passed",
               "testcase_results": [
-                {"name": "boot_smoke", "status": "passed", "variables": {"power_ready": true}}
+                {
+                  "name": "boot_smoke",
+                  "status": "passed",
+                  "variables": {"power_ready": true, "rpm": 1200},
+                  "events": [
+                    {
+                      "testcase": "boot_smoke",
+                      "phase": "steps",
+                      "command_path": ["testcases", 0, "steps", 1],
+                      "command_type": "assert.eq",
+                      "status": "passed",
+                      "error": null
+                    }
+                  ]
+                }
               ],
               "report": {"report_dir": "reports/gui-run"}
             }
@@ -71,6 +85,17 @@ static async Task RunEngineBridgeTest()
     AssertEqual(0, run.ExitCode, "run exit code");
     AssertEqual("passed", run.Status, "run status");
     AssertEqual("reports/gui-run", run.ReportDirectory, "report directory");
+    AssertEqual(1, run.Events.Count, "run event count");
+    AssertEqual("boot_smoke", run.Events[0].Testcase, "run event testcase");
+    AssertEqual("steps", run.Events[0].Phase, "run event phase");
+    AssertEqual("assert.eq", run.Events[0].CommandType, "run event command type");
+    AssertEqual("passed", run.Events[0].Status, "run event status");
+    AssertEqual("testcases/0/steps/1", run.Events[0].CommandPath, "run event command path");
+    AssertEqual(2, run.Variables.Count, "run variable count");
+    AssertEqual("power_ready", run.Variables[0].Name, "first variable name");
+    AssertEqual("true", run.Variables[0].Value, "first variable value");
+    AssertEqual("rpm", run.Variables[1].Name, "second variable name");
+    AssertEqual("1200", run.Variables[1].Value, "second variable value");
     AssertSequence(
         new[] { "-m", "embsw_tester.cli", "run", "/repo/samples/boot-smoke.yaml", "--json", "--run-id", "gui-run", "--reports-root", "/repo/reports" },
         runner.Calls[1].Arguments,
@@ -100,7 +125,23 @@ static async Task RunMainWorkbenchViewModelTest()
             {
               "run_id": "gui-run",
               "status": "passed",
-              "testcase_results": [],
+              "testcase_results": [
+                {
+                  "name": "boot_smoke",
+                  "status": "passed",
+                  "variables": {"power_ready": true},
+                  "events": [
+                    {
+                      "testcase": "boot_smoke",
+                      "phase": "steps",
+                      "command_path": ["testcases", 0, "steps", 0],
+                      "command_type": "call",
+                      "status": "passed",
+                      "error": null
+                    }
+                  ]
+                }
+              ],
               "report": {"report_dir": "reports/gui-run"}
             }
             """,
@@ -120,6 +161,11 @@ static async Task RunMainWorkbenchViewModelTest()
     AssertEqual("YAML_SCHEMA", viewModel.Problems[0].Code, "problem code");
     AssertEqual("passed", viewModel.RunStatus, "run status");
     AssertEqual("reports/gui-run", viewModel.ReportDirectory, "report directory");
+    AssertEqual(1, viewModel.ExecutionTrace.Count, "view model trace count");
+    AssertEqual("call", viewModel.ExecutionTrace[0].CommandType, "view model trace command");
+    AssertEqual(1, viewModel.Variables.Count, "view model variable count");
+    AssertEqual("power_ready", viewModel.Variables[0].Name, "view model variable name");
+    AssertEqual("true", viewModel.Variables[0].Value, "view model variable value");
 }
 
 static void AssertEqual<T>(T expected, T actual, string label)

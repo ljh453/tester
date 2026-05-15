@@ -67,6 +67,8 @@ public sealed class TesterEngineBridge
             result.ExitCode,
             status,
             reportDirectory,
+            ParseRunEvents(root),
+            ParseVariables(root),
             result.StandardError,
             result.StandardOutput);
     }
@@ -97,5 +99,110 @@ public sealed class TesterEngineBridge
         return element.TryGetProperty(propertyName, out var property)
             ? property.GetString() ?? string.Empty
             : string.Empty;
+    }
+
+    private static IReadOnlyList<EngineRunEvent> ParseRunEvents(JsonElement root)
+    {
+        if (!root.TryGetProperty("testcase_results", out var testcasesElement)
+            || testcasesElement.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<EngineRunEvent>();
+        }
+
+        var events = new List<EngineRunEvent>();
+        foreach (var testcase in testcasesElement.EnumerateArray())
+        {
+            var testcaseName = GetString(testcase, "name");
+            if (!testcase.TryGetProperty("events", out var eventsElement)
+                || eventsElement.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var runEvent in eventsElement.EnumerateArray())
+            {
+                events.Add(new EngineRunEvent(
+                    GetString(runEvent, "testcase", testcaseName),
+                    GetString(runEvent, "phase"),
+                    GetString(runEvent, "command_type"),
+                    GetString(runEvent, "status"),
+                    FormatCommandPath(runEvent),
+                    GetNullableString(runEvent, "error")));
+            }
+        }
+
+        return events;
+    }
+
+    private static IReadOnlyList<EngineVariableValue> ParseVariables(JsonElement root)
+    {
+        if (!root.TryGetProperty("testcase_results", out var testcasesElement)
+            || testcasesElement.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<EngineVariableValue>();
+        }
+
+        var variables = new List<EngineVariableValue>();
+        foreach (var testcase in testcasesElement.EnumerateArray())
+        {
+            var testcaseName = GetString(testcase, "name");
+            if (!testcase.TryGetProperty("variables", out var variablesElement)
+                || variablesElement.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            foreach (var variable in variablesElement.EnumerateObject())
+            {
+                variables.Add(new EngineVariableValue(
+                    testcaseName,
+                    variable.Name,
+                    FormatJsonValue(variable.Value)));
+            }
+        }
+
+        return variables;
+    }
+
+    private static string FormatCommandPath(JsonElement runEvent)
+    {
+        if (!runEvent.TryGetProperty("command_path", out var pathElement)
+            || pathElement.ValueKind != JsonValueKind.Array)
+        {
+            return string.Empty;
+        }
+
+        return string.Join(
+            "/",
+            pathElement.EnumerateArray().Select(FormatJsonValue));
+    }
+
+    private static string GetString(JsonElement element, string propertyName, string fallback)
+    {
+        var value = GetNullableString(element, propertyName);
+        return string.IsNullOrEmpty(value) ? fallback : value;
+    }
+
+    private static string GetNullableString(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property)
+            || property.ValueKind == JsonValueKind.Null
+            || property.ValueKind == JsonValueKind.Undefined)
+        {
+            return string.Empty;
+        }
+
+        return FormatJsonValue(property);
+    }
+
+    private static string FormatJsonValue(JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            JsonValueKind.Null => string.Empty,
+            JsonValueKind.Undefined => string.Empty,
+            _ => value.GetRawText()
+        };
     }
 }
