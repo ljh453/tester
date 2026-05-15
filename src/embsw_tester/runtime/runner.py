@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from embsw_tester.adapters import AdapterContext, AdapterRegistry, create_default_adapter_registry
-from embsw_tester.devices import DeviceCommandError, execute_device_command
+from embsw_tester.devices.command_profiles import DeviceCommandError, execute_device_command
 from embsw_tester.dsl.catalog import COMMAND_SPECS
 from embsw_tester.dsl.models import FunctionDef, NormalizedCommand, ResolvedPackage, TestcaseDef
 from embsw_tester.runtime.expressions import ExpressionError, evaluate_value

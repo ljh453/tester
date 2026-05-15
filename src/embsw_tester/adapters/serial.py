@@ -15,6 +15,12 @@ class SerialPort(Protocol):
     def read_line(self, timeout_ms: int) -> str:
         ...
 
+    def write_bytes(self, payload: bytes) -> int:
+        ...
+
+    def read_bytes(self, count: int, timeout_ms: int) -> bytes:
+        ...
+
 
 @dataclass(frozen=True)
 class SerialPortSettings:
@@ -53,11 +59,25 @@ class PySerialPort:
             raise TimeoutError(f"Serial read timed out after {timeout_ms} ms.")
         return data.decode("utf-8", errors="replace").rstrip("\r\n")
 
+    def write_bytes(self, payload: bytes) -> int:
+        return int(self._serial.write(payload))
+
+    def read_bytes(self, count: int, timeout_ms: int) -> bytes:
+        self._serial.timeout = timeout_ms / 1000
+        data = bytes(self._serial.read(count))
+        if len(data) != count:
+            raise TimeoutError(
+                f"Serial byte read timed out after {timeout_ms} ms: expected {count} bytes, got {len(data)}."
+            )
+        return data
+
 
 class FakeSerialPort:
-    def __init__(self, rx_lines: Iterable[str]):
+    def __init__(self, rx_lines: Iterable[str], rx_bytes: Iterable[bytes] = ()):
         self.rx_lines: List[str] = list(rx_lines)
+        self.rx_bytes: List[bytes] = list(rx_bytes)
         self.tx_lines: List[str] = []
+        self.tx_bytes: List[bytes] = []
 
     def write_line(self, text: str) -> int:
         self.tx_lines.append(text)
@@ -67,6 +87,24 @@ class FakeSerialPort:
         if not self.rx_lines:
             raise TimeoutError(f"Serial read timed out after {timeout_ms} ms.")
         return self.rx_lines.pop(0)
+
+    def write_bytes(self, payload: bytes) -> int:
+        data = bytes(payload)
+        self.tx_bytes.append(data)
+        return len(data)
+
+    def read_bytes(self, count: int, timeout_ms: int) -> bytes:
+        if not self.rx_bytes:
+            raise TimeoutError(f"Serial byte read timed out after {timeout_ms} ms.")
+
+        chunk = self.rx_bytes.pop(0)
+        if len(chunk) < count:
+            raise TimeoutError(
+                f"Serial byte read timed out after {timeout_ms} ms: expected {count} bytes, got {len(chunk)}."
+            )
+        if len(chunk) > count:
+            self.rx_bytes.insert(0, chunk[count:])
+        return chunk[:count]
 
 
 class SerialAdapter:
@@ -86,6 +124,10 @@ class SerialAdapter:
             return self._execute_write(args, context)
         if command_type == "serial.read":
             return self._execute_read(args, context)
+        if command_type == "serial.write_bytes":
+            return self._execute_write_bytes(args, context)
+        if command_type == "serial.read_bytes":
+            return self._execute_read_bytes(args, context)
         return AdapterResult(
             success=False,
             status="failed",
@@ -164,6 +206,49 @@ class SerialAdapter:
             status="passed",
             message=f"Read from serial port '{port_name}'.",
             values=values,
+            raw_evidence_ref=evidence_ref,
+        )
+
+    def _execute_write_bytes(self, args: Dict[str, object], context: AdapterContext) -> AdapterResult:
+        port_name = _required_text(args, "port")
+        payload_hex = _required_text(args, "payload_hex").replace(" ", "")
+        payload = bytes.fromhex(payload_hex)
+        port = self._get_port(port_name)
+        bytes_written = port.write_bytes(payload)
+        normalized_hex = payload.hex().upper()
+        evidence_ref = self._append_evidence(context, f"TX_HEX {normalized_hex}\n")
+        return AdapterResult(
+            success=True,
+            status="passed",
+            message=f"Wrote bytes to serial port '{port_name}'.",
+            values={
+                "port": port_name,
+                "payload_hex": normalized_hex,
+                "bytes_written": bytes_written,
+            },
+            raw_evidence_ref=evidence_ref,
+        )
+
+    def _execute_read_bytes(self, args: Dict[str, object], context: AdapterContext) -> AdapterResult:
+        port_name = _required_text(args, "port")
+        count = int(args.get("count", 0))
+        if count <= 0:
+            raise KeyError("Serial read_bytes requires a positive 'count'.")
+        timeout_ms = int(args.get("timeout_ms", 1000))
+        port = self._get_port(port_name)
+        data = port.read_bytes(count, timeout_ms)
+        data_hex = data.hex().upper()
+        evidence_ref = self._append_evidence(context, f"RX_HEX {data_hex}\n")
+        return AdapterResult(
+            success=True,
+            status="passed",
+            message=f"Read bytes from serial port '{port_name}'.",
+            values={
+                "port": port_name,
+                "data_hex": data_hex,
+                "count": len(data),
+                "timeout_ms": timeout_ms,
+            },
             raw_evidence_ref=evidence_ref,
         )
 

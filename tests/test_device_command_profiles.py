@@ -2,6 +2,7 @@ from pathlib import Path
 
 from embsw_tester.adapters.serial import FakeSerialPort
 from embsw_tester.adapters.serial_factory import create_adapter_registry_from_tool_profile
+from embsw_tester.devices.mach_sent_gateway import encode_gateway_frame
 from embsw_tester.dsl.compiler import compile_file
 from embsw_tester.runtime import run_package
 
@@ -198,6 +199,66 @@ testcases:
     assert result.testcase_results[0].variables["sent_value"] == "123"
     assert serial_read["resolved_inputs"]["match"] == r"VALUE:1:\d+"
     assert serial_read["outputs"]["values"]["match"] == r"VALUE:1:\d+"
+
+
+def test_runtime_reads_mach_sent_gateway_fast_frame(tmp_path: Path):
+    frame = encode_gateway_frame(100, bytes.fromhex("63214365BA"))
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: mach_sent_gateway
+command_profiles:
+  mach_sent_gateway:
+    commands:
+      sent_usb.read:
+        protocol: mach_sent_gateway
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "sent-gateway.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: sent_gateway_case
+    steps:
+      - sent_usb.read:
+          device: sent_usb
+          channel: 1
+          timeout_ms: 25
+          save_as: sent_frame
+""".strip(),
+        encoding="utf-8",
+    )
+    package = compile_file(test_file)
+    assert package.diagnostics == []
+    registry = create_adapter_registry_from_tool_profile(
+        package.tool_profile_snapshot,
+        evidence_root=tmp_path / "reports" / "sent-gateway",
+        serial_port_factory=lambda settings: FakeSerialPort(rx_lines=[], rx_bytes=[frame]),
+    )
+
+    result = run_package(
+        package,
+        run_id="sent-gateway-run",
+        adapter_registry=registry,
+    )
+
+    testcase = result.testcase_results[0]
+    sent_event = testcase.events[0]
+    assert result.status == "passed"
+    assert testcase.variables["sent_frame"]["data_nibbles"] == [1, 2, 3, 4, 5, 6]
+    assert testcase.variables["sent_frame"]["crc"] == 10
+    assert sent_event.outputs["protocol"] == "mach_sent_gateway"
+    assert sent_event.outputs["channel"] == 1
+    assert sent_event.outputs["frame"]["raw_hex"].startswith("020664")
+    assert sent_event.outputs["serial"][0]["command_type"] == "serial.read_bytes"
 
 
 def test_compile_reports_pending_power_supply_command_profile(tmp_path: Path):

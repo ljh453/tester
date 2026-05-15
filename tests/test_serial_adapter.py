@@ -63,3 +63,21 @@ def test_serial_read_fails_when_regex_match_misses(tmp_path):
     assert result.success is False
     assert result.values["text"] == "ERROR"
     assert "regex" in result.message
+
+
+def test_serial_read_bytes_returns_hex_and_records_raw_evidence(tmp_path):
+    port = FakeSerialPort(rx_lines=[], rx_bytes=[bytes.fromhex("02015A5B03")])
+    adapter = SerialAdapter({"sent_usb": port}, evidence_root=tmp_path)
+
+    result = adapter.execute(
+        "serial.read_bytes",
+        {"port": "sent_usb", "count": 5, "timeout_ms": 50},
+        AdapterContext(run_id="serial-run", testcase="case", phase="steps"),
+    )
+
+    assert result.success is True
+    assert result.values["data_hex"] == "02015A5B03"
+    assert result.values["count"] == 5
+    assert (tmp_path / result.raw_evidence_ref).read_text(encoding="utf-8") == (
+        "RX_HEX 02015A5B03\n"
+    )

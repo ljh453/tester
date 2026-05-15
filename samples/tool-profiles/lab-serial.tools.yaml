@@ -10,15 +10,11 @@ serial:
       device_type: mach_systems_sent_usb
       port: COM4
       baudrate: 115200
-      command_profile: sent_usb_line
-      notes: "Mach Systems SENT-USB serial interface."
+      command_profile: mach_sent_gateway
+      notes: "Mach Systems SENT-USB interface using the SENT Gateway binary protocol."
 command_profiles:
-  sent_usb_line:
-    notes: "Placeholder mapping. Replace write/read syntax after confirming the Mach Systems SENT-USB command format."
+  mach_sent_gateway:
+    notes: "Mach Systems SENT Gateway protocol. Initial scope receives SENT fast frames from message id 100/200."
     commands:
       sent_usb.read:
-        write: "READ SENT {{ channel }}"
-        read:
-          until: "VALUE"
-          match: "VALUE:.+"
-          extract: "VALUE:(?P<value>.+)"
+        protocol: mach_sent_gateway
