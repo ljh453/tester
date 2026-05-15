@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import socket
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Tuple
 
 from embsw_tester.adapters.base import AdapterContext, AdapterResult
 
@@ -24,6 +25,91 @@ class FakeTrace32Transport:
     def execute_command(self, command: str, timeout_ms: int) -> AdapterResult:
         self.commands.append((command, timeout_ms))
         return self.result
+
+
+class RclTrace32Transport:
+    name = "rcl"
+
+    def __init__(self, client: Any, command_method: str = "cmd"):
+        self._client = client
+        self._command_method = command_method
+
+    def execute_command(self, command: str, timeout_ms: int) -> AdapterResult:
+        try:
+            command_callable = getattr(self._client, self._command_method)
+            response = command_callable(command)
+        except Exception as exc:
+            return AdapterResult(
+                success=False,
+                status="failed",
+                message=f"Trace32 RCL command failed: {exc}.",
+                values={"transport": "rcl", "command": command},
+            )
+        return _coerce_transport_response(
+            response,
+            transport="rcl",
+            command=command,
+            success_message="Trace32 RCL command executed.",
+        )
+
+
+class UdpTrace32Transport:
+    name = "udp"
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        terminator: str = "\n",
+        encoding: str = "utf-8",
+        response_bytes: int = 4096,
+        socket_factory: Callable[..., Any] = socket.socket,
+    ):
+        self._host = host
+        self._port = int(port)
+        self._terminator = terminator
+        self._encoding = encoding
+        self._response_bytes = int(response_bytes)
+        self._socket_factory = socket_factory
+
+    def execute_command(self, command: str, timeout_ms: int) -> AdapterResult:
+        udp_socket = None
+        try:
+            udp_socket = self._socket_factory(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_socket.settimeout(timeout_ms / 1000)
+            udp_socket.connect((self._host, self._port))
+            udp_socket.sendall(f"{command}{self._terminator}".encode(self._encoding))
+            response = udp_socket.recv(self._response_bytes)
+        except Exception as exc:
+            return AdapterResult(
+                success=False,
+                status="failed",
+                message=f"Trace32 UDP command failed: {exc}.",
+                values={
+                    "transport": "udp",
+                    "command": command,
+                    "host": self._host,
+                    "port": self._port,
+                },
+            )
+        finally:
+            close = getattr(udp_socket, "close", None) if udp_socket is not None else None
+            if close is not None:
+                close()
+
+        text = response.decode(self._encoding, errors="replace").strip()
+        return AdapterResult(
+            success=True,
+            status="passed",
+            message="Trace32 UDP command executed.",
+            values={
+                "transport": "udp",
+                "command": command,
+                "host": self._host,
+                "port": self._port,
+                "value": text,
+            },
+        )
 
 
 class Trace32Adapter:
@@ -172,6 +258,64 @@ def _with_trace32_values(
         values=values,
         raw_evidence_ref=result.raw_evidence_ref,
         duration_ms=result.duration_ms,
+    )
+
+
+def _coerce_transport_response(
+    response: Any,
+    transport: str,
+    command: str,
+    success_message: str,
+) -> AdapterResult:
+    if isinstance(response, AdapterResult):
+        values = dict(response.values)
+        values.setdefault("transport", transport)
+        values.setdefault("command", command)
+        return AdapterResult(
+            success=response.success,
+            status=response.status,
+            message=response.message,
+            values=values,
+            raw_evidence_ref=response.raw_evidence_ref,
+            duration_ms=response.duration_ms,
+        )
+
+    if isinstance(response, bytes):
+        value = response.decode("utf-8", errors="replace").strip()
+        return _successful_transport_result(transport, command, value, success_message)
+
+    if isinstance(response, Mapping):
+        values = dict(response)
+        success = bool(values.pop("success", True))
+        status = str(values.pop("status", "passed" if success else "failed"))
+        message = str(values.pop("message", success_message))
+        values.setdefault("transport", transport)
+        values.setdefault("command", command)
+        return AdapterResult(
+            success=success,
+            status=status,
+            message=message,
+            values=values,
+        )
+
+    return _successful_transport_result(transport, command, response, success_message)
+
+
+def _successful_transport_result(
+    transport: str,
+    command: str,
+    value: Any,
+    message: str,
+) -> AdapterResult:
+    return AdapterResult(
+        success=True,
+        status="passed",
+        message=message,
+        values={
+            "transport": transport,
+            "command": command,
+            "value": value,
+        },
     )
 
 

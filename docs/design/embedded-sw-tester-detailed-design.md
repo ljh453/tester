@@ -413,7 +413,7 @@ testcase와 function call마다 독립 프레임을 생성한다.
 
 ### 13.1 Trace32 Adapter Contract
 
-1차 구현의 Trace32 adapter는 실제 Lauterbach RCL/UDP API를 직접 호출하지 않는 transport contract adapter로 시작한다. 기본 transport는 RCL이며, RCL transport가 실패하거나 사용할 수 없는 경우 UDP command transport로 fallback한다.
+1차 구현의 Trace32 adapter는 transport contract adapter로 시작한다. 기본 transport는 RCL이며, RCL transport가 실패하거나 사용할 수 없는 경우 UDP command transport로 fallback한다.
 
 초기 명령:
 
@@ -426,7 +426,7 @@ testcase와 function call마다 독립 프레임을 생성한다.
 - `fallback`은 기본 `true`이며, RCL 실패 시 UDP transport를 시도한다.
 - adapter result에는 실제 사용한 `transport`, `fallback_used`, `attempts`를 남겨 리포트에서 RCL 실패와 UDP fallback 여부를 추적 가능하게 한다.
 
-실제 RCL/UDP 구현은 `Trace32CommandTransport.execute_command(command, timeout_ms)` 경계 뒤에 별도 구현으로 붙인다. 이때 DSL command type과 AdapterResult shape는 유지한다.
+`RclTrace32Transport`는 주입된 RCL client의 command method를 호출하는 wrapper다. RCL Python 패키지별 세부 API 차이는 client factory 또는 `command_method` 설정으로 흡수한다. `UdpTrace32Transport`는 UDP socket으로 command 문자열과 terminator를 전송하고 응답 datagram을 읽는다. 두 transport 모두 `Trace32CommandTransport.execute_command(command, timeout_ms)` 경계를 만족하며, DSL command type과 AdapterResult shape는 유지한다.
 
 ### 13.2 CANoe/CANalyzer Adapter Contract
 
