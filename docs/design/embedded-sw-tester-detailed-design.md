@@ -308,6 +308,9 @@ command_profiles:
 - `trace32.command`
 - `canoe.measurement.start`
 - `canoe.measurement.stop`
+- `canoe.sysvar.set`
+- `canoe.sysvar.read`
+- `canoe.signal.read`
 - `inca.measure.read`
 
 ## 11. Resolved Run Package
@@ -403,7 +406,21 @@ testcase와 function call마다 독립 프레임을 생성한다.
 - raw_evidence_ref
 - duration_ms
 
-구현 순서는 mock adapter, Serial, Trace32, CANoe/CANalyzer, INCA 순서로 진행한다. 외부 장비 없이도 DSL 컴파일러와 런타임 테스트가 가능해야 한다.
+구현 순서는 mock adapter, Serial, CANoe/CANalyzer contract, Trace32, INCA 순서로 진행한다. 외부 장비 없이도 DSL 컴파일러와 런타임 테스트가 가능해야 한다.
+
+### 13.1 CANoe/CANalyzer Adapter Contract
+
+1차 구현의 CANoe/CANalyzer adapter는 Windows COM API를 직접 호출하지 않는 in-memory contract adapter로 시작한다. 목적은 DSL 명령, adapter result 구조, runtime `save_as` 동작, report event schema를 먼저 고정하는 것이다.
+
+초기 명령:
+
+- `canoe.measurement.start`: measurement running 상태를 시작한다.
+- `canoe.measurement.stop`: measurement running 상태를 중지한다.
+- `canoe.sysvar.set`: `namespace::name` system variable 값을 설정한다.
+- `canoe.sysvar.read`: `namespace::name` system variable 값을 읽고 `save_as`로 저장 가능하다.
+- `canoe.signal.read`: signal 값을 읽고 `save_as`로 저장 가능하다.
+
+실제 Vector CANoe/CANalyzer COM 연동은 같은 `execute(command_type, args, context)` 경계 뒤에 별도 구현으로 붙인다. 이때 DSL command type과 AdapterResult shape는 유지한다.
 
 ## 14. IDE UX 및 워크벤치 구조
 

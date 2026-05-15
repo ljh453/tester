@@ -35,6 +35,37 @@ COMMAND_SPECS: Dict[str, CommandSpec] = {
         optional_args=frozenset({"args", "out"}),
         category="control",
     ),
+    "canoe.measurement.start": CommandSpec(
+        type="canoe.measurement.start",
+        optional_args=frozenset({"configuration"}),
+        category="adapter",
+        adapter="canoe",
+    ),
+    "canoe.measurement.stop": CommandSpec(
+        type="canoe.measurement.stop",
+        category="adapter",
+        adapter="canoe",
+    ),
+    "canoe.signal.read": CommandSpec(
+        type="canoe.signal.read",
+        required_args=frozenset({"signal"}),
+        optional_args=frozenset({"bus", "channel", "save_as"}),
+        category="adapter",
+        adapter="canoe",
+    ),
+    "canoe.sysvar.read": CommandSpec(
+        type="canoe.sysvar.read",
+        required_args=frozenset({"namespace", "name"}),
+        optional_args=frozenset({"save_as"}),
+        category="adapter",
+        adapter="canoe",
+    ),
+    "canoe.sysvar.set": CommandSpec(
+        type="canoe.sysvar.set",
+        required_args=frozenset({"namespace", "name", "value"}),
+        category="adapter",
+        adapter="canoe",
+    ),
     "delay": CommandSpec(
         type="delay",
         required_args=frozenset({"ms"}),

@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 10: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter + Tool Profile + Serial Profile Factory + Device Command Profiles + Response Matching/Extraction**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, tool profile snapshot, profile 기반 SerialAdapter factory, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 11: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter + CANoe/CANalyzer Adapter Contract + Tool Profile + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, CANoe/CANalyzer adapter contract, tool profile snapshot, 장비 의미 명령 profile, 응답 매칭과 값 추출, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -20,8 +20,11 @@
 - adapter-category 명령의 registry 기반 dispatch
 - Serial/Trace32/CANoe/INCA용 기본 mock adapter 등록
 - 테스트 가능한 `SerialAdapter`, `SerialPort`, `FakeSerialPort`
+- 테스트 가능한 `CanoeAdapter`
 - `serial.write`, `serial.read`, `serial.read.save_as` 지원
 - `serial.read.match` regex 기반 응답 판정
+- `canoe.measurement.start`, `canoe.measurement.stop` 지원
+- `canoe.sysvar.set`, `canoe.sysvar.read`, `canoe.signal.read` 지원
 - Serial TX/RX raw evidence 파일 기록
 - tool profile 기반 serial device 선언과 resolved package snapshot
 - tool profile snapshot에서 `SerialAdapter`/`AdapterRegistry` 구성
@@ -53,6 +56,7 @@ src/
     cli.py
     adapters/
       base.py
+      canoe.py
       mock.py
       registry.py
       serial.py
@@ -185,6 +189,45 @@ result = run_package(package, adapter_registry=registry)
 ```
 
 실제 Serial, Trace32, CANoe, INCA 연동은 이 adapter contract 뒤에 붙이는 방식으로 확장합니다.
+
+## CANoe/CANalyzer Adapter
+
+`CanoeAdapter`는 Windows 전용 Vector COM 연동 전에 DSL과 runtime 계약을 고정하기 위한 in-memory adapter입니다. 현재 지원 명령은 measurement start/stop, system variable set/read, signal read입니다.
+
+YAML 예시:
+
+```yaml
+steps:
+  - canoe.measurement.start: {}
+  - canoe.sysvar.set:
+      namespace: Vehicle
+      name: Ignition
+      value: true
+  - canoe.sysvar.read:
+      namespace: Vehicle
+      name: Ignition
+      save_as: ignition_state
+  - canoe.signal.read:
+      signal: EngineSpeed
+      save_as: rpm
+  - canoe.measurement.stop: {}
+```
+
+테스트나 장비 없는 개발에서는 adapter를 직접 주입합니다.
+
+```python
+from embsw_tester.adapters import AdapterRegistry, CanoeAdapter
+from embsw_tester.dsl.compiler import compile_file
+from embsw_tester.runtime import run_package
+
+registry = AdapterRegistry()
+registry.register("canoe", CanoeAdapter(signals={"EngineSpeed": 850}))
+
+package = compile_file("tests/canoe.yaml")
+result = run_package(package, adapter_registry=registry)
+```
+
+실제 CANoe/CANalyzer COM API 호출은 이후 같은 `execute(command_type, args, context)` 경계 뒤에 붙입니다.
 
 ## Serial Adapter
 
@@ -364,11 +407,14 @@ testcases:
 - Phase 8 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase8-device-command-profiles.md`
 - Phase 9 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase9-device-response-extraction.md`
 - Phase 10 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase10-serial-response-matching.md`
+- Phase 11 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase11-canoe-adapter-contract.md`
 
 ## 다음 구현 단계
 
-다음 단계는 실제 장비 연결을 준비하는 serial 실행 경로 정교화입니다.
+다음 단계는 INCA adapter contract와 32bit helper RPC 경계를 잡는 쪽이 좋습니다.
 
+- INCA measurement read/calibration set/recording start-stop command catalog
+- 32bit Python helper 프로세스 RPC message schema
 - power supply 입력 포맷 확정 후 command profile 구현
 - Mach Systems SENT-USB 실제 line protocol로 sample mapping 교체
 - Windows 장비 연결 smoke test

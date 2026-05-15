@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from embsw_tester.adapters import AdapterContext, AdapterRegistry, AdapterResult
+from embsw_tester.adapters.canoe import CanoeAdapter
 from embsw_tester.adapters.serial import FakeSerialPort, SerialAdapter
 from embsw_tester.dsl.compiler import compile_file
 from embsw_tester.runtime import run_package
@@ -162,3 +163,49 @@ testcases:
     assert testcase.variables["psu_response"] == "OK"
     assert testcase.events[0].command_type == "serial.read"
     assert testcase.events[0].outputs["values"]["text"] == "OK"
+
+
+def test_runtime_runs_canoe_commands_through_adapter(tmp_path: Path):
+    test_file = tmp_path / "canoe.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: canoe_case
+    steps:
+      - canoe.measurement.start: {}
+      - canoe.sysvar.set:
+          namespace: Vehicle
+          name: Ignition
+          value: true
+      - canoe.sysvar.read:
+          namespace: Vehicle
+          name: Ignition
+          save_as: ignition_state
+      - canoe.signal.read:
+          signal: EngineSpeed
+          save_as: rpm
+      - assert.eq:
+          left: "${ignition_state}"
+          right: true
+      - assert.gt:
+          left: "${rpm}"
+          right: 0
+      - canoe.measurement.stop: {}
+""".strip(),
+        encoding="utf-8",
+    )
+    registry = AdapterRegistry()
+    registry.register("canoe", CanoeAdapter(signals={"EngineSpeed": 850}))
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="canoe-runtime",
+        adapter_registry=registry,
+    )
+
+    testcase = result.testcase_results[0]
+    assert result.status == "passed"
+    assert testcase.variables["ignition_state"] is True
+    assert testcase.variables["rpm"] == 850
+    assert testcase.events[0].command_type == "canoe.measurement.start"
+    assert testcase.events[-1].outputs["values"]["measurement_running"] is False
