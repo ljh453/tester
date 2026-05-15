@@ -25,6 +25,8 @@ public sealed class MainWorkbenchViewModel
 
     public string EditorText { get; private set; } = string.Empty;
 
+    public string EditorLineNumbersText { get; private set; } = "1";
+
     public IReadOnlyList<EngineDiagnostic> Problems { get; private set; } = Array.Empty<EngineDiagnostic>();
 
     public string RunStatus { get; private set; } = "Idle";
@@ -56,7 +58,7 @@ public sealed class MainWorkbenchViewModel
     public async Task OpenFileAsync(string yamlFilePath, CancellationToken cancellationToken = default)
     {
         SelectedFilePath = Path.GetFullPath(yamlFilePath);
-        EditorText = await File.ReadAllTextAsync(SelectedFilePath, cancellationToken);
+        UpdateEditorText(await File.ReadAllTextAsync(SelectedFilePath, cancellationToken));
         ClearCurrentExecutionLocation();
         ConsoleText = $"Opened file: {SelectedFilePath}";
     }
@@ -71,7 +73,10 @@ public sealed class MainWorkbenchViewModel
             : result.StandardError;
     }
 
-    public async Task RunAsync(string? runId = null, CancellationToken cancellationToken = default)
+    public async Task RunAsync(
+        string? runId = null,
+        Action? onExecutionChanged = null,
+        CancellationToken cancellationToken = default)
     {
         EnsureFileSelected();
         var effectiveRunId = string.IsNullOrWhiteSpace(runId)
@@ -81,19 +86,39 @@ public sealed class MainWorkbenchViewModel
             ? Path.Combine(Path.GetDirectoryName(SelectedFilePath!)!, "reports")
             : Path.Combine(WorkspacePath, "reports");
 
+        RunStatus = "Running";
+        ReportDirectory = null;
+        ExecutionTrace = Array.Empty<EngineRunEvent>();
+        _runVariables = Array.Empty<EngineVariableValue>();
+        Variables = Array.Empty<EngineVariableValue>();
+        ClearCurrentExecutionLocation();
+        onExecutionChanged?.Invoke();
+
         var result = await _engineBridge.RunAsync(
             SelectedFilePath!,
             effectiveRunId,
             reportsRoot,
-            cancellationToken);
+            cancellationToken,
+            runEvent =>
+            {
+                AppendExecutionTraceEvent(runEvent);
+                onExecutionChanged?.Invoke();
+            });
         RunStatus = result.Status;
         ReportDirectory = result.ReportDirectory;
-        ExecutionTrace = result.Events;
+        var streamedEvents = ExecutionTrace;
+        ExecutionTrace = result.Events.Count > 0 ? result.Events : streamedEvents;
         _runVariables = result.Variables;
         SelectExecutionTraceEvent(ExecutionTrace.LastOrDefault());
         ConsoleText = string.IsNullOrWhiteSpace(result.StandardError)
             ? $"Run '{effectiveRunId}' exited with status {result.Status}."
             : result.StandardError;
+    }
+
+    public void UpdateEditorText(string editorText)
+    {
+        EditorText = editorText;
+        EditorLineNumbersText = BuildLineNumbersText(editorText);
     }
 
     public void SelectExecutionTraceEvent(EngineRunEvent? runEvent)
@@ -115,6 +140,27 @@ public sealed class MainWorkbenchViewModel
             : runEvent.CommandType;
     }
 
+    private void AppendExecutionTraceEvent(EngineRunEvent runEvent)
+    {
+        var events = ExecutionTrace.ToList();
+        var runningEventIndex = events.FindLastIndex(
+            candidate => candidate.Status == "running"
+                && candidate.Testcase == runEvent.Testcase
+                && candidate.Phase == runEvent.Phase
+                && candidate.CommandPath == runEvent.CommandPath);
+        if (runEvent.Status != "running" && runningEventIndex >= 0)
+        {
+            events[runningEventIndex] = runEvent;
+        }
+        else
+        {
+            events.Add(runEvent);
+        }
+
+        ExecutionTrace = events;
+        SelectExecutionTraceEvent(runEvent);
+    }
+
     private IReadOnlyList<EngineVariableValue> LatestLocalVariablesOrRunVariables()
     {
         var latestEvent = ExecutionTrace.LastOrDefault();
@@ -128,6 +174,14 @@ public sealed class MainWorkbenchViewModel
         CurrentSourceFile = string.Empty;
         CurrentLineNumber = 0;
         CurrentLocationText = "No execution line selected.";
+    }
+
+    private static string BuildLineNumbersText(string editorText)
+    {
+        var lineCount = editorText.Count(character => character == '\n') + 1;
+        return string.Join(
+            Environment.NewLine,
+            Enumerable.Range(1, Math.Max(1, lineCount)));
     }
 
     private void EnsureFileSelected()

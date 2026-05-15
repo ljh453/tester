@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -25,6 +26,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser.add_argument("--run-id")
     run_parser.add_argument("--reports-root", type=Path)
     run_parser.add_argument("--use-tool-profile-adapters", action="store_true")
+    run_parser.add_argument("--events-jsonl", action="store_true")
 
     args = parser.parse_args(argv)
     if args.command == "compile":
@@ -48,6 +50,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             package,
             run_id=args.run_id,
             adapter_registry=adapter_registry,
+            event_callback=_event_jsonl_callback if args.events_jsonl else None,
         )
         payload = result.to_dict()
         if args.reports_root is not None:
@@ -79,6 +82,15 @@ def _print_run_summary(payload: dict) -> None:
         print(f"- {testcase_result['name']}: {testcase_result['status']}")
     if "report" in payload:
         print(f"report: {payload['report']['report_dir']}")
+
+
+def _event_jsonl_callback(event: object) -> None:
+    payload = event.to_dict()
+    print(
+        f"__EMBSW_EVENT__ {json.dumps(payload, ensure_ascii=False)}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def _profile_adapter_evidence_root(args: argparse.Namespace) -> Path:

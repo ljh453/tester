@@ -5,6 +5,8 @@ using TesterWorkbench.Core.Workspace;
 await RunWorkspaceScannerTest();
 await RunEngineBridgeTest();
 await RunMainWorkbenchViewModelTest();
+await RunMainWorkbenchViewModelStreamingTest();
+await RunMainWorkbenchLineNumbersTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
 
@@ -200,6 +202,149 @@ static async Task RunMainWorkbenchViewModelTest()
     AssertEqual("900", viewModel.Variables[0].Value, "selected trace variable value");
 }
 
+static async Task RunMainWorkbenchViewModelStreamingTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/stream.yaml", "testcases:\n  - name: stream_case\n    steps: []"));
+    var yamlPath = Path.Combine(root, "tests", "stream.yaml");
+    var firstRunningEventJson =
+        """
+        {
+          "testcase": "stream_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 0],
+          "command_type": "set",
+          "status": "running",
+          "source_file": "/repo/tests/stream.yaml",
+          "source_line": 4,
+          "local_variables": {},
+          "error": null
+        }
+        """;
+    var firstPassedEventJson =
+        """
+        {
+          "testcase": "stream_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 0],
+          "command_type": "set",
+          "status": "passed",
+          "source_file": "/repo/tests/stream.yaml",
+          "source_line": 4,
+          "local_variables": {"rpm": 700},
+          "error": null
+        }
+        """;
+    var secondRunningEventJson =
+        """
+        {
+          "testcase": "stream_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 1],
+          "command_type": "assert.eq",
+          "status": "running",
+          "source_file": "/repo/tests/stream.yaml",
+          "source_line": 7,
+          "local_variables": {"rpm": 700},
+          "error": null
+        }
+        """;
+    var secondPassedEventJson =
+        """
+        {
+          "testcase": "stream_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 1],
+          "command_type": "assert.eq",
+          "status": "passed",
+          "source_file": "/repo/tests/stream.yaml",
+          "source_line": 7,
+          "local_variables": {"rpm": 700, "rpm_ok": true},
+          "error": null
+        }
+        """;
+    var runner = new FakeEngineProcessRunner(
+        (
+            new EngineProcessResult(
+                0,
+                """
+                {
+                  "diagnostics": [],
+                  "testcases": []
+                }
+                """,
+                ""),
+            Array.Empty<string>()
+        ),
+        (
+            new EngineProcessResult(
+                0,
+                """
+                {
+                  "run_id": "gui-run",
+                  "status": "passed",
+                  "testcase_results": [
+                    {
+                      "name": "stream_case",
+                      "status": "passed",
+                      "variables": {"rpm": 700, "rpm_ok": true},
+                      "events": []
+                    }
+                  ],
+                  "report": {"report_dir": "reports/gui-run"}
+                }
+                """,
+                ""),
+            new[]
+            {
+                firstRunningEventJson,
+                firstPassedEventJson,
+                secondRunningEventJson,
+                secondPassedEventJson
+            }
+        ));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+    var callbackCount = 0;
+
+    await viewModel.OpenWorkspaceAsync(root);
+    await viewModel.OpenFileAsync(yamlPath);
+    await viewModel.CompileAsync();
+    await viewModel.RunAsync("gui-run", () => callbackCount++);
+
+    AssertEqual(5, callbackCount, "streaming callback count");
+    AssertEqual(2, viewModel.ExecutionTrace.Count, "streaming trace count");
+    AssertEqual(7, viewModel.CurrentLineNumber, "streaming current line");
+    AssertEqual(2, viewModel.Variables.Count, "streaming variables count");
+    AssertEqual("rpm_ok", viewModel.Variables[1].Name, "streaming second variable name");
+    AssertEqual("passed", viewModel.ExecutionTrace[0].Status, "streaming replaced first running event");
+    AssertSequence(
+        new[] { "-m", "embsw_tester.cli", "run", yamlPath, "--json", "--run-id", "gui-run", "--reports-root", Path.Combine(root, "reports"), "--events-jsonl" },
+        runner.Calls[1].Arguments,
+        "streaming run args");
+}
+
+static async Task RunMainWorkbenchLineNumbersTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/line-numbers.yaml", "testcases:\n  - name: line_case\n    steps: []"));
+    var yamlPath = Path.Combine(root, "tests", "line-numbers.yaml");
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            root,
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    await viewModel.OpenFileAsync(yamlPath);
+
+    AssertEqual(
+        string.Join(Environment.NewLine, "1", "2", "3"),
+        viewModel.EditorLineNumbersText,
+        "editor line numbers");
+}
+
 static void AssertEqual<T>(T expected, T actual, string label)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
@@ -255,11 +400,17 @@ static class TestPaths
 
 sealed class FakeEngineProcessRunner : IEngineProcessRunner
 {
-    private readonly Queue<EngineProcessResult> _results;
+    private readonly Queue<(EngineProcessResult Result, IReadOnlyList<string> EventJsonLines)> _results;
 
     public FakeEngineProcessRunner(params EngineProcessResult[] results)
     {
-        _results = new Queue<EngineProcessResult>(results);
+        _results = new Queue<(EngineProcessResult, IReadOnlyList<string>)>(
+            results.Select(result => (result, (IReadOnlyList<string>)Array.Empty<string>())));
+    }
+
+    public FakeEngineProcessRunner(params (EngineProcessResult Result, IReadOnlyList<string> EventJsonLines)[] results)
+    {
+        _results = new Queue<(EngineProcessResult, IReadOnlyList<string>)>(results);
     }
 
     public List<EngineProcessCall> Calls { get; } = new();
@@ -268,10 +419,17 @@ sealed class FakeEngineProcessRunner : IEngineProcessRunner
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<string>? onEventJsonLine = null)
     {
         Calls.Add(new EngineProcessCall(fileName, arguments, workingDirectory));
-        return Task.FromResult(_results.Dequeue());
+        var result = _results.Dequeue();
+        foreach (var eventJsonLine in result.EventJsonLines)
+        {
+            onEventJsonLine?.Invoke(eventJsonLine);
+        }
+
+        return Task.FromResult(result.Result);
     }
 }
 

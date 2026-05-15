@@ -59,6 +59,60 @@ def test_cli_run_outputs_run_result_json():
     assert payload["testcase_results"][0]["variables"] == {"power_ready": True}
 
 
+def test_cli_run_streams_event_json_lines_without_breaking_final_json(tmp_path: Path):
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    test_file = tmp_path / "stream.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: stream_case
+    steps:
+      - set:
+          var: rpm
+          value: 700
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            str(test_file),
+            "--json",
+            "--events-jsonl",
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "passed"
+    event_lines = [
+        line.removeprefix("__EMBSW_EVENT__ ")
+        for line in result.stderr.splitlines()
+        if line.startswith("__EMBSW_EVENT__ ")
+    ]
+    assert len(event_lines) == 2
+    running_event = json.loads(event_lines[0])
+    passed_event = json.loads(event_lines[1])
+    assert running_event["command_type"] == "set"
+    assert running_event["status"] == "running"
+    assert running_event["source_line"] == 4
+    assert running_event["local_variables"] == {}
+    assert passed_event["command_type"] == "set"
+    assert passed_event["status"] == "passed"
+    assert passed_event["source_line"] == 4
+    assert passed_event["local_variables"] == {"rpm": 700}
+
+
 def test_cli_run_writes_report_when_reports_root_is_set(tmp_path: Path):
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path("src").resolve())

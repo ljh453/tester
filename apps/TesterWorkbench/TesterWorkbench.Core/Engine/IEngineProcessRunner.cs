@@ -6,5 +6,6 @@ public interface IEngineProcessRunner
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Action<string>? onEventJsonLine = null);
 }

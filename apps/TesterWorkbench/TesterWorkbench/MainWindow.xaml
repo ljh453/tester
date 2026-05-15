@@ -38,14 +38,38 @@
             <GridSplitter Grid.Column="1" Grid.RowSpan="3" Width="5" HorizontalAlignment="Stretch" />
 
             <GroupBox Grid.Column="2" Grid.Row="0" Header="YAML Editor" Margin="6">
-                <TextBox x:Name="EditorBox"
-                         AcceptsReturn="True"
-                         AcceptsTab="True"
-                         FontFamily="Consolas"
-                         FontSize="13"
-                         HorizontalScrollBarVisibility="Auto"
-                         VerticalScrollBarVisibility="Auto"
-                         TextWrapping="NoWrap" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="54" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="LineNumbersBox"
+                             Grid.Column="0"
+                             Background="#F3F4F6"
+                             BorderThickness="0"
+                             FontFamily="Consolas"
+                             FontSize="13"
+                             Foreground="#6B7280"
+                             HorizontalContentAlignment="Right"
+                             IsHitTestVisible="False"
+                             IsReadOnly="True"
+                             Padding="4,2,8,0"
+                             TextAlignment="Right"
+                             VerticalScrollBarVisibility="Hidden" />
+                    <TextBox x:Name="EditorBox"
+                             Grid.Column="1"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             FontFamily="Consolas"
+                             FontSize="13"
+                             HorizontalScrollBarVisibility="Auto"
+                             SelectionBrush="#FBBF24"
+                             SelectionOpacity="0.8"
+                             TextChanged="EditorBox_TextChanged"
+                             TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.ScrollChanged="EditorBox_ScrollChanged" />
+                </Grid>
             </GroupBox>
 
             <GridSplitter Grid.Column="3" Grid.RowSpan="3" Width="5" HorizontalAlignment="Stretch" />

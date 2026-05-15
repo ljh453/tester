@@ -65,7 +65,8 @@ public partial class MainWindow : Window
 
     private async void Run_Click(object sender, RoutedEventArgs e)
     {
-        await RunUiAction(() => _viewModel.RunAsync());
+        await RunUiAction(() => _viewModel.RunAsync(
+            onExecutionChanged: () => Dispatcher.Invoke(RefreshRuntimeViews)));
     }
 
     private void ExecutionTraceGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -79,6 +80,22 @@ public partial class MainWindow : Window
         VariablesGrid.ItemsSource = _viewModel.Variables;
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         HighlightCurrentExecutionLine();
+    }
+
+    private void EditorBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (EditorBox.Text != _viewModel.EditorText)
+        {
+            _viewModel.UpdateEditorText(EditorBox.Text);
+        }
+
+        LineNumbersBox.Text = _viewModel.EditorLineNumbersText;
+        SyncLineNumberScroll();
+    }
+
+    private void EditorBox_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        SyncLineNumberScroll();
     }
 
     private async Task RunUiAction(Func<Task> action)
@@ -109,17 +126,32 @@ public partial class MainWindow : Window
         }
 
         EditorBox.Text = _viewModel.EditorText;
+        LineNumbersBox.Text = _viewModel.EditorLineNumbersText;
         SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
+        RefreshRuntimeViews();
+        ConsoleBox.Text = _viewModel.ConsoleText;
+        SyncLineNumberScroll();
+    }
+
+    private void RefreshRuntimeViews(bool selectLatestTrace = true)
+    {
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         ProblemsGrid.ItemsSource = _viewModel.Problems;
+        ExecutionTraceGrid.ItemsSource = null;
         ExecutionTraceGrid.ItemsSource = _viewModel.ExecutionTrace;
+        if (selectLatestTrace && _viewModel.ExecutionTrace.Count > 0)
+        {
+            var latestEvent = _viewModel.ExecutionTrace[^1];
+            ExecutionTraceGrid.SelectedItem = latestEvent;
+            ExecutionTraceGrid.ScrollIntoView(latestEvent);
+        }
+
         VariablesGrid.ItemsSource = _viewModel.Variables;
         RunStatusText.Text = _viewModel.RunStatus;
         ReportPathText.Text = _viewModel.ReportDirectory ?? "";
         ReportTabText.Text = _viewModel.ReportDirectory is null
             ? "No report generated yet."
             : $"Report directory: {_viewModel.ReportDirectory}";
-        ConsoleBox.Text = _viewModel.ConsoleText;
         HighlightCurrentExecutionLine();
     }
 
@@ -148,8 +180,24 @@ public partial class MainWindow : Window
 
         var start = EditorBox.GetCharacterIndexFromLineIndex(lineIndex);
         var length = EditorBox.GetLineLength(lineIndex);
+        EditorBox.Focus();
         EditorBox.Select(start, length);
         EditorBox.ScrollToLine(lineIndex);
+        SyncLineNumberScroll();
+    }
+
+    private void SyncLineNumberScroll()
+    {
+        if (EditorBox.LineCount <= 0)
+        {
+            return;
+        }
+
+        var firstVisibleLineIndex = EditorBox.GetFirstVisibleLineIndex();
+        if (firstVisibleLineIndex >= 0)
+        {
+            LineNumbersBox.ScrollToLine(firstVisibleLineIndex);
+        }
     }
 
     private static TreeViewItem CreateTreeItem(WorkspaceNode node)

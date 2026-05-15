@@ -29,6 +29,7 @@ class RuntimeContext:
     package: ResolvedPackage
     sleep_fn: Callable[[float], None]
     adapter_registry: AdapterRegistry
+    event_callback: Optional[Callable[[CommandEvent], None]] = None
 
 
 def run_package(
@@ -36,6 +37,7 @@ def run_package(
     run_id: Optional[str] = None,
     sleep_fn: Callable[[float], None] = time.sleep,
     adapter_registry: Optional[AdapterRegistry] = None,
+    event_callback: Optional[Callable[[CommandEvent], None]] = None,
 ) -> RunResult:
     resolved_run_id = run_id or str(uuid.uuid4())
     diagnostics = [diagnostic.to_dict() for diagnostic in package.diagnostics]
@@ -52,6 +54,7 @@ def run_package(
         package=package,
         sleep_fn=sleep_fn,
         adapter_registry=adapter_registry or create_default_adapter_registry(),
+        event_callback=event_callback,
     )
     testcase_results = [
         _run_testcase(context, testcase)
@@ -113,11 +116,34 @@ def _run_commands(
     events: List[CommandEvent],
 ) -> tuple[str, Optional[str]]:
     for command in commands:
+        if context.event_callback is not None:
+            context.event_callback(_running_event(context, testcase_name, phase, command, frame))
         event = _execute_command(context, testcase_name, phase, command, frame, events)
         events.append(event)
+        if context.event_callback is not None:
+            context.event_callback(event)
         if event.status == "failed":
             return "failed", event.error
     return "passed", None
+
+
+def _running_event(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    frame: Frame,
+) -> CommandEvent:
+    return _event(
+        context,
+        testcase_name,
+        phase,
+        command,
+        "running",
+        {},
+        {},
+        local_variables=deepcopy(frame.variables),
+    )
 
 
 def _execute_command(

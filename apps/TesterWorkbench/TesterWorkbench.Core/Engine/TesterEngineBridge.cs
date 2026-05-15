@@ -43,13 +43,32 @@ public sealed class TesterEngineBridge
         string yamlFile,
         string runId,
         string reportsRoot,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<EngineRunEvent>? onEvent = null)
     {
+        var arguments = new List<string>
+        {
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            yamlFile,
+            "--json",
+            "--run-id",
+            runId,
+            "--reports-root",
+            reportsRoot
+        };
+        if (onEvent is not null)
+        {
+            arguments.Add("--events-jsonl");
+        }
+
         var result = await _processRunner.RunAsync(
             _pythonExecutable,
-            new[] { "-m", "embsw_tester.cli", "run", yamlFile, "--json", "--run-id", runId, "--reports-root", reportsRoot },
+            arguments,
             _repositoryRoot,
-            cancellationToken);
+            cancellationToken,
+            onEvent is null ? null : eventJsonLine => onEvent(ParseRunEventJson(eventJsonLine)));
 
         using var document = JsonDocument.Parse(result.StandardOutput);
         var root = document.RootElement;
@@ -71,6 +90,12 @@ public sealed class TesterEngineBridge
             ParseVariables(root),
             result.StandardError,
             result.StandardOutput);
+    }
+
+    public static EngineRunEvent ParseRunEventJson(string eventJsonLine)
+    {
+        using var document = JsonDocument.Parse(eventJsonLine);
+        return ParseRunEvent(document.RootElement, GetString(document.RootElement, "testcase"));
     }
 
     private static IReadOnlyList<EngineDiagnostic> ParseDiagnostics(string stdout)
@@ -121,22 +146,27 @@ public sealed class TesterEngineBridge
 
             foreach (var runEvent in eventsElement.EnumerateArray())
             {
-                var localVariables = ParseVariableObject(runEvent, "local_variables", testcaseName);
-                events.Add(new EngineRunEvent(
-                    GetString(runEvent, "testcase", testcaseName),
-                    GetString(runEvent, "phase"),
-                    GetString(runEvent, "command_type"),
-                    GetString(runEvent, "status"),
-                    FormatCommandPath(runEvent),
-                    GetString(runEvent, "source_file"),
-                    GetInt(runEvent, "source_line"),
-                    localVariables,
-                    HasVariableObject(runEvent, "local_variables"),
-                    GetNullableString(runEvent, "error")));
+                events.Add(ParseRunEvent(runEvent, testcaseName));
             }
         }
 
         return events;
+    }
+
+    private static EngineRunEvent ParseRunEvent(JsonElement runEvent, string testcaseName)
+    {
+        var localVariables = ParseVariableObject(runEvent, "local_variables", testcaseName);
+        return new EngineRunEvent(
+            GetString(runEvent, "testcase", testcaseName),
+            GetString(runEvent, "phase"),
+            GetString(runEvent, "command_type"),
+            GetString(runEvent, "status"),
+            FormatCommandPath(runEvent),
+            GetString(runEvent, "source_file"),
+            GetInt(runEvent, "source_line"),
+            localVariables,
+            HasVariableObject(runEvent, "local_variables"),
+            GetNullableString(runEvent, "error"));
     }
 
     private static IReadOnlyList<EngineVariableValue> ParseVariables(JsonElement root)
