@@ -213,7 +213,17 @@ def _execute_adapter_command(
     )
     if not adapter_result.success:
         raise CommandFailed(adapter_result.message or f"Adapter '{spec.adapter}' failed.")
+    if "save_as" in command.args:
+        frame.variables[str(command.args["save_as"])] = _adapter_save_value(adapter_result.values)
     return resolved_inputs, adapter_result.to_outputs()
+
+
+def _adapter_save_value(values: Dict[str, Any]) -> Any:
+    if "text" in values:
+        return values["text"]
+    if "value" in values:
+        return values["value"]
+    return dict(values)
 
 
 def _execute_call(

@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 4: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 5: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -19,6 +19,9 @@
 - 공통 adapter interface와 adapter registry
 - adapter-category 명령의 registry 기반 dispatch
 - Serial/Trace32/CANoe/INCA용 기본 mock adapter 등록
+- 테스트 가능한 `SerialAdapter`, `SerialPort`, `FakeSerialPort`
+- `serial.write`, `serial.read`, `serial.read.save_as` 지원
+- Serial TX/RX raw evidence 파일 기록
 - `run.json`, `resolved-package.yaml`, testcase result JSON, `summary.html` 리포트 생성
 - pytest 기반 회귀 테스트
 
@@ -42,6 +45,7 @@ src/
       base.py
       mock.py
       registry.py
+      serial.py
     dsl/
       catalog.py
       compiler.py
@@ -59,6 +63,7 @@ tests/
   test_compiler.py
   test_reports.py
   test_runtime.py
+  test_serial_adapter.py
 ```
 
 ## 개발 환경 준비
@@ -156,6 +161,43 @@ result = run_package(package, adapter_registry=registry)
 
 실제 Serial, Trace32, CANoe, INCA 연동은 이 adapter contract 뒤에 붙이는 방식으로 확장합니다.
 
+## Serial Adapter
+
+`SerialAdapter`는 `SerialPort` 추상화를 통해 `serial.write`와 `serial.read`를 실행합니다. 현재 저장소에는 물리 COM 포트 없이 테스트 가능한 `FakeSerialPort`가 포함되어 있습니다.
+
+```python
+from embsw_tester.adapters import AdapterRegistry
+from embsw_tester.adapters.serial import FakeSerialPort, SerialAdapter
+
+registry = AdapterRegistry()
+registry.register(
+    "serial",
+    SerialAdapter(
+        {"psu": FakeSerialPort(rx_lines=["OK"])},
+        evidence_root="reports/my-run",
+    ),
+)
+```
+
+YAML 예시:
+
+```yaml
+steps:
+  - serial.write:
+      port: psu
+      text: "OUT 1 ON"
+  - serial.read:
+      port: psu
+      timeout_ms: 500
+      until: "OK"
+      save_as: psu_response
+  - assert.eq:
+      left: "${psu_response}"
+      right: "OK"
+```
+
+`serial.read.save_as`는 adapter 응답의 `text` 값을 현재 testcase local variable에 저장합니다. Serial adapter는 `raw-logs/serial/<run-id>/<testcase>.log` 형태의 TX/RX evidence를 기록합니다.
+
 ## 리포트 생성
 
 `run` 명령에 `--reports-root`를 지정하면 실행 결과를 파일로 저장합니다.
@@ -214,12 +256,13 @@ testcases:
 - Phase 2 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase2-runtime.md`
 - Phase 3 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase3-report-pipeline.md`
 - Phase 4 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase4-adapter-framework.md`
+- Phase 5 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase5-serial-adapter.md`
 
 ## 다음 구현 단계
 
-다음 단계는 Serial Adapter입니다.
+다음 단계는 실제 Serial 포트 연결입니다.
 
-- Serial mock/real adapter 분리
-- `serial.write`, `serial.read` command catalog 확장
-- timeout과 raw tx/rx evidence 저장
-- raw evidence 저장 연동
+- pyserial 기반 `SerialPort` 구현
+- tool profile에서 COM port 설정 로드
+- Windows 장비 연결 smoke test
+- timeout/응답 매칭 정책 확장

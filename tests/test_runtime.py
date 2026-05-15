@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from embsw_tester.adapters import AdapterContext, AdapterRegistry, AdapterResult
+from embsw_tester.adapters.serial import FakeSerialPort, SerialAdapter
 from embsw_tester.dsl.compiler import compile_file
 from embsw_tester.runtime import run_package
 
@@ -122,3 +123,42 @@ testcases:
     assert event.outputs["values"] == {"echo": {"port": "psu", "text": "OUT 1 ON"}}
     assert event.outputs["raw_evidence_ref"] == "raw-logs/serial.log"
     assert event.outputs["duration_ms"] == 7
+
+
+def test_runtime_serial_read_saves_response_into_variable(tmp_path: Path):
+    test_file = tmp_path / "serial-read.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: serial_read_case
+    steps:
+      - serial.read:
+          port: psu
+          timeout_ms: 50
+          save_as: psu_response
+      - assert.eq:
+          left: "${psu_response}"
+          right: "OK"
+""".strip(),
+        encoding="utf-8",
+    )
+    registry = AdapterRegistry()
+    registry.register(
+        "serial",
+        SerialAdapter(
+            {"psu": FakeSerialPort(rx_lines=["OK"])},
+            evidence_root=tmp_path / "reports" / "serial-read",
+        ),
+    )
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="serial-read",
+        adapter_registry=registry,
+    )
+
+    testcase = result.testcase_results[0]
+    assert result.status == "passed"
+    assert testcase.variables["psu_response"] == "OK"
+    assert testcase.events[0].command_type == "serial.read"
+    assert testcase.events[0].outputs["values"]["text"] == "OK"

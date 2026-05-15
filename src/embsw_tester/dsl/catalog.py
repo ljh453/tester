@@ -53,6 +53,14 @@ COMMAND_SPECS: Dict[str, CommandSpec] = {
     "serial.write": CommandSpec(
         type="serial.write",
         required_args=frozenset({"port", "text"}),
+        optional_args=frozenset({"timeout_ms"}),
+        category="adapter",
+        adapter="serial",
+    ),
+    "serial.read": CommandSpec(
+        type="serial.read",
+        required_args=frozenset({"port"}),
+        optional_args=frozenset({"timeout_ms", "until", "save_as"}),
         category="adapter",
         adapter="serial",
     ),
