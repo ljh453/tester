@@ -1,8 +1,8 @@
 # Embedded SW Tester
 
-임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하기 위한 프로토타입입니다.
+임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 1: Python DSL Compiler**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러와 CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 2: Python DSL Compiler + Runtime Core**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -13,6 +13,10 @@
 - unknown command 진단
 - function call 반환 매핑 검증
 - resolved package JSON 출력
+- `set`, `call`, `assert.eq`, `assert.gt`, `assert.fail`, `log.*`, `delay` 실행
+- testcase/function frame과 local variable scope
+- command event와 testcase result JSON 출력
+- adapter-category 명령의 mock event 처리
 - pytest 기반 회귀 테스트
 
 ## 프로젝트 구조
@@ -35,9 +39,14 @@ src/
       catalog.py
       compiler.py
       models.py
+    runtime/
+      expressions.py
+      models.py
+      runner.py
 tests/
   test_cli.py
   test_compiler.py
+  test_runtime.py
 ```
 
 ## 개발 환경 준비
@@ -94,6 +103,22 @@ PYTHONPATH=src .venv/bin/python -m embsw_tester.cli compile samples/boot-smoke.y
 
 정상 컴파일되면 `diagnostics`가 빈 배열이고, import된 `power_on` function과 `boot_smoke` testcase가 포함된 resolved package JSON이 출력됩니다.
 
+## 샘플 YAML 실행
+
+mock runtime으로 샘플 테스트케이스를 실행합니다.
+
+```bash
+.venv/bin/embsw-tester run samples/boot-smoke.yaml --json
+```
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\embsw-tester run samples\boot-smoke.yaml --json
+```
+
+정상 실행되면 `status`가 `passed`이고, `testcase_results`에 실행된 command event와 최종 local variable snapshot이 포함됩니다. 현재 외부 툴 adapter 명령은 실제 장비를 제어하지 않고 mock event로 기록됩니다.
+
 ## YAML 예시
 
 ```yaml
@@ -120,13 +145,13 @@ testcases:
 
 - 상세 설계서: `docs/design/embedded-sw-tester-detailed-design.md`
 - Phase 1 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase1.md`
+- Phase 2 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase2-runtime.md`
 
 ## 다음 구현 단계
 
-다음 단계는 Runtime Core입니다.
+다음 단계는 Report Pipeline입니다.
 
-- `set`, `call`, `assert.*`, `log.*`, `delay` 실행
-- testcase/function frame과 local variable scope
-- execution event 생성
-- mock adapter 기반 실행 흐름
 - `run.json` 리포트 원본 생성
+- `resolved-package.yaml` 저장
+- testcase result summary 생성
+- 기본 `summary.html` 렌더러 구현

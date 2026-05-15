@@ -18,6 +18,11 @@ COMMAND_SPECS: Dict[str, CommandSpec] = {
         required_args=frozenset({"left", "right"}),
         category="assert",
     ),
+    "assert.gt": CommandSpec(
+        type="assert.gt",
+        required_args=frozenset({"left", "right"}),
+        category="assert",
+    ),
     "assert.fail": CommandSpec(
         type="assert.fail",
         required_args=frozenset({"message"}),

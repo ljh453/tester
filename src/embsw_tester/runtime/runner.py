@@ -1,0 +1,261 @@
+from __future__ import annotations
+
+import time
+import uuid
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+
+from embsw_tester.dsl.catalog import COMMAND_SPECS
+from embsw_tester.dsl.models import FunctionDef, NormalizedCommand, ResolvedPackage, TestcaseDef
+from embsw_tester.runtime.expressions import ExpressionError, evaluate_value
+from embsw_tester.runtime.models import CommandEvent, RunResult, TestcaseResult
+
+
+class CommandFailed(RuntimeError):
+    """Raised for expected DSL command failures such as failed assertions."""
+
+
+@dataclass
+class Frame:
+    variables: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class RuntimeContext:
+    run_id: str
+    package: ResolvedPackage
+    sleep_fn: Callable[[float], None]
+
+
+def run_package(
+    package: ResolvedPackage,
+    run_id: Optional[str] = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> RunResult:
+    resolved_run_id = run_id or str(uuid.uuid4())
+    diagnostics = [diagnostic.to_dict() for diagnostic in package.diagnostics]
+    if diagnostics:
+        return RunResult(
+            run_id=resolved_run_id,
+            status="failed",
+            testcase_results=[],
+            diagnostics=diagnostics,
+        )
+
+    context = RuntimeContext(
+        run_id=resolved_run_id,
+        package=package,
+        sleep_fn=sleep_fn,
+    )
+    testcase_results = [
+        _run_testcase(context, testcase)
+        for testcase in package.testcases
+    ]
+    run_status = "failed" if any(result.status == "failed" for result in testcase_results) else "passed"
+    return RunResult(
+        run_id=resolved_run_id,
+        status=run_status,
+        testcase_results=testcase_results,
+    )
+
+
+def _run_testcase(context: RuntimeContext, testcase: TestcaseDef) -> TestcaseResult:
+    frame = Frame()
+    events: List[CommandEvent] = []
+    status = "passed"
+    error: Optional[str] = None
+
+    for phase, commands in (
+        ("preconditions", testcase.preconditions),
+        ("steps", testcase.steps),
+        ("postconditions", testcase.postconditions),
+    ):
+        phase_status, phase_error = _run_commands(context, testcase.name, phase, commands, frame, events)
+        if phase_status == "failed":
+            status = "failed"
+            error = phase_error
+            break
+
+    if testcase.cleanup:
+        cleanup_status, cleanup_error = _run_commands(
+            context,
+            testcase.name,
+            "cleanup",
+            testcase.cleanup,
+            frame,
+            events,
+        )
+        if cleanup_status == "failed" and status == "passed":
+            status = "failed"
+            error = cleanup_error
+
+    return TestcaseResult(
+        name=testcase.name,
+        status=status,
+        variables=dict(frame.variables),
+        events=events,
+        error=error,
+    )
+
+
+def _run_commands(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    commands: Sequence[NormalizedCommand],
+    frame: Frame,
+    events: List[CommandEvent],
+) -> tuple[str, Optional[str]]:
+    for command in commands:
+        event = _execute_command(context, testcase_name, phase, command, frame, events)
+        events.append(event)
+        if event.status == "failed":
+            return "failed", event.error
+    return "passed", None
+
+
+def _execute_command(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    frame: Frame,
+    events: List[CommandEvent],
+) -> CommandEvent:
+    try:
+        resolved_inputs, outputs = _dispatch_command(context, testcase_name, phase, command, frame, events)
+        return _event(context, testcase_name, phase, command, "passed", resolved_inputs, outputs)
+    except (CommandFailed, ExpressionError, KeyError) as exc:
+        return _event(context, testcase_name, phase, command, "failed", {}, {}, str(exc))
+
+
+def _dispatch_command(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    frame: Frame,
+    events: List[CommandEvent],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    if command.type == "set":
+        var_name = str(command.args["var"])
+        value = evaluate_value(command.args["value"], frame.variables)
+        frame.variables[var_name] = value
+        return {"var": var_name, "value": value}, {"var": var_name, "value": value}
+
+    if command.type == "assert.eq":
+        left = evaluate_value(command.args["left"], frame.variables)
+        right = evaluate_value(command.args["right"], frame.variables)
+        if left != right:
+            raise CommandFailed(f"assert.eq failed: {left!r} != {right!r}")
+        return {"left": left, "right": right}, {"passed": True}
+
+    if command.type == "assert.gt":
+        left = evaluate_value(command.args["left"], frame.variables)
+        right = evaluate_value(command.args["right"], frame.variables)
+        if not left > right:
+            raise CommandFailed(f"assert.gt failed: {left!r} <= {right!r}")
+        return {"left": left, "right": right}, {"passed": True}
+
+    if command.type == "assert.fail":
+        message = str(evaluate_value(command.args["message"], frame.variables))
+        raise CommandFailed(message)
+
+    if command.type == "log.text":
+        text = str(evaluate_value(command.args["text"], frame.variables))
+        return {"text": text}, {"text": text}
+
+    if command.type == "log.value":
+        name = str(command.args["name"])
+        value = evaluate_value(command.args["value"], frame.variables)
+        return {"name": name, "value": value}, {"name": name, "value": value}
+
+    if command.type == "delay":
+        ms = int(evaluate_value(command.args["ms"], frame.variables))
+        context.sleep_fn(ms / 1000)
+        return {"ms": ms}, {"slept_ms": ms}
+
+    if command.type == "call":
+        return _execute_call(context, testcase_name, phase, command, frame, events)
+
+    spec = COMMAND_SPECS.get(command.type)
+    if spec is not None and spec.category == "adapter":
+        resolved_inputs = evaluate_value(command.args, frame.variables)
+        return resolved_inputs, {"mode": "mock", "command_type": command.type}
+
+    raise CommandFailed(f"Unsupported command '{command.type}'.")
+
+
+def _execute_call(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    frame: Frame,
+    events: List[CommandEvent],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    function_name = str(command.args["function"])
+    function_def = context.package.functions[function_name]
+    call_args = evaluate_value(command.args.get("args", {}), frame.variables)
+    if not isinstance(call_args, Mapping):
+        raise CommandFailed("call.args must resolve to a mapping.")
+
+    function_frame = Frame(
+        variables={
+            param: call_args[param]
+            for param in function_def.params
+            if param in call_args
+        }
+    )
+    function_status, function_error = _run_commands(
+        context,
+        testcase_name,
+        f"function:{function_name}",
+        function_def.steps,
+        function_frame,
+        events,
+    )
+    if function_status == "failed":
+        raise CommandFailed(function_error or f"Function '{function_name}' failed.")
+
+    out_mapping = command.args.get("out", {}) or {}
+    if not isinstance(out_mapping, Mapping):
+        raise CommandFailed("call.out must be a mapping.")
+
+    mapped_outputs: Dict[str, Any] = {}
+    for return_name in function_def.returns:
+        if return_name not in function_frame.variables:
+            continue
+        target_name = str(out_mapping.get(return_name, return_name))
+        value = function_frame.variables[return_name]
+        frame.variables[target_name] = value
+        mapped_outputs[target_name] = value
+
+    return {
+        "function": function_name,
+        "args": dict(call_args),
+        "out": dict(out_mapping),
+    }, {"returns": mapped_outputs}
+
+
+def _event(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    status: str,
+    resolved_inputs: Dict[str, Any],
+    outputs: Dict[str, Any],
+    error: Optional[str] = None,
+) -> CommandEvent:
+    return CommandEvent(
+        run_id=context.run_id,
+        testcase=testcase_name,
+        phase=phase,
+        command_path=command.path,
+        command_type=command.type,
+        status=status,
+        resolved_inputs=resolved_inputs,
+        outputs=outputs,
+        error=error,
+    )
