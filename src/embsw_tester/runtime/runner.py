@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import time
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from embsw_tester.adapters import AdapterContext, AdapterRegistry, create_default_adapter_registry
 from embsw_tester.devices.command_profiles import DeviceCommandError, execute_device_command
@@ -129,9 +130,28 @@ def _execute_command(
 ) -> CommandEvent:
     try:
         resolved_inputs, outputs = _dispatch_command(context, testcase_name, phase, command, frame, events)
-        return _event(context, testcase_name, phase, command, "passed", resolved_inputs, outputs)
+        return _event(
+            context,
+            testcase_name,
+            phase,
+            command,
+            "passed",
+            resolved_inputs,
+            outputs,
+            local_variables=deepcopy(frame.variables),
+        )
     except (CommandFailed, DeviceCommandError, ExpressionError, KeyError) as exc:
-        return _event(context, testcase_name, phase, command, "failed", {}, {}, str(exc))
+        return _event(
+            context,
+            testcase_name,
+            phase,
+            command,
+            "failed",
+            {},
+            {},
+            str(exc),
+            local_variables=deepcopy(frame.variables),
+        )
 
 
 def _dispatch_command(
@@ -182,6 +202,9 @@ def _dispatch_command(
 
     if command.type == "call":
         return _execute_call(context, testcase_name, phase, command, frame, events)
+
+    if command.type == "for":
+        return _execute_for(context, testcase_name, phase, command, frame, events)
 
     spec = COMMAND_SPECS.get(command.type)
     if spec is not None and spec.category == "adapter":
@@ -305,6 +328,55 @@ def _execute_call(
     }, {"returns": mapped_outputs}
 
 
+def _execute_for(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    frame: Frame,
+    events: List[CommandEvent],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    resolved_loop_items = evaluate_value(command.args["each"], frame.variables)
+    if not _is_loop_iterable(resolved_loop_items):
+        raise CommandFailed("for.each must resolve to a list or tuple.")
+    loop_items = list(resolved_loop_items)
+
+    loop_variable = str(command.args["as"])
+    nested_commands = command.args.get("do", [])
+    if not isinstance(nested_commands, Sequence) or not all(
+        isinstance(item, NormalizedCommand)
+        for item in nested_commands
+    ):
+        raise CommandFailed("for.do must be a command list.")
+
+    iteration_count = 0
+    for item in loop_items:
+        frame.variables[loop_variable] = item
+        iteration_status, iteration_error = _run_commands(
+            context,
+            testcase_name,
+            phase,
+            nested_commands,
+            frame,
+            events,
+        )
+        iteration_count += 1
+        if iteration_status == "failed":
+            raise CommandFailed(iteration_error or "for loop body failed.")
+
+    return {
+        "each": list(loop_items),
+        "as": loop_variable,
+    }, {
+        "iterations": iteration_count,
+        "last_value": frame.variables.get(loop_variable),
+    }
+
+
+def _is_loop_iterable(value: Any) -> bool:
+    return isinstance(value, Iterable) and not isinstance(value, (str, bytes, Mapping))
+
+
 def _event(
     context: RuntimeContext,
     testcase_name: str,
@@ -314,6 +386,7 @@ def _event(
     resolved_inputs: Dict[str, Any],
     outputs: Dict[str, Any],
     error: Optional[str] = None,
+    local_variables: Optional[Dict[str, Any]] = None,
 ) -> CommandEvent:
     return CommandEvent(
         run_id=context.run_id,
@@ -322,7 +395,10 @@ def _event(
         command_path=command.path,
         command_type=command.type,
         status=status,
+        source_file=command.source_file,
+        source_line=command.source_line,
         resolved_inputs=resolved_inputs,
         outputs=outputs,
+        local_variables=local_variables or {},
         error=error,
     )

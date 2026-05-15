@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Set, Tuple
 
 import yaml
+from yaml.nodes import MappingNode, ScalarNode, SequenceNode
 
 from embsw_tester.dsl.catalog import COMMAND_SPECS
 from embsw_tester.dsl.models import (
@@ -24,6 +25,7 @@ def compile_file(path: Path) -> ResolvedPackage:
     diagnostics: List[Diagnostic] = []
     visited: Set[Path] = set()
     document = _load_yaml_document(source_file, diagnostics)
+    line_map = _load_yaml_line_map(source_file)
     functions: Dict[str, FunctionDef] = {}
     imports: List[str] = []
     tool_profile_snapshot: Dict[str, Any] = {}
@@ -35,8 +37,15 @@ def compile_file(path: Path) -> ResolvedPackage:
             imports.append(str(import_path))
             _load_imported_functions(import_path, functions, diagnostics, visited)
 
-        _collect_functions(source_file, document, functions, diagnostics, path_prefix=("functions",))
-        testcases = _collect_testcases(source_file, document, functions, diagnostics)
+        _collect_functions(
+            source_file,
+            document,
+            functions,
+            diagnostics,
+            path_prefix=("functions",),
+            line_map=line_map,
+        )
+        testcases = _collect_testcases(source_file, document, functions, diagnostics, line_map)
         _validate_device_commands(testcases, functions, tool_profile_snapshot, diagnostics)
     else:
         testcases = []
@@ -102,6 +111,7 @@ def _load_imported_functions(
 
     visited.add(resolved)
     document = _load_yaml_document(resolved, diagnostics)
+    line_map = _load_yaml_line_map(resolved)
     if not isinstance(document, Mapping):
         diagnostics.append(
             Diagnostic(
@@ -117,7 +127,14 @@ def _load_imported_functions(
         nested_path = _resolve_import_path(resolved.parent, import_ref)
         _load_imported_functions(nested_path, functions, diagnostics, visited)
 
-    _collect_functions(resolved, document, functions, diagnostics, path_prefix=("functions",))
+    _collect_functions(
+        resolved,
+        document,
+        functions,
+        diagnostics,
+        path_prefix=("functions",),
+        line_map=line_map,
+    )
     visited.remove(resolved)
 
 
@@ -127,6 +144,7 @@ def _collect_functions(
     functions: MutableMapping[str, FunctionDef],
     diagnostics: List[Diagnostic],
     path_prefix: CommandPath,
+    line_map: Mapping[CommandPath, int],
 ) -> None:
     raw_functions = document.get("functions", {})
     if raw_functions is None:
@@ -171,6 +189,7 @@ def _collect_functions(
             path_prefix=function_path + ("steps",),
             diagnostics=diagnostics,
             functions=functions,
+            line_map=line_map,
         )
         functions[str(name)] = FunctionDef(
             name=str(name),
@@ -186,6 +205,7 @@ def _collect_testcases(
     document: Mapping[str, Any],
     functions: Mapping[str, FunctionDef],
     diagnostics: List[Diagnostic],
+    line_map: Mapping[CommandPath, int],
 ) -> List[TestcaseDef]:
     raw_testcases = document.get("testcases", [])
     if raw_testcases is None:
@@ -222,6 +242,7 @@ def _collect_testcases(
             testcase_path + ("preconditions",),
             diagnostics,
             functions,
+            line_map,
         )
         steps = _normalize_step_list(
             source_file,
@@ -229,6 +250,7 @@ def _collect_testcases(
             testcase_path + ("steps",),
             diagnostics,
             functions,
+            line_map,
         )
         postconditions = _normalize_step_list(
             source_file,
@@ -236,6 +258,7 @@ def _collect_testcases(
             testcase_path + ("postconditions",),
             diagnostics,
             functions,
+            line_map,
         )
         cleanup = _normalize_step_list(
             source_file,
@@ -243,6 +266,7 @@ def _collect_testcases(
             testcase_path + ("cleanup",),
             diagnostics,
             functions,
+            line_map,
         )
         metadata = {
             key: value
@@ -269,6 +293,7 @@ def _normalize_step_list(
     path_prefix: CommandPath,
     diagnostics: List[Diagnostic],
     functions: Mapping[str, FunctionDef],
+    line_map: Mapping[CommandPath, int],
 ) -> List[NormalizedCommand]:
     if raw_steps is None:
         return []
@@ -291,6 +316,7 @@ def _normalize_step_list(
             path_prefix + (index,),
             diagnostics,
             functions,
+            line_map,
         )
         if command is not None:
             commands.append(command)
@@ -303,6 +329,7 @@ def _normalize_command(
     path: CommandPath,
     diagnostics: List[Diagnostic],
     functions: Mapping[str, FunctionDef],
+    line_map: Mapping[CommandPath, int],
 ) -> Optional[NormalizedCommand]:
     if not isinstance(raw_step, Mapping) or len(raw_step) != 1:
         diagnostics.append(
@@ -318,11 +345,21 @@ def _normalize_command(
     command_type, raw_args = next(iter(raw_step.items()))
     command_type = str(command_type)
     args = _normalize_args(raw_args)
+    if command_type == "for":
+        args["do"] = _normalize_step_list(
+            source_file,
+            args.get("do", []),
+            path + ("for", "do"),
+            diagnostics,
+            functions,
+            line_map,
+        )
     command = NormalizedCommand(
         type=command_type,
         args=args,
         path=path,
         source_file=str(source_file),
+        source_line=line_map.get(path),
     )
 
     _validate_command(command, diagnostics, functions)
@@ -359,6 +396,8 @@ def _validate_command(
 
     if command.type == "call":
         _validate_call_command(command, diagnostics, functions)
+    if command.type == "for":
+        _validate_for_command(command, diagnostics)
 
 
 def _validate_call_command(
@@ -420,6 +459,36 @@ def _validate_call_command(
             )
 
 
+def _validate_for_command(
+    command: NormalizedCommand,
+    diagnostics: List[Diagnostic],
+) -> None:
+    loop_variable = command.args.get("as")
+    if not isinstance(loop_variable, str) or not loop_variable:
+        diagnostics.append(
+            Diagnostic(
+                code="INVALID_FOR_VARIABLE",
+                message="'for.as' must be a non-empty string.",
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+
+    nested_commands = command.args.get("do")
+    if not isinstance(nested_commands, list) or not all(
+        isinstance(item, NormalizedCommand)
+        for item in nested_commands
+    ):
+        diagnostics.append(
+            Diagnostic(
+                code="INVALID_FOR_BODY",
+                message="'for.do' must be a command list.",
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+
+
 def _validate_device_commands(
     testcases: Sequence[TestcaseDef],
     functions: Mapping[str, FunctionDef],
@@ -438,12 +507,27 @@ def _iter_commands(
     functions: Mapping[str, FunctionDef],
 ) -> Iterable[NormalizedCommand]:
     for testcase in testcases:
-        yield from testcase.preconditions
-        yield from testcase.steps
-        yield from testcase.postconditions
-        yield from testcase.cleanup
+        yield from _iter_command_tree(testcase.preconditions)
+        yield from _iter_command_tree(testcase.steps)
+        yield from _iter_command_tree(testcase.postconditions)
+        yield from _iter_command_tree(testcase.cleanup)
     for function_def in functions.values():
-        yield from function_def.steps
+        yield from _iter_command_tree(function_def.steps)
+
+
+def _iter_command_tree(commands: Sequence[NormalizedCommand]) -> Iterable[NormalizedCommand]:
+    for command in commands:
+        yield command
+        if command.type == "for":
+            nested_commands = command.args.get("do", [])
+            if isinstance(nested_commands, Sequence):
+                yield from _iter_command_tree(
+                    [
+                        nested_command
+                        for nested_command in nested_commands
+                        if isinstance(nested_command, NormalizedCommand)
+                    ]
+                )
 
 
 def _validate_device_command(
@@ -651,6 +735,40 @@ def _load_yaml_document(path: Path, diagnostics: List[Diagnostic]) -> Any:
             )
         )
         return {}
+
+
+def _load_yaml_line_map(path: Path) -> Dict[CommandPath, int]:
+    try:
+        root = yaml.compose(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return {}
+    if root is None:
+        return {}
+
+    line_map: Dict[CommandPath, int] = {}
+    _collect_yaml_line_numbers(root, (), line_map)
+    return line_map
+
+
+def _collect_yaml_line_numbers(
+    node: yaml.Node,
+    path: CommandPath,
+    line_map: MutableMapping[CommandPath, int],
+) -> None:
+    line_map[path] = node.start_mark.line + 1
+    if isinstance(node, MappingNode):
+        for key_node, value_node in node.value:
+            key = _yaml_key_value(key_node)
+            _collect_yaml_line_numbers(value_node, path + (key,), line_map)
+    elif isinstance(node, SequenceNode):
+        for index, item_node in enumerate(node.value):
+            _collect_yaml_line_numbers(item_node, path + (index,), line_map)
+
+
+def _yaml_key_value(node: yaml.Node) -> Any:
+    if isinstance(node, ScalarNode):
+        return node.value
+    return str(node)
 
 
 def _resolve_import_path(base_dir: Path, import_ref: Any) -> Path:

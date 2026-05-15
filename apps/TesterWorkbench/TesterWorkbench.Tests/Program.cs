@@ -59,6 +59,9 @@ static async Task RunEngineBridgeTest()
                       "command_path": ["testcases", 0, "steps", 1],
                       "command_type": "assert.eq",
                       "status": "passed",
+                      "source_file": "/repo/samples/boot-smoke.yaml",
+                      "source_line": 12,
+                      "local_variables": {"power_ready": true, "rpm": 1200},
                       "error": null
                     }
                   ]
@@ -91,6 +94,12 @@ static async Task RunEngineBridgeTest()
     AssertEqual("assert.eq", run.Events[0].CommandType, "run event command type");
     AssertEqual("passed", run.Events[0].Status, "run event status");
     AssertEqual("testcases/0/steps/1", run.Events[0].CommandPath, "run event command path");
+    AssertEqual("/repo/samples/boot-smoke.yaml", run.Events[0].SourceFile, "run event source file");
+    AssertEqual(12, run.Events[0].SourceLine, "run event source line");
+    AssertTrue(run.Events[0].HasLocalVariables, "run event local variables flag");
+    AssertEqual(2, run.Events[0].LocalVariables.Count, "run event local variable count");
+    AssertEqual("power_ready", run.Events[0].LocalVariables[0].Name, "run event first local variable name");
+    AssertEqual("true", run.Events[0].LocalVariables[0].Value, "run event first local variable value");
     AssertEqual(2, run.Variables.Count, "run variable count");
     AssertEqual("power_ready", run.Variables[0].Name, "first variable name");
     AssertEqual("true", run.Variables[0].Value, "first variable value");
@@ -137,6 +146,20 @@ static async Task RunMainWorkbenchViewModelTest()
                       "command_path": ["testcases", 0, "steps", 0],
                       "command_type": "call",
                       "status": "passed",
+                      "source_file": "/repo/tests/boot-smoke.yaml",
+                      "source_line": 4,
+                      "local_variables": {"rpm": 900},
+                      "error": null
+                    },
+                    {
+                      "testcase": "boot_smoke",
+                      "phase": "steps",
+                      "command_path": ["testcases", 0, "steps", 1],
+                      "command_type": "assert.eq",
+                      "status": "passed",
+                      "source_file": "/repo/tests/boot-smoke.yaml",
+                      "source_line": 8,
+                      "local_variables": {"power_ready": true},
                       "error": null
                     }
                   ]
@@ -161,11 +184,20 @@ static async Task RunMainWorkbenchViewModelTest()
     AssertEqual("YAML_SCHEMA", viewModel.Problems[0].Code, "problem code");
     AssertEqual("passed", viewModel.RunStatus, "run status");
     AssertEqual("reports/gui-run", viewModel.ReportDirectory, "report directory");
-    AssertEqual(1, viewModel.ExecutionTrace.Count, "view model trace count");
+    AssertEqual(2, viewModel.ExecutionTrace.Count, "view model trace count");
+    AssertEqual(8, viewModel.CurrentLineNumber, "view model current line after run");
     AssertEqual("call", viewModel.ExecutionTrace[0].CommandType, "view model trace command");
     AssertEqual(1, viewModel.Variables.Count, "view model variable count");
     AssertEqual("power_ready", viewModel.Variables[0].Name, "view model variable name");
     AssertEqual("true", viewModel.Variables[0].Value, "view model variable value");
+
+    viewModel.SelectExecutionTraceEvent(viewModel.ExecutionTrace[0]);
+
+    AssertEqual(4, viewModel.CurrentLineNumber, "selected trace current line");
+    AssertEqual("Line 4 - call", viewModel.CurrentLocationText, "selected trace current location text");
+    AssertEqual(1, viewModel.Variables.Count, "selected trace variable count");
+    AssertEqual("rpm", viewModel.Variables[0].Name, "selected trace variable name");
+    AssertEqual("900", viewModel.Variables[0].Value, "selected trace variable value");
 }
 
 static void AssertEqual<T>(T expected, T actual, string label)

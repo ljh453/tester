@@ -68,6 +68,19 @@ public partial class MainWindow : Window
         await RunUiAction(() => _viewModel.RunAsync());
     }
 
+    private void ExecutionTraceGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ExecutionTraceGrid.SelectedItem is not EngineRunEvent runEvent)
+        {
+            return;
+        }
+
+        _viewModel.SelectExecutionTraceEvent(runEvent);
+        VariablesGrid.ItemsSource = _viewModel.Variables;
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
+        HighlightCurrentExecutionLine();
+    }
+
     private async Task RunUiAction(Func<Task> action)
     {
         try
@@ -97,6 +110,7 @@ public partial class MainWindow : Window
 
         EditorBox.Text = _viewModel.EditorText;
         SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
         ProblemsGrid.ItemsSource = _viewModel.Problems;
         ExecutionTraceGrid.ItemsSource = _viewModel.ExecutionTrace;
         VariablesGrid.ItemsSource = _viewModel.Variables;
@@ -106,6 +120,36 @@ public partial class MainWindow : Window
             ? "No report generated yet."
             : $"Report directory: {_viewModel.ReportDirectory}";
         ConsoleBox.Text = _viewModel.ConsoleText;
+        HighlightCurrentExecutionLine();
+    }
+
+    private void HighlightCurrentExecutionLine()
+    {
+        var lineNumber = _viewModel.CurrentLineNumber;
+        if (lineNumber <= 0 || string.IsNullOrEmpty(EditorBox.Text))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_viewModel.CurrentSourceFile)
+            && !string.IsNullOrWhiteSpace(_viewModel.SelectedFilePath)
+            && !Path.GetFullPath(_viewModel.CurrentSourceFile).Equals(
+                Path.GetFullPath(_viewModel.SelectedFilePath),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var lineIndex = lineNumber - 1;
+        if (lineIndex < 0 || lineIndex >= EditorBox.LineCount)
+        {
+            return;
+        }
+
+        var start = EditorBox.GetCharacterIndexFromLineIndex(lineIndex);
+        var length = EditorBox.GetLineLength(lineIndex);
+        EditorBox.Select(start, length);
+        EditorBox.ScrollToLine(lineIndex);
     }
 
     private static TreeViewItem CreateTreeItem(WorkspaceNode node)

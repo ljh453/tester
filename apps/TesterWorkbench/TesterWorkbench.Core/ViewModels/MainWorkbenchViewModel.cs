@@ -7,6 +7,7 @@ public sealed class MainWorkbenchViewModel
 {
     private readonly WorkspaceScanner _workspaceScanner;
     private readonly TesterEngineBridge _engineBridge;
+    private IReadOnlyList<EngineVariableValue> _runVariables = Array.Empty<EngineVariableValue>();
 
     public MainWorkbenchViewModel(
         WorkspaceScanner workspaceScanner,
@@ -34,6 +35,12 @@ public sealed class MainWorkbenchViewModel
 
     public IReadOnlyList<EngineVariableValue> Variables { get; private set; } = Array.Empty<EngineVariableValue>();
 
+    public string CurrentSourceFile { get; private set; } = string.Empty;
+
+    public int CurrentLineNumber { get; private set; }
+
+    public string CurrentLocationText { get; private set; } = "No execution line selected.";
+
     public string ConsoleText { get; private set; } = string.Empty;
 
     public Task OpenWorkspaceAsync(string workspacePath, CancellationToken cancellationToken = default)
@@ -41,6 +48,7 @@ public sealed class MainWorkbenchViewModel
         cancellationToken.ThrowIfCancellationRequested();
         WorkspacePath = Path.GetFullPath(workspacePath);
         WorkspaceRoot = _workspaceScanner.Scan(WorkspacePath);
+        ClearCurrentExecutionLocation();
         ConsoleText = $"Opened workspace: {WorkspacePath}";
         return Task.CompletedTask;
     }
@@ -49,6 +57,7 @@ public sealed class MainWorkbenchViewModel
     {
         SelectedFilePath = Path.GetFullPath(yamlFilePath);
         EditorText = await File.ReadAllTextAsync(SelectedFilePath, cancellationToken);
+        ClearCurrentExecutionLocation();
         ConsoleText = $"Opened file: {SelectedFilePath}";
     }
 
@@ -80,10 +89,45 @@ public sealed class MainWorkbenchViewModel
         RunStatus = result.Status;
         ReportDirectory = result.ReportDirectory;
         ExecutionTrace = result.Events;
-        Variables = result.Variables;
+        _runVariables = result.Variables;
+        SelectExecutionTraceEvent(ExecutionTrace.LastOrDefault());
         ConsoleText = string.IsNullOrWhiteSpace(result.StandardError)
             ? $"Run '{effectiveRunId}' exited with status {result.Status}."
             : result.StandardError;
+    }
+
+    public void SelectExecutionTraceEvent(EngineRunEvent? runEvent)
+    {
+        if (runEvent is null)
+        {
+            Variables = LatestLocalVariablesOrRunVariables();
+            ClearCurrentExecutionLocation();
+            return;
+        }
+
+        Variables = runEvent.HasLocalVariables
+            ? runEvent.LocalVariables
+            : _runVariables.Where(variable => variable.Testcase == runEvent.Testcase).ToArray();
+        CurrentSourceFile = runEvent.SourceFile;
+        CurrentLineNumber = runEvent.SourceLine;
+        CurrentLocationText = runEvent.SourceLine > 0
+            ? $"Line {runEvent.SourceLine} - {runEvent.CommandType}"
+            : runEvent.CommandType;
+    }
+
+    private IReadOnlyList<EngineVariableValue> LatestLocalVariablesOrRunVariables()
+    {
+        var latestEvent = ExecutionTrace.LastOrDefault();
+        return latestEvent is { HasLocalVariables: true }
+            ? latestEvent.LocalVariables
+            : _runVariables;
+    }
+
+    private void ClearCurrentExecutionLocation()
+    {
+        CurrentSourceFile = string.Empty;
+        CurrentLineNumber = 0;
+        CurrentLocationText = "No execution line selected.";
     }
 
     private void EnsureFileSelected()

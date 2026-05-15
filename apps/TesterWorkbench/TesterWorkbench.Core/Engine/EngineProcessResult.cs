@@ -31,6 +31,10 @@ public sealed record EngineRunEvent(
     string CommandType,
     string Status,
     string CommandPath,
+    string SourceFile,
+    int SourceLine,
+    IReadOnlyList<EngineVariableValue> LocalVariables,
+    bool HasLocalVariables,
     string Error);
 
 public sealed record EngineVariableValue(

@@ -32,13 +32,15 @@ class NormalizedCommand:
     args: Dict[str, Any]
     path: CommandPath = field(default_factory=tuple)
     source_file: Optional[str] = None
+    source_line: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": self.type,
-            "args": self.args,
+            "args": _to_plain_value(self.args),
             "path": list(self.path),
             "source_file": self.source_file,
+            "source_line": self.source_line,
         }
 
 
@@ -107,3 +109,16 @@ class ResolvedPackage:
             "testcases": [testcase.to_dict() for testcase in self.testcases],
             "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
         }
+
+
+def _to_plain_value(value: Any) -> Any:
+    if isinstance(value, NormalizedCommand):
+        return value.to_dict()
+    if isinstance(value, list):
+        return [_to_plain_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _to_plain_value(item)
+            for key, item in value.items()
+        }
+    return value

@@ -62,6 +62,117 @@ testcases:
     assert result.testcase_results[0].status == "passed"
 
 
+def test_runtime_records_local_variable_snapshot_per_event(tmp_path: Path):
+    test_file = tmp_path / "variable-snapshot.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: variable_snapshot_case
+    steps:
+      - set:
+          var: rpm
+          value: 700
+      - set:
+          var: power_ready
+          value: "${rpm > 0}"
+      - log.value:
+          name: rpm
+          value: "${rpm}"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = run_package(compile_file(test_file), run_id="run-variable-snapshot")
+
+    testcase = result.testcase_results[0]
+    assert testcase.events[0].local_variables == {"rpm": 700}
+    assert testcase.events[1].local_variables == {"rpm": 700, "power_ready": True}
+    assert testcase.events[2].local_variables == {"rpm": 700, "power_ready": True}
+    assert testcase.events[1].to_dict()["local_variables"] == {
+        "rpm": 700,
+        "power_ready": True,
+    }
+
+
+def test_runtime_records_source_line_per_event(tmp_path: Path):
+    test_file = tmp_path / "source-line.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: source_line_case
+    steps:
+      - set:
+          var: rpm
+          value: 700
+      - assert.gt:
+          left: "${rpm}"
+          right: 0
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = run_package(compile_file(test_file), run_id="run-source-line")
+
+    testcase = result.testcase_results[0]
+    assert testcase.events[0].source_file == str(test_file.resolve())
+    assert testcase.events[0].source_line == 4
+    assert testcase.events[1].source_line == 7
+    assert testcase.events[1].to_dict()["source_line"] == 7
+
+
+def test_runtime_runs_for_loop_and_nested_call_with_shared_frame(tmp_path: Path):
+    test_file = tmp_path / "for-loop.yaml"
+    test_file.write_text(
+        """
+functions:
+  add_channel:
+    params: [running_total, channel]
+    returns: [next_total]
+    steps:
+      - set:
+          var: next_total
+          value: "${running_total + channel}"
+testcases:
+  - name: for_loop_case
+    steps:
+      - set:
+          var: channel_sum
+          value: 0
+      - set:
+          var: channels
+          value: [1, 2, 3]
+      - for:
+          each: "${channels}"
+          as: channel
+          do:
+            - call:
+                function: add_channel
+                args:
+                  running_total: "${channel_sum}"
+                  channel: "${channel}"
+                out:
+                  next_total: channel_sum
+            - log.value:
+                name: channel_sum
+                value: "${channel_sum}"
+      - assert.eq:
+          left: "${channel_sum}"
+          right: 6
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = run_package(compile_file(test_file), run_id="run-for-loop")
+
+    testcase = result.testcase_results[0]
+    assert result.status == "passed"
+    assert testcase.variables["channel_sum"] == 6
+    assert testcase.variables["channel"] == 3
+    assert [event.command_type for event in testcase.events].count("call") == 3
+    assert testcase.events[-1].command_type == "assert.eq"
+    assert testcase.events[-1].local_variables["channel_sum"] == 6
+
+
 def test_runtime_marks_assert_failure_and_stops_remaining_steps(tmp_path: Path):
     test_file = tmp_path / "failure.yaml"
     test_file.write_text(

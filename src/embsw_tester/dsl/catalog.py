@@ -35,6 +35,11 @@ COMMAND_SPECS: Dict[str, CommandSpec] = {
         optional_args=frozenset({"args", "out"}),
         category="control",
     ),
+    "for": CommandSpec(
+        type="for",
+        required_args=frozenset({"each", "as", "do"}),
+        category="control",
+    ),
     "canoe.measurement.start": CommandSpec(
         type="canoe.measurement.start",
         optional_args=frozenset({"configuration"}),

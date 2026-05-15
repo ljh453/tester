@@ -121,12 +121,17 @@ public sealed class TesterEngineBridge
 
             foreach (var runEvent in eventsElement.EnumerateArray())
             {
+                var localVariables = ParseVariableObject(runEvent, "local_variables", testcaseName);
                 events.Add(new EngineRunEvent(
                     GetString(runEvent, "testcase", testcaseName),
                     GetString(runEvent, "phase"),
                     GetString(runEvent, "command_type"),
                     GetString(runEvent, "status"),
                     FormatCommandPath(runEvent),
+                    GetString(runEvent, "source_file"),
+                    GetInt(runEvent, "source_line"),
+                    localVariables,
+                    HasVariableObject(runEvent, "local_variables"),
                     GetNullableString(runEvent, "error")));
             }
         }
@@ -152,16 +157,39 @@ public sealed class TesterEngineBridge
                 continue;
             }
 
-            foreach (var variable in variablesElement.EnumerateObject())
-            {
-                variables.Add(new EngineVariableValue(
-                    testcaseName,
-                    variable.Name,
-                    FormatJsonValue(variable.Value)));
-            }
+            variables.AddRange(ParseVariableObject(testcase, "variables", testcaseName));
         }
 
         return variables;
+    }
+
+    private static IReadOnlyList<EngineVariableValue> ParseVariableObject(
+        JsonElement element,
+        string propertyName,
+        string testcaseName)
+    {
+        if (!element.TryGetProperty(propertyName, out var variablesElement)
+            || variablesElement.ValueKind != JsonValueKind.Object)
+        {
+            return Array.Empty<EngineVariableValue>();
+        }
+
+        var variables = new List<EngineVariableValue>();
+        foreach (var variable in variablesElement.EnumerateObject())
+        {
+            variables.Add(new EngineVariableValue(
+                testcaseName,
+                variable.Name,
+                FormatJsonValue(variable.Value)));
+        }
+
+        return variables;
+    }
+
+    private static bool HasVariableObject(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var variablesElement)
+            && variablesElement.ValueKind == JsonValueKind.Object;
     }
 
     private static string FormatCommandPath(JsonElement runEvent)
@@ -193,6 +221,23 @@ public sealed class TesterEngineBridge
         }
 
         return FormatJsonValue(property);
+    }
+
+    private static int GetInt(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property)
+            || property.ValueKind == JsonValueKind.Null
+            || property.ValueKind == JsonValueKind.Undefined)
+        {
+            return 0;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var value))
+        {
+            return value;
+        }
+
+        return int.TryParse(FormatJsonValue(property), out var parsed) ? parsed : 0;
     }
 
     private static string FormatJsonValue(JsonElement value)

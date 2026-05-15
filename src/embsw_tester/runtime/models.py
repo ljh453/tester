@@ -14,8 +14,11 @@ class CommandEvent:
     command_path: CommandPath
     command_type: str
     status: str
+    source_file: Optional[str] = None
+    source_line: Optional[int] = None
     resolved_inputs: Dict[str, Any] = field(default_factory=dict)
     outputs: Dict[str, Any] = field(default_factory=dict)
+    local_variables: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -26,8 +29,11 @@ class CommandEvent:
             "command_path": list(self.command_path),
             "command_type": self.command_type,
             "status": self.status,
+            "source_file": self.source_file,
+            "source_line": self.source_line,
             "resolved_inputs": self.resolved_inputs,
             "outputs": self.outputs,
+            "local_variables": self.local_variables,
             "error": self.error,
         }
 

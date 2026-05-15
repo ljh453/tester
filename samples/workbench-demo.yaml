@@ -1,111 +1,82 @@
-tool_profile: tool-profiles/lab-serial.tools.yaml
+functions:
+  add_channel:
+    params: [running_total, channel]
+    returns: [next_total, channel_label]
+    steps:
+      - set:
+          var: next_total
+          value: "${running_total + channel}"
+      - set:
+          var: channel_label
+          value: "channel-{{ channel }}"
 
-imports:
-  - libs/common-power-sequence.yaml
+  make_summary:
+    params: [total, expected_total]
+    returns: [summary_text, total_ok]
+    steps:
+      - set:
+          var: total_ok
+          value: "${total == expected_total}"
+      - set:
+          var: summary_text
+          value: "total={{ total }}, expected={{ expected_total }}"
 
 testcases:
-  - name: workbench_trace_variables_demo
-    description: GUI workbench demo for Problems, Execution Trace, Variables, and Report views.
-    tags: [gui, smoke, mock]
+  - name: gui_control_flow_demo
+    description: Pure runtime sample for checking GUI execution line and local variables.
+    tags: [gui, control-flow, sample]
     preconditions:
       - log.text:
-          text: "Preparing GUI workbench demo run"
+          text: "Preparing control-flow GUI demo"
       - set:
-          var: rpm_min
-          value: 700
+          var: expected_total
+          value: 6
+      - set:
+          var: channels
+          value: [1, 2, 3]
+      - set:
+          var: channel_sum
+          value: 0
+      - set:
+          var: iterations
+          value: 0
     steps:
+      - for:
+          each: "${channels}"
+          as: channel
+          do:
+            - call:
+                function: add_channel
+                args:
+                  running_total: "${channel_sum}"
+                  channel: "${channel}"
+                out:
+                  next_total: channel_sum
+                  channel_label: last_channel_label
+            - set:
+                var: iterations
+                value: "${iterations + 1}"
+            - log.value:
+                name: loop_state
+                value: "{{ last_channel_label }} sum={{ channel_sum }}"
       - call:
-          function: power_on
+          function: make_summary
           args:
-            channel: 1
+            total: "${channel_sum}"
+            expected_total: "${expected_total}"
           out:
-            voltage_ok: power_ready
+            summary_text: summary_text
+            total_ok: total_ok
       - assert.eq:
-          left: "${power_ready}"
+          left: "${total_ok}"
           right: true
-      - canoe.measurement.start:
-          configuration: "samples/tool-profiles/lab-serial.tools.yaml"
-      - canoe.sysvar.set:
-          namespace: Demo
-          name: Ignition
-          value: true
-      - inca.calibration.set:
-          parameter: IdleTargetRpm
-          value: 850
-      - trace32.command:
-          command: "STATE()"
-          save_as: trace32_state
-      - set:
-          var: measured_rpm
-          value: 1250
-      - assert.gt:
-          left: "${measured_rpm}"
-          right: "${rpm_min}"
+      - assert.eq:
+          left: "${iterations}"
+          right: 3
     postconditions:
       - log.value:
-          name: measured_rpm
-          value: "${measured_rpm}"
-      - canoe.measurement.stop: {}
-    cleanup:
-      - power_supply.command:
-          device: psu
-          action: output
-          channel: 1
-          state: off
-
-  - name: sent_gateway_command_demo
-    description: Mock-friendly Mach SENT Gateway command sequence for GUI trace inspection.
-    tags: [gui, sent, mock]
-    preconditions:
-      - log.text:
-          text: "Configuring SENT channel in TX mode"
-    steps:
-      - sent_usb.command:
-          device: sent_usb
-          action: config
-          channel: 1
-          direction: tx
-          data_nibble_count: 6
-          unit_time_us: 3.0
-          read_ack: false
-      - sent_usb.command:
-          device: sent_usb
-          action: start
-          channel: 1
-          read_ack: false
-      - sent_usb.command:
-          device: sent_usb
-          action: transmit_fast
-          channel: 1
-          status: 3
-          data_nibbles: [1, 2, 3, 4, 5, 6]
-          crc: 10
-          crc_calculated: 11
-          read_ack: false
-      - sent_usb.command:
-          device: sent_usb
-          action: transmit_slow
-          channel: 1
-          slow_message_id: 18
-          data: 13398
-          slow_frame_type: enhanced_serial
-          enhanced_format: true
-          crc_received: 37
-          crc_calculated: 44
-          read_ack: false
-      - set:
-          var: sent_demo_ok
-          value: true
-      - assert.eq:
-          left: "${sent_demo_ok}"
-          right: true
-    postconditions:
+          name: summary_text
+          value: "${summary_text}"
       - log.value:
-          name: sent_demo_ok
-          value: "${sent_demo_ok}"
-    cleanup:
-      - sent_usb.command:
-          device: sent_usb
-          action: stop
-          channel: 1
-          read_ack: false
+          name: last_channel_label
+          value: "${last_channel_label}"

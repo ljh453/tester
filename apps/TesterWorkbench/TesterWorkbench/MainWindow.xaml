@@ -54,6 +54,8 @@
                 <StackPanel Margin="8">
                     <TextBlock Text="Selected File" FontWeight="Bold" />
                     <TextBlock x:Name="SelectedFileText" TextWrapping="Wrap" Margin="0,4,0,16" />
+                    <TextBlock Text="Current Line" FontWeight="Bold" />
+                    <TextBlock x:Name="CurrentLineText" TextWrapping="Wrap" Margin="0,4,0,16" />
                     <TextBlock Text="Report" FontWeight="Bold" />
                     <TextBlock x:Name="ReportPathText" TextWrapping="Wrap" Margin="0,4,0,0" />
                 </StackPanel>
@@ -83,12 +85,14 @@
                 <TabItem Header="Execution Trace">
                     <DataGrid x:Name="ExecutionTraceGrid"
                               AutoGenerateColumns="False"
+                              SelectionChanged="ExecutionTraceGrid_SelectionChanged"
                               IsReadOnly="True">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Testcase" Binding="{Binding Testcase}" Width="140" />
                             <DataGridTextColumn Header="Phase" Binding="{Binding Phase}" Width="140" />
                             <DataGridTextColumn Header="Command" Binding="{Binding CommandType}" Width="160" />
                             <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" />
+                            <DataGridTextColumn Header="Line" Binding="{Binding SourceLine}" Width="70" />
                             <DataGridTextColumn Header="Path" Binding="{Binding CommandPath}" Width="220" />
                             <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="*" />
                         </DataGrid.Columns>
