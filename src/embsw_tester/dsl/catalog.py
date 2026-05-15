@@ -64,6 +64,20 @@ COMMAND_SPECS: Dict[str, CommandSpec] = {
         category="adapter",
         adapter="serial",
     ),
+    "sent_usb.read": CommandSpec(
+        type="sent_usb.read",
+        required_args=frozenset({"device"}),
+        optional_args=frozenset({"channel", "timeout_ms", "until", "save_as"}),
+        category="device",
+        adapter="serial",
+    ),
+    "power_supply.command": CommandSpec(
+        type="power_supply.command",
+        required_args=frozenset({"device"}),
+        optional_args=frozenset({"channel", "text", "timeout_ms", "value"}),
+        category="device",
+        adapter="serial",
+    ),
     "set": CommandSpec(
         type="set",
         required_args=frozenset({"var", "value"}),

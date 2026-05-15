@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from embsw_tester.adapters import AdapterContext, AdapterRegistry, create_default_adapter_registry
+from embsw_tester.devices import DeviceCommandError, execute_device_command
 from embsw_tester.dsl.catalog import COMMAND_SPECS
 from embsw_tester.dsl.models import FunctionDef, NormalizedCommand, ResolvedPackage, TestcaseDef
 from embsw_tester.runtime.expressions import ExpressionError, evaluate_value
@@ -129,7 +130,7 @@ def _execute_command(
     try:
         resolved_inputs, outputs = _dispatch_command(context, testcase_name, phase, command, frame, events)
         return _event(context, testcase_name, phase, command, "passed", resolved_inputs, outputs)
-    except (CommandFailed, ExpressionError, KeyError) as exc:
+    except (CommandFailed, DeviceCommandError, ExpressionError, KeyError) as exc:
         return _event(context, testcase_name, phase, command, "failed", {}, {}, str(exc))
 
 
@@ -185,6 +186,8 @@ def _dispatch_command(
     spec = COMMAND_SPECS.get(command.type)
     if spec is not None and spec.category == "adapter":
         return _execute_adapter_command(context, testcase_name, phase, command, frame)
+    if spec is not None and spec.category == "device":
+        return _execute_device_command(context, testcase_name, phase, command, frame)
 
     raise CommandFailed(f"Unsupported command '{command.type}'.")
 
@@ -224,6 +227,30 @@ def _adapter_save_value(values: Dict[str, Any]) -> Any:
     if "value" in values:
         return values["value"]
     return dict(values)
+
+
+def _execute_device_command(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    frame: Frame,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    resolved_inputs = evaluate_value(command.args, frame.variables)
+    execution = execute_device_command(
+        command.type,
+        resolved_inputs,
+        context.package.tool_profile_snapshot,
+        context.adapter_registry,
+        AdapterContext(
+            run_id=context.run_id,
+            testcase=testcase_name,
+            phase=phase,
+        ),
+    )
+    if "save_as" in command.args and execution.save_value is not None:
+        frame.variables[str(command.args["save_as"])] = execution.save_value
+    return execution.resolved_inputs, execution.outputs
 
 
 def _execute_call(

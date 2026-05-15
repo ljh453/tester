@@ -211,6 +211,36 @@ steps:
 
 `postconditions`는 결과 검증 단계다. 실패나 사용자 중단에도 가능한 정리가 필요하면 `cleanup`을 별도 단계로 둔다. 1차 릴리스에서 YAML 구조는 `preconditions`, `steps`, `postconditions`, `cleanup`을 허용한다.
 
+### 8.6 Serial 장비 명령 Profile
+
+Serial로 직접 제어하는 장비는 low-level `serial.write/read`와 별개로 장비 의미 명령을 제공할 수 있다. 장비 의미 명령은 tool profile의 `serial.devices.<name>.command_profile`을 통해 실제 TX/RX sequence로 해석한다.
+
+1차로 고정된 serial 조작 대상:
+
+- `power_supply`: 입력 포맷 미확정. `command_profile: pending` 상태에서는 `power_supply.command` 사용 시 compile error로 차단한다.
+- `mach_systems_sent_usb`: Mach Systems SENT-USB interface. `sent_usb.read`는 profile에 정의된 `write` template과 `read` matcher로 실행한다.
+
+예시:
+
+```yaml
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: sent_usb_line
+command_profiles:
+  sent_usb_line:
+    commands:
+      sent_usb.read:
+        write: "READ SENT {{ channel }}"
+        read:
+          until: "VALUE"
+```
+
+이 구조는 장비별 serial protocol이 확정되면 YAML profile만 교체해도 같은 테스트 의미를 유지하기 위한 경계다.
+
 ## 9. 파싱, 검증, 컴파일
 
 실행 전 compile-like phase를 반드시 거친다.
@@ -235,6 +265,9 @@ steps:
 - 선언되지 않은 반환값 매핑
 - import 충돌
 - 잘못된 변수 참조
+- 선언되지 않은 serial device
+- `pending` command profile을 참조하는 장비 의미 명령
+- 존재하지 않는 command profile 또는 profile 내 command 누락
 
 ## 10. 명령 카탈로그
 
@@ -266,6 +299,8 @@ steps:
 - `for`
 - `serial.write`
 - `serial.read`
+- `sent_usb.read`
+- `power_supply.command`
 - `trace32.command`
 - `canoe.measurement.start`
 - `canoe.measurement.stop`

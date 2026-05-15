@@ -36,6 +36,7 @@ def compile_file(path: Path) -> ResolvedPackage:
 
         _collect_functions(source_file, document, functions, diagnostics, path_prefix=("functions",))
         testcases = _collect_testcases(source_file, document, functions, diagnostics)
+        _validate_device_commands(testcases, functions, tool_profile_snapshot, diagnostics)
     else:
         testcases = []
         diagnostics.append(
@@ -416,6 +417,136 @@ def _validate_call_command(
                     source_file=command.source_file,
                 )
             )
+
+
+def _validate_device_commands(
+    testcases: Sequence[TestcaseDef],
+    functions: Mapping[str, FunctionDef],
+    tool_profile_snapshot: Mapping[str, Any],
+    diagnostics: List[Diagnostic],
+) -> None:
+    for command in _iter_commands(testcases, functions):
+        spec = COMMAND_SPECS.get(command.type)
+        if spec is None or spec.category != "device":
+            continue
+        _validate_device_command(command, tool_profile_snapshot, diagnostics)
+
+
+def _iter_commands(
+    testcases: Sequence[TestcaseDef],
+    functions: Mapping[str, FunctionDef],
+) -> Iterable[NormalizedCommand]:
+    for testcase in testcases:
+        yield from testcase.preconditions
+        yield from testcase.steps
+        yield from testcase.postconditions
+        yield from testcase.cleanup
+    for function_def in functions.values():
+        yield from function_def.steps
+
+
+def _validate_device_command(
+    command: NormalizedCommand,
+    tool_profile_snapshot: Mapping[str, Any],
+    diagnostics: List[Diagnostic],
+) -> None:
+    device_name = command.args.get("device")
+    if not isinstance(device_name, str):
+        diagnostics.append(
+            Diagnostic(
+                code="INVALID_DEVICE_REFERENCE",
+                message=f"Command '{command.type}' requires a literal device name.",
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+        return
+
+    devices = _serial_devices(tool_profile_snapshot)
+    device_config = devices.get(device_name)
+    if not isinstance(device_config, Mapping):
+        diagnostics.append(
+            Diagnostic(
+                code="UNKNOWN_DEVICE",
+                message=f"Device '{device_name}' is not declared in the tool profile.",
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+        return
+
+    profile_name = str(device_config.get("command_profile", ""))
+    if not profile_name:
+        diagnostics.append(
+            Diagnostic(
+                code="UNKNOWN_COMMAND_PROFILE",
+                message=f"Device '{device_name}' does not declare a command_profile.",
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+        return
+    if profile_name == "pending":
+        diagnostics.append(
+            Diagnostic(
+                code="PENDING_COMMAND_PROFILE",
+                message=(
+                    f"Device '{device_name}' uses pending command_profile; "
+                    f"command '{command.type}' cannot be compiled yet."
+                ),
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+        return
+
+    command_profiles = tool_profile_snapshot.get("command_profiles", {})
+    if not isinstance(command_profiles, Mapping):
+        diagnostics.append(
+            Diagnostic(
+                code="UNKNOWN_COMMAND_PROFILE",
+                message="'command_profiles' must be a mapping when device commands are used.",
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+        return
+
+    profile = command_profiles.get(profile_name)
+    if not isinstance(profile, Mapping):
+        diagnostics.append(
+            Diagnostic(
+                code="UNKNOWN_COMMAND_PROFILE",
+                message=f"Command profile '{profile_name}' for device '{device_name}' is not defined.",
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+        return
+
+    commands = profile.get("commands", {})
+    if not isinstance(commands, Mapping) or command.type not in commands:
+        diagnostics.append(
+            Diagnostic(
+                code="UNKNOWN_COMMAND_PROFILE",
+                message=(
+                    f"Command profile '{profile_name}' for device '{device_name}' "
+                    f"does not define command '{command.type}'."
+                ),
+                path=command.path,
+                source_file=command.source_file,
+            )
+        )
+
+
+def _serial_devices(tool_profile_snapshot: Mapping[str, Any]) -> Mapping[str, Any]:
+    serial_section = tool_profile_snapshot.get("serial", {})
+    if not isinstance(serial_section, Mapping):
+        return {}
+    devices = serial_section.get("devices", {})
+    if not isinstance(devices, Mapping):
+        return {}
+    return devices
 
 
 def _normalize_args(raw_args: Any) -> Dict[str, Any]:

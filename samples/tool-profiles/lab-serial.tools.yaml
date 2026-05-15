@@ -12,3 +12,11 @@ serial:
       baudrate: 115200
       command_profile: sent_usb_line
       notes: "Mach Systems SENT-USB serial interface."
+command_profiles:
+  sent_usb_line:
+    notes: "Placeholder mapping. Replace write/read syntax after confirming the Mach Systems SENT-USB command format."
+    commands:
+      sent_usb.read:
+        write: "READ SENT {{ channel }}"
+        read:
+          until: "VALUE"

@@ -1,0 +1,112 @@
+from pathlib import Path
+
+from embsw_tester.adapters.serial import FakeSerialPort
+from embsw_tester.adapters.serial_factory import create_adapter_registry_from_tool_profile
+from embsw_tester.dsl.compiler import compile_file
+from embsw_tester.runtime import run_package
+
+
+def test_runtime_executes_sent_usb_command_profile_over_serial(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: sent_usb_line
+command_profiles:
+  sent_usb_line:
+    commands:
+      sent_usb.read:
+        write: "READ SENT {{ channel }}"
+        read:
+          until: "VALUE"
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "sent.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: sent_case
+    steps:
+      - sent_usb.read:
+          device: sent_usb
+          channel: 1
+          timeout_ms: 25
+          save_as: sent_value
+      - assert.eq:
+          left: "${sent_value}"
+          right: "VALUE:123"
+""".strip(),
+        encoding="utf-8",
+    )
+    package = compile_file(test_file)
+    assert package.diagnostics == []
+
+    created_ports = {}
+
+    def port_factory(settings):
+        port = FakeSerialPort(rx_lines=["VALUE:123"])
+        created_ports[settings.logical_name] = port
+        return port
+
+    registry = create_adapter_registry_from_tool_profile(
+        package.tool_profile_snapshot,
+        evidence_root=tmp_path / "reports" / "sent",
+        serial_port_factory=port_factory,
+    )
+
+    result = run_package(
+        package,
+        run_id="sent-run",
+        adapter_registry=registry,
+    )
+
+    testcase = result.testcase_results[0]
+    sent_event = testcase.events[0]
+    assert result.status == "passed"
+    assert created_ports["sent_usb"].tx_lines == ["READ SENT 1"]
+    assert testcase.variables["sent_value"] == "VALUE:123"
+    assert sent_event.command_type == "sent_usb.read"
+    assert sent_event.outputs["value"] == "VALUE:123"
+    assert sent_event.outputs["serial"][0]["command_type"] == "serial.write"
+    assert sent_event.outputs["serial"][1]["command_type"] == "serial.read"
+
+
+def test_compile_reports_pending_power_supply_command_profile(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    psu:
+      device_type: power_supply
+      port: COM3
+      baudrate: 9600
+      command_profile: pending
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "psu.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: psu_case
+    steps:
+      - power_supply.command:
+          device: psu
+          text: "OUT 1 ON"
+""".strip(),
+        encoding="utf-8",
+    )
+
+    package = compile_file(test_file)
+
+    assert [diagnostic.code for diagnostic in package.diagnostics] == ["PENDING_COMMAND_PROFILE"]
+    assert "psu" in package.diagnostics[0].message

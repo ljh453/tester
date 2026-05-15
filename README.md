@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 7: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter + Tool Profile + Serial Profile Factory**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, tool profile snapshot, profile 기반 SerialAdapter factory, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 8: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter + Tool Profile + Serial Profile Factory + Device Command Profiles**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, tool profile snapshot, profile 기반 SerialAdapter factory, 장비 의미 명령 profile, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -25,6 +25,8 @@
 - tool profile 기반 serial device 선언과 resolved package snapshot
 - tool profile snapshot에서 `SerialAdapter`/`AdapterRegistry` 구성
 - 확정 serial 대상: power supply, Mach Systems SENT-USB interface
+- `sent_usb.read` 장비 의미 명령을 profile 정의 기반 serial TX/RX로 실행
+- `power_supply.command`는 입력 포맷 확정 전 `pending` profile 사용 시 compile error로 차단
 - `run.json`, `resolved-package.yaml`, testcase result JSON, `summary.html` 리포트 생성
 - pytest 기반 회귀 테스트
 
@@ -52,6 +54,8 @@ src/
       registry.py
       serial.py
       serial_factory.py
+    devices/
+      command_profiles.py
     dsl/
       catalog.py
       compiler.py
@@ -73,6 +77,7 @@ tests/
   test_runtime.py
   test_serial_adapter.py
   test_serial_factory.py
+  test_device_command_profiles.py
   test_tool_profile.py
 ```
 
@@ -242,6 +247,14 @@ serial:
       baudrate: 115200
       command_profile: sent_usb_line
       notes: "Mach Systems SENT-USB serial interface."
+command_profiles:
+  sent_usb_line:
+    notes: "Placeholder mapping. Replace write/read syntax after confirming the Mach Systems SENT-USB command format."
+    commands:
+      sent_usb.read:
+        write: "READ SENT {{ channel }}"
+        read:
+          until: "VALUE"
 ```
 
 `psu`는 power supply를 뜻하며, 입력 포맷이 아직 확정되지 않았기 때문에 `command_profile: pending`으로 둡니다. `sent_usb`는 Mach Systems의 SENT-USB interface를 뜻합니다. compiler는 이 설정을 실행 직전 `tool_profile_snapshot`으로 고정해서 report의 `resolved-package.yaml`에도 남깁니다.
@@ -264,6 +277,23 @@ result = run_package(package, run_id="real-serial-run", adapter_registry=registr
 ```
 
 `create_adapter_registry_from_tool_profile`는 profile의 논리 장비 이름을 `SerialAdapter` port 이름으로 사용합니다. 예를 들어 YAML의 `port: psu`는 profile의 `serial.devices.psu.port: COM3`로 연결됩니다.
+
+## Device Command Profiles
+
+장비 의미 명령은 테스트 YAML에서 raw serial 문자열 대신 장비 목적을 드러내는 명령을 쓰고, 실제 serial TX/RX는 tool profile의 `command_profiles`에서 결정하는 방식입니다.
+
+```yaml
+steps:
+  - sent_usb.read:
+      device: sent_usb
+      channel: 1
+      timeout_ms: 500
+      save_as: sent_value
+```
+
+위 명령은 `sent_usb` 장비의 `command_profile`을 찾아 `sent_usb.read` mapping을 실행합니다. 샘플 profile에서는 placeholder로 `READ SENT {{ channel }}`을 전송하고, 응답에 `VALUE`가 포함될 때 read 성공으로 처리합니다. Mach Systems SENT-USB의 실제 입력 포맷이 확정되면 `samples/tool-profiles/lab-serial.tools.yaml`의 mapping만 교체하면 됩니다.
+
+Power supply는 아직 입력 포맷이 미확정이므로 샘플 profile에서 `command_profile: pending`입니다. 이 상태에서 `power_supply.command`를 쓰면 compiler가 `PENDING_COMMAND_PROFILE` 진단으로 실행을 차단합니다.
 
 ## 리포트 생성
 
@@ -326,12 +356,13 @@ testcases:
 - Phase 5 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase5-serial-adapter.md`
 - Phase 6 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase6-tool-profile-serial-devices.md`
 - Phase 7 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase7-serial-profile-factory.md`
+- Phase 8 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase8-device-command-profiles.md`
 
 ## 다음 구현 단계
 
-다음 단계는 장비별 serial command profile입니다.
+다음 단계는 실제 장비 연결을 준비하는 serial 실행 경로 정교화입니다.
 
 - power supply 입력 포맷 확정 후 command profile 구현
-- Mach Systems SENT-USB line protocol command 정의
+- Mach Systems SENT-USB 실제 line protocol로 sample mapping 교체
 - Windows 장비 연결 smoke test
 - timeout/응답 매칭 정책 확장

@@ -1,0 +1,191 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, List, Mapping, Optional
+
+from embsw_tester.adapters import AdapterContext, AdapterRegistry, AdapterResult
+from embsw_tester.runtime.expressions import render_template
+
+
+class DeviceCommandError(RuntimeError):
+    """Raised when a device-level command profile cannot be executed."""
+
+
+@dataclass(frozen=True)
+class DeviceCommandExecution:
+    resolved_inputs: Dict[str, Any]
+    outputs: Dict[str, Any]
+    save_value: Optional[Any] = None
+
+
+def execute_device_command(
+    command_type: str,
+    args: Dict[str, Any],
+    tool_profile_snapshot: Mapping[str, Any],
+    adapter_registry: AdapterRegistry,
+    adapter_context: AdapterContext,
+) -> DeviceCommandExecution:
+    device_name = _required_text(args, "device")
+    device_config = _device_config(tool_profile_snapshot, device_name)
+    profile_name = str(device_config.get("command_profile", ""))
+    command_definition = _command_definition(
+        tool_profile_snapshot,
+        device_name,
+        profile_name,
+        command_type,
+    )
+    serial_steps: List[Dict[str, Any]] = []
+    save_value: Optional[Any] = None
+
+    if "write" in command_definition:
+        write_args = _serial_write_args(device_name, command_definition, args)
+        write_result = _execute_serial(
+            adapter_registry,
+            "serial.write",
+            write_args,
+            adapter_context,
+        )
+        serial_steps.append(_serial_step("serial.write", write_args, write_result))
+
+    if "read" in command_definition:
+        read_args = _serial_read_args(device_name, command_definition, args)
+        read_result = _execute_serial(
+            adapter_registry,
+            "serial.read",
+            read_args,
+            adapter_context,
+        )
+        serial_steps.append(_serial_step("serial.read", read_args, read_result))
+        save_value = _save_value(read_result.values)
+
+    outputs: Dict[str, Any] = {
+        "device": device_name,
+        "command_profile": profile_name,
+        "serial": serial_steps,
+    }
+    if save_value is not None:
+        outputs["value"] = save_value
+
+    return DeviceCommandExecution(
+        resolved_inputs=dict(args),
+        outputs=outputs,
+        save_value=save_value,
+    )
+
+
+def _device_config(
+    tool_profile_snapshot: Mapping[str, Any],
+    device_name: str,
+) -> Mapping[str, Any]:
+    serial_section = tool_profile_snapshot.get("serial", {})
+    if not isinstance(serial_section, Mapping):
+        raise DeviceCommandError("Tool profile does not declare serial devices.")
+    devices = serial_section.get("devices", {})
+    if not isinstance(devices, Mapping):
+        raise DeviceCommandError("Tool profile serial.devices must be a mapping.")
+    device_config = devices.get(device_name)
+    if not isinstance(device_config, Mapping):
+        raise DeviceCommandError(f"Device '{device_name}' is not declared in the tool profile.")
+    return device_config
+
+
+def _command_definition(
+    tool_profile_snapshot: Mapping[str, Any],
+    device_name: str,
+    profile_name: str,
+    command_type: str,
+) -> Mapping[str, Any]:
+    if not profile_name:
+        raise DeviceCommandError(f"Device '{device_name}' does not declare a command_profile.")
+    if profile_name == "pending":
+        raise DeviceCommandError(f"Device '{device_name}' command_profile is pending.")
+
+    profiles = tool_profile_snapshot.get("command_profiles", {})
+    if not isinstance(profiles, Mapping):
+        raise DeviceCommandError("Tool profile command_profiles must be a mapping.")
+    profile = profiles.get(profile_name)
+    if not isinstance(profile, Mapping):
+        raise DeviceCommandError(f"Command profile '{profile_name}' is not defined.")
+    commands = profile.get("commands", {})
+    if not isinstance(commands, Mapping):
+        raise DeviceCommandError(f"Command profile '{profile_name}' commands must be a mapping.")
+    command_definition = commands.get(command_type)
+    if not isinstance(command_definition, Mapping):
+        raise DeviceCommandError(
+            f"Command profile '{profile_name}' does not define command '{command_type}'."
+        )
+    return command_definition
+
+
+def _serial_write_args(
+    device_name: str,
+    command_definition: Mapping[str, Any],
+    args: Mapping[str, Any],
+) -> Dict[str, Any]:
+    text = render_template(str(command_definition["write"]), args)
+    write_args: Dict[str, Any] = {
+        "port": device_name,
+        "text": text,
+    }
+    if "timeout_ms" in args:
+        write_args["timeout_ms"] = args["timeout_ms"]
+    return write_args
+
+
+def _serial_read_args(
+    device_name: str,
+    command_definition: Mapping[str, Any],
+    args: Mapping[str, Any],
+) -> Dict[str, Any]:
+    read_definition = command_definition.get("read") or {}
+    if not isinstance(read_definition, Mapping):
+        raise DeviceCommandError("Device command read definition must be a mapping.")
+
+    read_args: Dict[str, Any] = {"port": device_name}
+    timeout_ms = args.get("timeout_ms", read_definition.get("timeout_ms"))
+    if timeout_ms is not None:
+        read_args["timeout_ms"] = timeout_ms
+    until = args.get("until", read_definition.get("until"))
+    if until is not None:
+        read_args["until"] = render_template(str(until), args)
+    return read_args
+
+
+def _execute_serial(
+    adapter_registry: AdapterRegistry,
+    command_type: str,
+    args: Dict[str, Any],
+    adapter_context: AdapterContext,
+) -> AdapterResult:
+    adapter = adapter_registry.get("serial")
+    result = adapter.execute(command_type, args, adapter_context)
+    if not result.success:
+        raise DeviceCommandError(result.message or f"Serial command '{command_type}' failed.")
+    return result
+
+
+def _serial_step(
+    command_type: str,
+    resolved_inputs: Dict[str, Any],
+    result: AdapterResult,
+) -> Dict[str, Any]:
+    return {
+        "command_type": command_type,
+        "resolved_inputs": resolved_inputs,
+        "outputs": result.to_outputs(),
+    }
+
+
+def _save_value(values: Mapping[str, Any]) -> Any:
+    if "text" in values:
+        return values["text"]
+    if "value" in values:
+        return values["value"]
+    return dict(values)
+
+
+def _required_text(args: Mapping[str, Any], name: str) -> str:
+    value = args.get(name)
+    if value is None:
+        raise DeviceCommandError(f"Missing required device argument '{name}'.")
+    return str(value)
