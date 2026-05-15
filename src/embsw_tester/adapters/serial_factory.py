@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Callable, Dict, Mapping, Optional
+
+from embsw_tester.adapters.registry import AdapterRegistry, create_default_adapter_registry
+from embsw_tester.adapters.serial import PySerialPort, SerialAdapter, SerialPort, SerialPortSettings
+
+SerialPortFactory = Callable[[SerialPortSettings], SerialPort]
+
+
+def create_serial_adapter_from_profile(
+    tool_profile_snapshot: Mapping[str, Any],
+    evidence_root: Path,
+    port_factory: Optional[SerialPortFactory] = None,
+) -> SerialAdapter:
+    factory = port_factory or PySerialPort
+    ports = {
+        settings.logical_name: factory(settings)
+        for settings in _serial_settings_from_profile(tool_profile_snapshot)
+    }
+    return SerialAdapter(ports, evidence_root=evidence_root)
+
+
+def create_adapter_registry_from_tool_profile(
+    tool_profile_snapshot: Mapping[str, Any],
+    evidence_root: Path,
+    serial_port_factory: Optional[SerialPortFactory] = None,
+) -> AdapterRegistry:
+    registry = create_default_adapter_registry()
+    if _has_serial_devices(tool_profile_snapshot):
+        registry.register(
+            "serial",
+            create_serial_adapter_from_profile(
+                tool_profile_snapshot,
+                evidence_root=evidence_root,
+                port_factory=serial_port_factory,
+            ),
+        )
+    return registry
+
+
+def _serial_settings_from_profile(
+    tool_profile_snapshot: Mapping[str, Any],
+) -> list[SerialPortSettings]:
+    serial_section = tool_profile_snapshot.get("serial", {})
+    if not isinstance(serial_section, Mapping):
+        raise ValueError("'serial' tool profile section must be a mapping.")
+    devices = serial_section.get("devices", {})
+    if not isinstance(devices, Mapping):
+        raise ValueError("'serial.devices' tool profile section must be a mapping.")
+
+    return [
+        _serial_settings_from_device(str(logical_name), device_config)
+        for logical_name, device_config in devices.items()
+    ]
+
+
+def _serial_settings_from_device(
+    logical_name: str,
+    device_config: Any,
+) -> SerialPortSettings:
+    if not isinstance(device_config, Mapping):
+        raise ValueError(f"Serial device '{logical_name}' must be a mapping.")
+    return SerialPortSettings(
+        logical_name=logical_name,
+        system_port=str(device_config["port"]),
+        baudrate=int(device_config.get("baudrate", 9600)),
+        timeout_ms=int(device_config.get("timeout_ms", 1000)),
+        device_type=str(device_config.get("device_type", "generic_serial")),
+        command_profile=str(device_config.get("command_profile", "raw_line")),
+    )
+
+
+def _has_serial_devices(tool_profile_snapshot: Mapping[str, Any]) -> bool:
+    serial_section = tool_profile_snapshot.get("serial")
+    return isinstance(serial_section, Mapping) and bool(serial_section.get("devices"))

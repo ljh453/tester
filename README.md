@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 6: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter + Tool Profile**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, tool profile snapshot, CLI에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 7: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial Adapter + Tool Profile + Serial Profile Factory**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial adapter, tool profile snapshot, profile 기반 SerialAdapter factory, CLI에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -23,6 +23,7 @@
 - `serial.write`, `serial.read`, `serial.read.save_as` 지원
 - Serial TX/RX raw evidence 파일 기록
 - tool profile 기반 serial device 선언과 resolved package snapshot
+- tool profile snapshot에서 `SerialAdapter`/`AdapterRegistry` 구성
 - 확정 serial 대상: power supply, Mach Systems SENT-USB interface
 - `run.json`, `resolved-package.yaml`, testcase result JSON, `summary.html` 리포트 생성
 - pytest 기반 회귀 테스트
@@ -50,6 +51,7 @@ src/
       mock.py
       registry.py
       serial.py
+      serial_factory.py
     dsl/
       catalog.py
       compiler.py
@@ -70,6 +72,7 @@ tests/
   test_reports.py
   test_runtime.py
   test_serial_adapter.py
+  test_serial_factory.py
   test_tool_profile.py
 ```
 
@@ -91,6 +94,12 @@ Windows PowerShell:
 py -3.9 -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\python -m pip install -e ".[dev]"
+```
+
+실제 serial port를 열어야 하는 환경에서는 optional dependency를 추가로 설치합니다.
+
+```bash
+.venv/bin/python -m pip install -e ".[serial]"
 ```
 
 ## 테스트 실행
@@ -206,6 +215,8 @@ steps:
 
 `serial.read.save_as`는 adapter 응답의 `text` 값을 현재 testcase local variable에 저장합니다. Serial adapter는 `raw-logs/serial/<run-id>/<testcase>.log` 형태의 TX/RX evidence를 기록합니다.
 
+실제 COM 포트 사용은 `PySerialPort`가 담당하며, `pyserial` 설치 후 사용합니다. 테스트나 장비 없는 개발에서는 `FakeSerialPort`를 주입합니다.
+
 ## Tool Profile
 
 실행 YAML은 top-level `tool_profile`로 공통 장비 설정 파일을 참조할 수 있습니다.
@@ -234,6 +245,25 @@ serial:
 ```
 
 `psu`는 power supply를 뜻하며, 입력 포맷이 아직 확정되지 않았기 때문에 `command_profile: pending`으로 둡니다. `sent_usb`는 Mach Systems의 SENT-USB interface를 뜻합니다. compiler는 이 설정을 실행 직전 `tool_profile_snapshot`으로 고정해서 report의 `resolved-package.yaml`에도 남깁니다.
+
+profile snapshot으로 실제 serial adapter registry를 구성할 수 있습니다. CLI 기본 실행은 장비 없이 동작하도록 mock adapter를 유지하며, 실제 장비 실행 경로에서는 아래 factory를 사용합니다.
+
+```python
+from pathlib import Path
+
+from embsw_tester.adapters import create_adapter_registry_from_tool_profile
+from embsw_tester.dsl.compiler import compile_file
+from embsw_tester.runtime import run_package
+
+package = compile_file(Path("samples/boot-smoke.yaml"))
+registry = create_adapter_registry_from_tool_profile(
+    package.tool_profile_snapshot,
+    evidence_root=Path("reports/real-serial-run"),
+)
+result = run_package(package, run_id="real-serial-run", adapter_registry=registry)
+```
+
+`create_adapter_registry_from_tool_profile`는 profile의 논리 장비 이름을 `SerialAdapter` port 이름으로 사용합니다. 예를 들어 YAML의 `port: psu`는 profile의 `serial.devices.psu.port: COM3`로 연결됩니다.
 
 ## 리포트 생성
 
@@ -295,12 +325,13 @@ testcases:
 - Phase 4 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase4-adapter-framework.md`
 - Phase 5 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase5-serial-adapter.md`
 - Phase 6 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase6-tool-profile-serial-devices.md`
+- Phase 7 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase7-serial-profile-factory.md`
 
 ## 다음 구현 단계
 
-다음 단계는 실제 Serial 포트 연결입니다.
+다음 단계는 장비별 serial command profile입니다.
 
-- pyserial 기반 `SerialPort` 구현
-- tool profile에서 COM port 설정으로 `SerialAdapter` 구성
+- power supply 입력 포맷 확정 후 command profile 구현
+- Mach Systems SENT-USB line protocol command 정의
 - Windows 장비 연결 smoke test
 - timeout/응답 매칭 정책 확장

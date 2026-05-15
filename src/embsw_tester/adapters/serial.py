@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Protocol
 
@@ -13,6 +14,44 @@ class SerialPort(Protocol):
 
     def read_line(self, timeout_ms: int) -> str:
         ...
+
+
+@dataclass(frozen=True)
+class SerialPortSettings:
+    logical_name: str
+    system_port: str
+    baudrate: int = 9600
+    timeout_ms: int = 1000
+    device_type: str = "generic_serial"
+    command_profile: str = "raw_line"
+
+
+class PySerialPort:
+    def __init__(self, settings: SerialPortSettings):
+        try:
+            import serial  # type: ignore[import-not-found]
+        except ImportError as exc:
+            raise RuntimeError(
+                "pyserial is required for real serial ports. Install it with 'pip install pyserial'."
+            ) from exc
+
+        self._serial = serial.Serial(
+            port=settings.system_port,
+            baudrate=settings.baudrate,
+            timeout=settings.timeout_ms / 1000,
+            write_timeout=settings.timeout_ms / 1000,
+        )
+
+    def write_line(self, text: str) -> int:
+        payload = f"{text}\n".encode("utf-8")
+        return int(self._serial.write(payload))
+
+    def read_line(self, timeout_ms: int) -> str:
+        self._serial.timeout = timeout_ms / 1000
+        data = self._serial.readline()
+        if not data:
+            raise TimeoutError(f"Serial read timed out after {timeout_ms} ms.")
+        return data.decode("utf-8", errors="replace").rstrip("\r\n")
 
 
 class FakeSerialPort:
