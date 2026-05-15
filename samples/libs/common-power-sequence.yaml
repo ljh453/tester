@@ -1,0 +1,13 @@
+functions:
+  power_on:
+    params: [channel]
+    returns: [voltage_ok]
+    steps:
+      - serial.write:
+          port: psu
+          text: "OUT {{ channel }} ON"
+      - delay:
+          ms: 300
+      - set:
+          var: voltage_ok
+          value: true

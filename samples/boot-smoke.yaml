@@ -1,0 +1,24 @@
+imports:
+  - libs/common-power-sequence.yaml
+
+testcases:
+  - name: boot_smoke
+    description: Basic boot smoke test using the shared power sequence.
+    on_step_failure: stop
+    preconditions:
+      - log.text:
+          text: "Starting boot smoke preconditions"
+    steps:
+      - call:
+          function: power_on
+          args:
+            channel: 1
+          out:
+            voltage_ok: power_ready
+      - assert.eq:
+          left: "${power_ready}"
+          right: true
+    postconditions:
+      - log.value:
+          name: power_ready
+          value: "${power_ready}"
