@@ -12,6 +12,7 @@ await RunMainWorkbenchLineNumbersTest();
 await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
 await RunMainWorkbenchThemeModeSettingTest();
+await RunWorkbenchThemeResolverTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
 
@@ -546,6 +547,27 @@ static Task RunMainWorkbenchThemeModeSettingTest()
     AssertEqual(WorkbenchThemeMode.System, viewModel.ThemeMode, "theme mode can be system");
     viewModel.SetThemeMode(WorkbenchThemeMode.Dark);
     AssertEqual(WorkbenchThemeMode.Dark, viewModel.ThemeMode, "theme mode can be dark");
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchThemeResolverTest()
+{
+    AssertEqual(
+        ResolvedWorkbenchTheme.Light,
+        WorkbenchThemeResolver.Resolve(WorkbenchThemeMode.Light, systemPrefersDarkTheme: true),
+        "light theme resolves to light");
+    AssertEqual(
+        ResolvedWorkbenchTheme.Dark,
+        WorkbenchThemeResolver.Resolve(WorkbenchThemeMode.Dark, systemPrefersDarkTheme: false),
+        "dark theme resolves to dark");
+    AssertEqual(
+        ResolvedWorkbenchTheme.Light,
+        WorkbenchThemeResolver.Resolve(WorkbenchThemeMode.System, systemPrefersDarkTheme: false),
+        "system light preference resolves to light");
+    AssertEqual(
+        ResolvedWorkbenchTheme.Dark,
+        WorkbenchThemeResolver.Resolve(WorkbenchThemeMode.System, systemPrefersDarkTheme: true),
+        "system dark preference resolves to dark");
     return Task.CompletedTask;
 }
 

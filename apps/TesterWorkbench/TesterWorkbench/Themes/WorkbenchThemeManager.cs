@@ -11,6 +11,11 @@ public static class WorkbenchThemeManager
 
     public static void Apply(WorkbenchThemeMode themeMode)
     {
+        Apply(themeMode, WorkbenchSystemTheme.PrefersDarkTheme());
+    }
+
+    internal static void Apply(WorkbenchThemeMode themeMode, bool systemPrefersDarkTheme)
+    {
         var resources = System.Windows.Application.Current.Resources.MergedDictionaries;
         for (var index = resources.Count - 1; index >= 0; index--)
         {
@@ -25,17 +30,17 @@ public static class WorkbenchThemeManager
 
         resources.Insert(0, new ResourceDictionary
         {
-            Source = new Uri(ResolveThemeSource(themeMode), UriKind.Relative)
+            Source = new Uri(ResolveThemeSource(themeMode, systemPrefersDarkTheme), UriKind.Relative)
         });
     }
 
-    private static string ResolveThemeSource(WorkbenchThemeMode themeMode)
+    private static string ResolveThemeSource(WorkbenchThemeMode themeMode, bool systemPrefersDarkTheme)
     {
-        return themeMode switch
+        var resolvedTheme = WorkbenchThemeResolver.Resolve(themeMode, systemPrefersDarkTheme);
+        return resolvedTheme switch
         {
-            WorkbenchThemeMode.Light => LightThemeSource,
-            WorkbenchThemeMode.Dark => DarkThemeSource,
-            WorkbenchThemeMode.System => DarkThemeSource,
+            ResolvedWorkbenchTheme.Light => LightThemeSource,
+            ResolvedWorkbenchTheme.Dark => DarkThemeSource,
             _ => DarkThemeSource
         };
     }
