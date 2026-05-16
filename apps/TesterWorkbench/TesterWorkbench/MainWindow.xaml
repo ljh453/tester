@@ -6,7 +6,7 @@
         MinWidth="1120"
         Height="820"
         Width="1280">
-    <DockPanel>
+    <DockPanel Background="{DynamicResource Workbench.Brush.AppBackground}">
         <ToolBar DockPanel.Dock="Top">
             <TextBlock Text="Workspace" VerticalAlignment="Center" Margin="8,0,4,0" />
             <TextBox x:Name="WorkspacePathBox" Width="420" />
@@ -21,6 +21,11 @@
                       Checked="AutoFocusLine_Changed"
                       Unchecked="AutoFocusLine_Changed"
                       VerticalAlignment="Center" />
+            <Separator />
+            <TextBlock Text="Theme" VerticalAlignment="Center" Margin="8,0,4,0" />
+            <ComboBox x:Name="ThemeModeComboBox"
+                      Width="96"
+                      SelectionChanged="ThemeMode_Changed" />
         </ToolBar>
 
         <Grid>
@@ -51,7 +56,7 @@
                     </Grid.ColumnDefinitions>
                     <ScrollViewer x:Name="LineNumbersScrollViewer"
                                   Grid.Column="0"
-                                  Background="#F3F4F6"
+                                  Background="{DynamicResource Workbench.Brush.EditorGutter}"
                                   Focusable="False"
                                   HorizontalScrollBarVisibility="Disabled"
                                   IsHitTestVisible="False"
@@ -59,7 +64,7 @@
                         <TextBlock x:Name="LineNumbersTextBlock"
                                    FontFamily="Consolas"
                                    FontSize="13"
-                                   Foreground="#6B7280"
+                                   Foreground="{DynamicResource Workbench.Brush.TextMuted}"
                                    Padding="4,2,8,0"
                                    TextAlignment="Right" />
                     </ScrollViewer>
@@ -69,10 +74,13 @@
                                  AcceptsTab="True"
                                  FontFamily="Consolas"
                                  FontSize="13"
+                                 Background="{DynamicResource Workbench.Brush.EditorBackground}"
+                                 Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
+                                 CaretBrush="{DynamicResource Workbench.Brush.TextPrimary}"
                                  HorizontalScrollBarVisibility="Auto"
                                  Padding="4,2,4,2"
                                  PreviewKeyDown="EditorBox_PreviewKeyDown"
-                                 SelectionBrush="#FBBF24"
+                                 SelectionBrush="{DynamicResource Workbench.Brush.EditorSelection}"
                                  SelectionOpacity="0.8"
                                  SizeChanged="EditorBox_SizeChanged"
                                  TextChanged="EditorBox_TextChanged"
@@ -83,19 +91,19 @@
                                 ClipToBounds="True"
                                 IsHitTestVisible="False">
                             <Border x:Name="CurrentExecutionLineMarker"
-                                    Background="#FBBF24"
+                                    Background="{DynamicResource Workbench.Brush.CurrentLine}"
                                     Opacity="0.28"
                                     Visibility="Collapsed" />
                             <Border x:Name="CurrentExecutionLineBadge"
                                     Canvas.Top="6"
                                     Canvas.Right="22"
-                                    Background="#111827"
+                                    Background="{DynamicResource Workbench.Brush.BadgeBackground}"
                                     CornerRadius="3"
                                     Opacity="0.88"
                                     Padding="8,4"
                                     Visibility="Collapsed">
                                 <TextBlock x:Name="CurrentExecutionLineBadgeText"
-                                           Foreground="White"
+                                           Foreground="{DynamicResource Workbench.Brush.BadgeText}"
                                            FontSize="12" />
                             </Border>
                         </Canvas>

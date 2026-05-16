@@ -53,6 +53,8 @@ public sealed class MainWorkbenchViewModel
 
     public double EditorFontSize { get; private set; } = 13.0;
 
+    public WorkbenchThemeMode ThemeMode { get; private set; } = WorkbenchThemeMode.Dark;
+
     public Task OpenWorkspaceAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -140,6 +142,11 @@ public sealed class MainWorkbenchViewModel
     public void SetAutoFocusExecutionLine(bool enabled)
     {
         AutoFocusExecutionLine = enabled;
+    }
+
+    public void SetThemeMode(WorkbenchThemeMode themeMode)
+    {
+        ThemeMode = themeMode;
     }
 
     public void ZoomEditorIn()

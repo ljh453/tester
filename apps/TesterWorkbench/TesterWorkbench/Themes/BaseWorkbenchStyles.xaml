@@ -1,0 +1,129 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style TargetType="{x:Type Window}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.AppBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="FontFamily" Value="Segoe UI" />
+    </Style>
+
+    <Style TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+    </Style>
+
+    <Style TargetType="{x:Type ToolBar}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+    </Style>
+
+    <Style TargetType="{x:Type Separator}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.Border}" />
+    </Style>
+
+    <Style TargetType="{x:Type Button}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="Padding" Value="10,3" />
+    </Style>
+
+    <Style TargetType="{x:Type CheckBox}">
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+    </Style>
+
+    <Style TargetType="{x:Type ComboBox}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+    </Style>
+
+    <Style TargetType="{x:Type TextBox}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+    </Style>
+
+    <Style TargetType="{x:Type GroupBox}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type GroupBox}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.RowSpan="2"
+                                Margin="0,9,0,0"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="2" />
+                        <Border Grid.Row="0"
+                                Margin="8,0,0,0"
+                                Padding="6,0"
+                                Background="{DynamicResource Workbench.Brush.AppBackground}"
+                                HorizontalAlignment="Left">
+                            <ContentPresenter ContentSource="Header"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{DynamicResource Workbench.Brush.TextSecondary}" />
+                        </Border>
+                        <ContentPresenter Grid.Row="1"
+                                          Margin="8,12,8,8" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type TreeView}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+    </Style>
+
+    <Style TargetType="{x:Type TreeViewItem}">
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+    </Style>
+
+    <Style TargetType="{x:Type TabControl}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+    </Style>
+
+    <Style TargetType="{x:Type TabItem}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextSecondary}" />
+    </Style>
+
+    <Style TargetType="{x:Type DataGrid}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="RowBackground" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+        <Setter Property="AlternatingRowBackground" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
+    </Style>
+
+    <Style TargetType="{x:Type DataGridColumnHeader}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextSecondary}" />
+    </Style>
+
+    <Style TargetType="{x:Type DataGridCell}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+    </Style>
+
+    <Style TargetType="{x:Type GridSplitter}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.AppBackground}" />
+    </Style>
+</ResourceDictionary>

@@ -6,6 +6,7 @@ using Forms = System.Windows.Forms;
 using TesterWorkbench.Core.Engine;
 using TesterWorkbench.Core.ViewModels;
 using TesterWorkbench.Core.Workspace;
+using TesterWorkbench.Themes;
 
 namespace TesterWorkbench;
 
@@ -28,6 +29,9 @@ public partial class MainWindow : Window
                 new ProcessEngineRunner()));
         WorkspacePathBox.Text = repositoryRoot;
         AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
+        ThemeModeComboBox.ItemsSource = Enum.GetValues<WorkbenchThemeMode>();
+        ThemeModeComboBox.SelectedItem = _viewModel.ThemeMode;
+        WorkbenchThemeManager.Apply(_viewModel.ThemeMode);
         ApplyEditorFontSize();
         RefreshView();
     }
@@ -76,6 +80,17 @@ public partial class MainWindow : Window
     private void AutoFocusLine_Changed(object sender, RoutedEventArgs e)
     {
         _viewModel.SetAutoFocusExecutionLine(AutoFocusLineCheckBox.IsChecked == true);
+    }
+
+    private void ThemeMode_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (ThemeModeComboBox.SelectedItem is not WorkbenchThemeMode themeMode)
+        {
+            return;
+        }
+
+        _viewModel.SetThemeMode(themeMode);
+        WorkbenchThemeManager.Apply(themeMode);
     }
 
     private void ExecutionTraceGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -177,6 +192,7 @@ public partial class MainWindow : Window
         EditorBox.Text = _viewModel.EditorText;
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
+        ThemeModeComboBox.SelectedItem = _viewModel.ThemeMode;
         ApplyEditorFontSize();
         SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
         RefreshRuntimeViews();

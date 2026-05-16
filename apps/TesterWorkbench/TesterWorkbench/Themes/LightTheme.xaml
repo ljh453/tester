@@ -1,0 +1,24 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="Workbench.Brush.AppBackground" Color="#F3F4F6" />
+    <SolidColorBrush x:Key="Workbench.Brush.PanelBackground" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Workbench.Brush.PanelBackgroundAlt" Color="#F9FAFB" />
+    <SolidColorBrush x:Key="Workbench.Brush.ControlBackground" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Workbench.Brush.ControlBackgroundHover" Color="#EEF2F7" />
+    <SolidColorBrush x:Key="Workbench.Brush.ControlBackgroundPressed" Color="#E5E7EB" />
+    <SolidColorBrush x:Key="Workbench.Brush.Border" Color="#D1D5DB" />
+    <SolidColorBrush x:Key="Workbench.Brush.BorderStrong" Color="#9CA3AF" />
+    <SolidColorBrush x:Key="Workbench.Brush.TextPrimary" Color="#111827" />
+    <SolidColorBrush x:Key="Workbench.Brush.TextSecondary" Color="#374151" />
+    <SolidColorBrush x:Key="Workbench.Brush.TextMuted" Color="#6B7280" />
+    <SolidColorBrush x:Key="Workbench.Brush.EditorBackground" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Workbench.Brush.EditorGutter" Color="#F3F4F6" />
+    <SolidColorBrush x:Key="Workbench.Brush.EditorSelection" Color="#F59E0B" />
+    <SolidColorBrush x:Key="Workbench.Brush.CurrentLine" Color="#FBBF24" />
+    <SolidColorBrush x:Key="Workbench.Brush.BadgeBackground" Color="#111827" />
+    <SolidColorBrush x:Key="Workbench.Brush.BadgeText" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Workbench.Brush.Accent" Color="#0284C7" />
+    <SolidColorBrush x:Key="Workbench.Brush.Pass" Color="#16A34A" />
+    <SolidColorBrush x:Key="Workbench.Brush.Warning" Color="#D97706" />
+    <SolidColorBrush x:Key="Workbench.Brush.Fail" Color="#DC2626" />
+</ResourceDictionary>

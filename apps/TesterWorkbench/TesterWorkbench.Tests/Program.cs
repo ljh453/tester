@@ -11,6 +11,7 @@ await RunMainWorkbenchViewModelShowsLogEventsInConsoleTest();
 await RunMainWorkbenchLineNumbersTest();
 await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
+await RunMainWorkbenchThemeModeSettingTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
 
@@ -526,6 +527,25 @@ static Task RunMainWorkbenchEditorZoomSettingTest()
         viewModel.ZoomEditorIn();
     }
     AssertEqual(32.0, viewModel.EditorFontSize, "editor zoom in clamps to maximum");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchThemeModeSettingTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            "/repo",
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    AssertEqual(WorkbenchThemeMode.Dark, viewModel.ThemeMode, "theme mode defaults to dark");
+    viewModel.SetThemeMode(WorkbenchThemeMode.Light);
+    AssertEqual(WorkbenchThemeMode.Light, viewModel.ThemeMode, "theme mode can be light");
+    viewModel.SetThemeMode(WorkbenchThemeMode.System);
+    AssertEqual(WorkbenchThemeMode.System, viewModel.ThemeMode, "theme mode can be system");
+    viewModel.SetThemeMode(WorkbenchThemeMode.Dark);
+    AssertEqual(WorkbenchThemeMode.Dark, viewModel.ThemeMode, "theme mode can be dark");
     return Task.CompletedTask;
 }
 
