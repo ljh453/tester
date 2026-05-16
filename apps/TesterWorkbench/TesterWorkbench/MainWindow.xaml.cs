@@ -196,7 +196,6 @@ public partial class MainWindow : Window
         ApplyEditorFontSize();
         SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
         RefreshRuntimeViews();
-        ConsoleBox.Text = _viewModel.ConsoleText;
         SyncLineNumberScroll();
     }
 
@@ -219,7 +218,19 @@ public partial class MainWindow : Window
         ReportTabText.Text = _viewModel.ReportDirectory is null
             ? "No report generated yet."
             : $"Report directory: {_viewModel.ReportDirectory}";
+        RefreshConsole();
         HighlightCurrentExecutionLine();
+    }
+
+    private void RefreshConsole()
+    {
+        if (ConsoleBox.Text == _viewModel.ConsoleText)
+        {
+            return;
+        }
+
+        ConsoleBox.Text = _viewModel.ConsoleText;
+        ConsoleBox.ScrollToEnd();
     }
 
     private void QueueRuntimeRefresh()

@@ -8,6 +8,7 @@ await RunMainWorkbenchViewModelTest();
 await RunMainWorkbenchViewModelStreamingTest();
 await RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest();
 await RunMainWorkbenchViewModelShowsLogEventsInConsoleTest();
+await RunMainWorkbenchViewModelStreamsLogEventsInConsoleTest();
 await RunMainWorkbenchLineNumbersTest();
 await RunYamlExecutionBlockRangeTest();
 await RunMainWorkbenchAutoFocusSettingTest();
@@ -464,6 +465,65 @@ static async Task RunMainWorkbenchViewModelShowsLogEventsInConsoleTest()
     AssertTrue(viewModel.ConsoleText.Contains("[log_case/steps L6] rpm = 700"), "console includes log.value");
     AssertEqual("Engine warmed up", viewModel.ExecutionTrace[0].Detail, "log text trace detail");
     AssertEqual("rpm = 700", viewModel.ExecutionTrace[1].Detail, "log value trace detail");
+}
+
+static async Task RunMainWorkbenchViewModelStreamsLogEventsInConsoleTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/log-stream.yaml", "testcases:\n  - name: log_stream_case\n    steps: []"));
+    var yamlPath = Path.Combine(root, "tests", "log-stream.yaml");
+    var logEventJson =
+        """
+        {
+          "testcase": "log_stream_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 0],
+          "command_type": "log.text",
+          "status": "passed",
+          "source_file": "/repo/tests/log-stream.yaml",
+          "source_line": 4,
+          "local_variables": {"step": "before-final-result"},
+          "outputs": {"text": "streamed while running"},
+          "error": null
+        }
+        """;
+    var runner = new FakeEngineProcessRunner(
+        (
+            new EngineProcessResult(
+                0,
+                """
+                {
+                  "run_id": "log-stream-run",
+                  "status": "passed",
+                  "testcase_results": [
+                    {
+                      "name": "log_stream_case",
+                      "status": "passed",
+                      "variables": {},
+                      "events": []
+                    }
+                  ],
+                  "report": {"report_dir": "reports/log-stream-run"}
+                }
+                """,
+                ""),
+            new[] { logEventJson }
+        ));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+    var consoleSnapshots = new List<string>();
+
+    await viewModel.OpenFileAsync(yamlPath);
+    await viewModel.RunAsync("log-stream-run", () => consoleSnapshots.Add(viewModel.ConsoleText));
+
+    AssertTrue(
+        consoleSnapshots.Any(snapshot => snapshot.Contains("[log_stream_case/steps L4] streamed while running")),
+        "console includes streamed log before run completion");
+    AssertEqual(
+        1,
+        consoleSnapshots.Count(snapshot => snapshot.Contains("[log_stream_case/steps L4] streamed while running")),
+        "streamed log appears once in callbacks");
 }
 
 static async Task RunMainWorkbenchLineNumbersTest()
