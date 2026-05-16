@@ -1,4 +1,41 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace TesterWorkbench.Core.ViewModels;
+
+public abstract class WorkbenchDragInsertionPreviewTarget : INotifyPropertyChanged
+{
+    private bool _isDragInsertionTarget;
+    private string _dragInsertionText = string.Empty;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public bool IsDragInsertionTarget
+    {
+        get => _isDragInsertionTarget;
+        set => SetField(ref _isDragInsertionTarget, value);
+    }
+
+    public string DragInsertionText
+    {
+        get => _dragInsertionText;
+        set => SetField(ref _dragInsertionText, value);
+    }
+
+    protected void SetField<T>(
+        ref T field,
+        T value,
+        [CallerMemberName] string propertyName = "")
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return;
+        }
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}
 
 public sealed class WorkbenchGuiModel
 {
@@ -52,7 +89,7 @@ public sealed class WorkbenchGuiTestcase
     public IReadOnlyList<WorkbenchGuiPhase> Phases { get; }
 }
 
-public sealed class WorkbenchGuiPhase
+public sealed class WorkbenchGuiPhase : WorkbenchDragInsertionPreviewTarget
 {
     public WorkbenchGuiPhase(
         string name,
@@ -87,7 +124,7 @@ public sealed class WorkbenchGuiPhase
         : $"{Blocks.Count} commands";
 }
 
-public sealed class WorkbenchCommandBlock
+public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
 {
     public WorkbenchCommandBlock(
         string displayIndex,

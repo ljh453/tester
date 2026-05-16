@@ -371,6 +371,7 @@
     }
 
     .phase {
+      position: relative;
       border: 1px solid var(--line);
       border-radius: 6px;
       margin-bottom: 12px;
@@ -592,6 +593,7 @@
     }
 
     .drop-slot {
+      position: relative;
       height: 28px;
       border: 1px dashed #435267;
       border-radius: 5px;
@@ -711,6 +713,36 @@
     .phase.drag-over {
       outline: 2px solid rgba(101, 168, 255, 0.58);
       outline-offset: -2px;
+    }
+
+    .drop-slot.drag-over::after,
+    .block.drag-over::after,
+    .phase.drag-over::after {
+      content: attr(data-insert-preview);
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 8px;
+      z-index: 5;
+      border: 1px solid rgba(101, 168, 255, 0.68);
+      border-radius: 4px;
+      background: #26384d;
+      color: #dcecff;
+      font-size: 12px;
+      padding: 6px 8px;
+      pointer-events: none;
+    }
+
+    .drop-slot.drag-over::after {
+      left: 8px;
+      right: 8px;
+      bottom: -32px;
+    }
+
+    .block.drag-over::after {
+      left: 42px;
+      right: 10px;
+      bottom: -26px;
     }
 
     .mock-inserted {
@@ -1381,19 +1413,25 @@
           return;
         }
 
+        const type = event.dataTransfer.getData("text/plain") || "command";
         event.preventDefault();
         target.classList.add("drag-over");
+        target.dataset.insertPreview = target.classList.contains("block")
+          ? `Insert ${type} after this command`
+          : `Append ${type} here`;
         event.dataTransfer.dropEffect = "copy";
       });
 
       target.addEventListener("dragleave", () => {
         target.classList.remove("drag-over");
+        delete target.dataset.insertPreview;
       });
 
       target.addEventListener("drop", (event) => {
         event.preventDefault();
         event.stopPropagation();
         target.classList.remove("drag-over");
+        delete target.dataset.insertPreview;
         const type = event.dataTransfer.getData("text/plain");
         if (!type) {
           return;

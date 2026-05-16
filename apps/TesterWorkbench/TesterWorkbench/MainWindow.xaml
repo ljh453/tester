@@ -26,52 +26,78 @@
 
         <HierarchicalDataTemplate DataType="{x:Type vm:WorkbenchCommandBlock}"
                                   ItemsSource="{Binding Children}">
-            <Border Margin="0,3,0,5"
-                    Padding="8,7"
-                    Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}"
-                    BorderBrush="{Binding AccentColor}"
-                    BorderThickness="4,1,1,1"
-                    CornerRadius="4">
-                <Border.Style>
-                    <Style TargetType="{x:Type Border}">
-                        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsCurrentExecution}" Value="True">
-                                <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
-                                <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="42" />
-                        <ColumnDefinition Width="82" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="72" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding DisplayIndex}"
-                               Foreground="{DynamicResource Workbench.Brush.TextMuted}"
-                               VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding DisplayType}"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="2"
-                               Text="{Binding Summary}"
-                               Foreground="{DynamicResource Workbench.Brush.TextSecondary}"
-                               TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="3"
-                               Text="{Binding LineRangeText}"
-                               FontFamily="Consolas"
-                               FontSize="11"
-                               Foreground="{DynamicResource Workbench.Brush.TextMuted}"
-                               TextAlignment="Right"
-                               VerticalAlignment="Center" />
-                </Grid>
-            </Border>
+            <StackPanel>
+                <Border Margin="0,3,0,5"
+                        Padding="8,7"
+                        Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}"
+                        BorderBrush="{Binding AccentColor}"
+                        BorderThickness="4,1,1,1"
+                        CornerRadius="4">
+                    <Border.Style>
+                        <Style TargetType="{x:Type Border}">
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCurrentExecution}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsDragInsertionTarget}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="42" />
+                            <ColumnDefinition Width="82" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="72" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding DisplayIndex}"
+                                   Foreground="{DynamicResource Workbench.Brush.TextMuted}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding DisplayType}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding Summary}"
+                                   Foreground="{DynamicResource Workbench.Brush.TextSecondary}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="3"
+                                   Text="{Binding LineRangeText}"
+                                   FontFamily="Consolas"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource Workbench.Brush.TextMuted}"
+                                   TextAlignment="Right"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Margin="42,0,0,6"
+                        Padding="8,4"
+                        Background="{DynamicResource Workbench.Brush.ControlBackgroundPressed}"
+                        BorderBrush="{DynamicResource Workbench.Brush.Accent}"
+                        BorderThickness="1"
+                        CornerRadius="3">
+                    <Border.Style>
+                        <Style TargetType="{x:Type Border}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDragInsertionTarget}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="{Binding DragInsertionText}"
+                               Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
+                               FontSize="12" />
+                </Border>
+            </StackPanel>
         </HierarchicalDataTemplate>
 
         <DataTemplate DataType="{x:Type vm:WorkbenchCommandCatalogGroup}">
@@ -348,6 +374,7 @@
                                                 BorderThickness="1"
                                                 CornerRadius="4"
                                                 DragOver="GuiPhase_DragOver"
+                                                DragLeave="GuiPhase_DragLeave"
                                                 Drop="GuiPhase_Drop">
                                             <DockPanel>
                                                 <Border DockPanel.Dock="Top"
@@ -367,6 +394,7 @@
                                                           AllowDrop="True"
                                                           BorderThickness="0"
                                                           DragOver="GuiPhase_DragOver"
+                                                          DragLeave="GuiPhase_DragLeave"
                                                           Drop="GuiPhase_Drop"
                                                           SelectedItemChanged="GuiBlockTree_SelectedItemChanged">
                                                     <TreeView.ItemContainerStyle>
@@ -376,6 +404,26 @@
                                                         </Style>
                                                     </TreeView.ItemContainerStyle>
                                                 </TreeView>
+                                                <Border Margin="9,0,9,9"
+                                                        Padding="8,5"
+                                                        Background="{DynamicResource Workbench.Brush.ControlBackgroundPressed}"
+                                                        BorderBrush="{DynamicResource Workbench.Brush.Accent}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="3">
+                                                    <Border.Style>
+                                                        <Style TargetType="{x:Type Border}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDragInsertionTarget}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding DragInsertionText}"
+                                                               Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
+                                                               FontSize="12" />
+                                                </Border>
                                             </DockPanel>
                                         </Border>
                                     </DataTemplate>

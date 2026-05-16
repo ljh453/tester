@@ -247,6 +247,38 @@ public sealed class MainWorkbenchViewModel
         UpdateGuiCurrentExecutionBlock();
     }
 
+    public void ShowGuiCommandInsertionPreview(
+        WorkbenchCommandDefinition command,
+        WorkbenchGuiPhase phase,
+        WorkbenchCommandBlock? afterCommand = null)
+    {
+        ClearGuiCommandInsertionPreview();
+        if (afterCommand is not null)
+        {
+            afterCommand.IsDragInsertionTarget = true;
+            afterCommand.DragInsertionText =
+                $"Insert {command.CommandType} after command {afterCommand.DisplayIndex}";
+            return;
+        }
+
+        phase.IsDragInsertionTarget = true;
+        phase.DragInsertionText = $"Insert {command.CommandType} at end of {phase.Name}";
+    }
+
+    public void ClearGuiCommandInsertionPreview()
+    {
+        foreach (var phase in SelectedGuiTestcase?.Phases ?? Array.Empty<WorkbenchGuiPhase>())
+        {
+            phase.IsDragInsertionTarget = false;
+            phase.DragInsertionText = string.Empty;
+            foreach (var commandBlock in FlattenCommands(phase.Blocks))
+            {
+                commandBlock.IsDragInsertionTarget = false;
+                commandBlock.DragInsertionText = string.Empty;
+            }
+        }
+    }
+
     public void ExpandAllGuiBlocks()
     {
         foreach (var commandBlock in AllGuiCommandBlocks())

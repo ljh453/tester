@@ -20,6 +20,7 @@ await RunMainWorkbenchViewModelRefreshesGuiModelTest();
 await RunWorkbenchCommandCatalogTest();
 await RunWorkbenchYamlCommandInserterTest();
 await RunMainWorkbenchViewModelInsertsGuiCommandTest();
+await RunMainWorkbenchViewModelShowsDragInsertionPreviewTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
 
@@ -858,6 +859,50 @@ static Task RunMainWorkbenchViewModelInsertsGuiCommandTest()
     AssertEqual("assert.eq", viewModel.SelectedGuiCommand?.CommandType, "view model selects inserted command");
     AssertEqual(7, viewModel.CurrentLineNumber, "view model focuses inserted command line");
     AssertEqual("Line 7 - assert.eq", viewModel.CurrentLocationText, "view model current location after insert");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelShowsDragInsertionPreviewTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: gui_preview_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+        """);
+    var steps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+    var setBlock = steps.Blocks[0];
+    var command = WorkbenchCommandCatalog.Find("delay")!;
+
+    viewModel.ShowGuiCommandInsertionPreview(command, steps, setBlock);
+
+    AssertTrue(setBlock.IsDragInsertionTarget, "drag preview marks hovered command block");
+    AssertTrue(
+        setBlock.DragInsertionText.Contains("delay", StringComparison.Ordinal),
+        "drag preview block text includes command type");
+    AssertFalse(steps.IsDragInsertionTarget, "drag preview does not mark phase when block is target");
+
+    viewModel.ShowGuiCommandInsertionPreview(command, steps);
+
+    AssertFalse(setBlock.IsDragInsertionTarget, "drag preview clears previous command block");
+    AssertTrue(steps.IsDragInsertionTarget, "drag preview marks phase append target");
+    AssertTrue(
+        steps.DragInsertionText.Contains("Steps", StringComparison.Ordinal),
+        "drag preview phase text includes phase name");
+
+    viewModel.ClearGuiCommandInsertionPreview();
+
+    AssertFalse(steps.IsDragInsertionTarget, "drag preview clears phase target");
+    AssertEqual("", steps.DragInsertionText, "drag preview clears phase text");
     return Task.CompletedTask;
 }
 

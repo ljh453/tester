@@ -219,6 +219,7 @@ public partial class MainWindow : Window
 
         var dragData = new System.Windows.DataObject(CommandDragDataFormat, _dragCommandDefinition.CommandType);
         DragDrop.DoDragDrop(dragSource, dragData, System.Windows.DragDropEffects.Copy);
+        _viewModel.ClearGuiCommandInsertionPreview();
         _dragCommandDefinition = null;
         _commandDragStartPoint = null;
         e.Handled = true;
@@ -226,10 +227,28 @@ public partial class MainWindow : Window
 
     private void GuiPhase_DragOver(object sender, System.Windows.DragEventArgs e)
     {
-        e.Effects = GetDraggedCommand(e.Data) is not null
+        var commandDefinition = GetDraggedCommand(e.Data);
+        var phase = FindPhaseFromDropTarget(sender, e.OriginalSource);
+        var afterCommand = FindCommandBlockFromDropTarget(e.OriginalSource as DependencyObject);
+        if (commandDefinition is not null && phase is not null)
+        {
+            _viewModel.ShowGuiCommandInsertionPreview(commandDefinition, phase, afterCommand);
+        }
+
+        e.Effects = commandDefinition is not null && phase is not null
             ? System.Windows.DragDropEffects.Copy
             : System.Windows.DragDropEffects.None;
         e.Handled = true;
+    }
+
+    private void GuiPhase_DragLeave(object sender, System.Windows.DragEventArgs e)
+    {
+        if (sender is FrameworkElement element && IsPointerInside(element, e.GetPosition(element)))
+        {
+            return;
+        }
+
+        _viewModel.ClearGuiCommandInsertionPreview();
     }
 
     private void GuiPhase_Drop(object sender, System.Windows.DragEventArgs e)
@@ -244,6 +263,7 @@ public partial class MainWindow : Window
         }
 
         var afterCommand = FindCommandBlockFromDropTarget(e.OriginalSource as DependencyObject);
+        _viewModel.ClearGuiCommandInsertionPreview();
         _viewModel.InsertGuiCommand(commandDefinition, phase, afterCommand);
         RefreshEditorAfterGuiEdit();
         e.Effects = System.Windows.DragDropEffects.Copy;
@@ -772,6 +792,14 @@ public partial class MainWindow : Window
         }
 
         return LogicalTreeHelper.GetParent(current);
+    }
+
+    private static bool IsPointerInside(FrameworkElement element, System.Windows.Point position)
+    {
+        return position.X >= 0
+            && position.Y >= 0
+            && position.X <= element.ActualWidth
+            && position.Y <= element.ActualHeight;
     }
 
     private static string EmptyToDash(string value)
