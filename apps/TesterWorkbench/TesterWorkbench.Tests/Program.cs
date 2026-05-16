@@ -9,6 +9,7 @@ await RunMainWorkbenchViewModelStreamingTest();
 await RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest();
 await RunMainWorkbenchViewModelShowsLogEventsInConsoleTest();
 await RunMainWorkbenchLineNumbersTest();
+await RunYamlExecutionBlockRangeTest();
 await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
 await RunMainWorkbenchThemeModeSettingTest();
@@ -483,6 +484,31 @@ static async Task RunMainWorkbenchLineNumbersTest()
         string.Join(Environment.NewLine, "1", "2", "3"),
         viewModel.EditorLineNumbersText,
         "editor line numbers");
+}
+
+static Task RunYamlExecutionBlockRangeTest()
+{
+    var yamlText =
+        """
+        steps:
+          - delay:
+              ms: 1000
+          - log.text:
+              text: done
+        """;
+
+    var delayRange = YamlExecutionBlockRange.Find(yamlText, sourceLineNumber: 2);
+
+    AssertTrue(delayRange is not null, "delay block range is found");
+    AssertEqual(1, delayRange!.StartLineIndex, "delay block starts at command line");
+    AssertEqual(2, delayRange.EndLineIndex, "delay block includes argument line");
+
+    var logRange = YamlExecutionBlockRange.Find(yamlText, sourceLineNumber: 4);
+
+    AssertTrue(logRange is not null, "log block range is found");
+    AssertEqual(3, logRange!.StartLineIndex, "log block starts at command line");
+    AssertEqual(4, logRange.EndLineIndex, "log block includes text line");
+    return Task.CompletedTask;
 }
 
 static Task RunMainWorkbenchAutoFocusSettingTest()

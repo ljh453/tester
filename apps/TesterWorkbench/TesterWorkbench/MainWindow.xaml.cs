@@ -256,9 +256,8 @@ public partial class MainWindow : Window
         if (_viewModel.AutoFocusExecutionLine)
         {
             var start = EditorBox.GetCharacterIndexFromLineIndex(lineIndex);
-            var length = EditorBox.GetLineLength(lineIndex);
             EditorBox.Focus();
-            EditorBox.Select(start, length);
+            EditorBox.Select(start, 0);
             EditorBox.ScrollToLine(lineIndex);
             SyncLineNumberScroll();
         }
@@ -339,23 +338,58 @@ public partial class MainWindow : Window
     private void UpdateCurrentExecutionLineMarker(int lineIndex)
     {
         ShowCurrentExecutionLineBadge();
-        var characterIndex = EditorBox.GetCharacterIndexFromLineIndex(lineIndex);
-        var lineRectangle = EditorBox.GetRectFromCharacterIndex(characterIndex);
-        if (lineRectangle.IsEmpty
-            || lineRectangle.Bottom < 0
-            || lineRectangle.Top > EditorBox.ActualHeight)
+        var blockRange = YamlExecutionBlockRange.Find(EditorBox.Text, lineIndex + 1)
+            ?? new YamlExecutionBlockRange(lineIndex, lineIndex);
+        var startRectangle = GetLineRectangle(blockRange.StartLineIndex);
+        var endRectangle = GetLineRectangle(blockRange.EndLineIndex);
+        if (startRectangle.IsEmpty || endRectangle.IsEmpty)
+        {
+            HideCurrentExecutionLineHighlight();
+            return;
+        }
+
+        var top = startRectangle.Top;
+        var bottom = endRectangle.Bottom;
+        if (bottom < 0 || top > EditorBox.ActualHeight)
+        {
+            HideCurrentExecutionLineHighlight();
+            return;
+        }
+
+        top = Math.Max(0, top);
+        bottom = Math.Min(EditorBox.ActualHeight, bottom);
+        if (bottom <= top)
         {
             HideCurrentExecutionLineHighlight();
             return;
         }
 
         CurrentExecutionLineMarker.Width = Math.Max(0, EditorBox.ActualWidth);
-        CurrentExecutionLineMarker.Height = lineRectangle.Height > 0
-            ? lineRectangle.Height
-            : EditorBox.FontSize * 1.4;
+        CurrentExecutionLineMarker.Height = bottom - top;
         Canvas.SetLeft(CurrentExecutionLineMarker, 0);
-        Canvas.SetTop(CurrentExecutionLineMarker, lineRectangle.Top);
+        Canvas.SetTop(CurrentExecutionLineMarker, top);
         CurrentExecutionLineMarker.Visibility = Visibility.Visible;
+    }
+
+    private Rect GetLineRectangle(int lineIndex)
+    {
+        var characterIndex = EditorBox.GetCharacterIndexFromLineIndex(lineIndex);
+        var rectangle = EditorBox.GetRectFromCharacterIndex(characterIndex);
+        if (rectangle.IsEmpty)
+        {
+            return rectangle;
+        }
+
+        if (rectangle.Height > 0)
+        {
+            return rectangle;
+        }
+
+        return new Rect(
+            rectangle.X,
+            rectangle.Y,
+            Math.Max(0, EditorBox.ActualWidth),
+            EditorBox.FontSize * 1.4);
     }
 
     private void HideCurrentExecutionLineMarker()
