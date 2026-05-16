@@ -13,6 +13,7 @@ await RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest();
 await RunMainWorkbenchViewModelShowsLogEventsInConsoleTest();
 await RunMainWorkbenchViewModelStreamsLogEventsInConsoleTest();
 await RunMainWorkbenchLineNumbersTest();
+await RunMainWorkbenchBreakpointEligibilityTest();
 await RunYamlExecutionBlockRangeTest();
 await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
@@ -455,7 +456,11 @@ static async Task RunMainWorkbenchViewModelDebugControlTest()
     await viewModel.RunAsync("debug-run");
 
     AssertTrue(viewModel.BreakpointLineNumbers.Contains(4), "view model keeps breakpoint line");
-    AssertTrue(viewModel.EditorLineNumbersText.Contains("\u25CF 4", StringComparison.Ordinal), "line numbers show breakpoint marker");
+    AssertTrue(
+        viewModel.EditorLineNumbersText.Contains(
+            $"{MainWorkbenchViewModel.ActiveBreakpointMarker} 4",
+            StringComparison.Ordinal),
+        "line numbers show breakpoint marker");
     AssertEqual("L4", viewModel.BreakpointsText, "breakpoints summary");
     AssertTrue(
         runner.Calls[0].Arguments.Contains("--control-file"),
@@ -726,6 +731,48 @@ static async Task RunMainWorkbenchLineNumbersTest()
         string.Join(Environment.NewLine, "1", "2", "3"),
         viewModel.EditorLineNumbersText,
         "editor line numbers");
+}
+
+static async Task RunMainWorkbenchBreakpointEligibilityTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/breakpoint-eligible.yaml",
+            """
+            testcases:
+              - name: breakpoint_eligible_case
+                steps:
+                  - delay:
+                      ms: 1000
+                  - log.text:
+                      text: "done"
+            """));
+    var yamlPath = Path.Combine(root, "tests", "breakpoint-eligible.yaml");
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            root,
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    await viewModel.OpenFileAsync(yamlPath);
+
+    AssertTrue(
+        viewModel.EditorLineNumbersText.Contains($"{MainWorkbenchViewModel.AvailableBreakpointMarker} 4"),
+        "command line shows breakpoint box");
+    AssertFalse(
+        viewModel.EditorLineNumbersText.Contains($"{MainWorkbenchViewModel.AvailableBreakpointMarker} 5"),
+        "argument line does not show breakpoint box");
+
+    viewModel.ToggleBreakpointAtLine(5);
+
+    AssertFalse(viewModel.BreakpointLineNumbers.Contains(5), "argument line cannot become breakpoint");
+
+    viewModel.ToggleBreakpointAtLine(4);
+
+    AssertTrue(viewModel.BreakpointLineNumbers.Contains(4), "command line can become breakpoint");
+    AssertTrue(
+        viewModel.EditorLineNumbersText.Contains($"{MainWorkbenchViewModel.ActiveBreakpointMarker} 4"),
+        "active command line shows active breakpoint marker");
 }
 
 static Task RunYamlExecutionBlockRangeTest()

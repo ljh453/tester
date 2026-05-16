@@ -215,7 +215,7 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
 
     public bool IsBreakpoint { get; set; }
 
-    public string BreakpointMarker => IsBreakpoint ? "\u25CF" : string.Empty;
+    public string BreakpointMarker => IsBreakpoint ? MainWorkbenchViewModel.ActiveBreakpointMarker : string.Empty;
 
     public bool IsFoldable => Children.Count > 0;
 

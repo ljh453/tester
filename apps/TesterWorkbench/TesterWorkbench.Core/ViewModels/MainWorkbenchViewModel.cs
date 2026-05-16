@@ -6,7 +6,8 @@ namespace TesterWorkbench.Core.ViewModels;
 
 public sealed class MainWorkbenchViewModel
 {
-    public const string BreakpointMarker = "\u25CF";
+    public const string AvailableBreakpointMarker = "\u25A1";
+    public const string ActiveBreakpointMarker = "\u25A3";
 
     private const double MinimumEditorFontSize = 8.0;
     private const double MaximumEditorFontSize = 32.0;
@@ -215,7 +216,7 @@ public sealed class MainWorkbenchViewModel
 
     public void ToggleBreakpointAtLine(int lineNumber)
     {
-        if (lineNumber <= 0 || lineNumber > CountEditorLines(EditorText))
+        if (!IsBreakpointEligibleLine(lineNumber))
         {
             return;
         }
@@ -232,9 +233,6 @@ public sealed class MainWorkbenchViewModel
     public void UpdateEditorText(string editorText)
     {
         EditorText = editorText;
-        PruneBreakpointsOutsideEditor();
-        EditorLineNumbersText = BuildLineNumbersText(editorText, _breakpointLineNumbers);
-        UpdateBreakpointsText();
         var previousTestcaseName = SelectedGuiTestcase?.Name;
         GuiModel = WorkbenchGuiModelBuilder.Build(editorText);
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase => testcase.Name == previousTestcaseName)
@@ -242,6 +240,13 @@ public sealed class MainWorkbenchViewModel
         SelectedGuiCommand = SelectedGuiTestcase?.Phases
             .SelectMany(phase => FlattenCommands(phase.Blocks))
             .FirstOrDefault();
+        PruneBreakpointsOutsideEditor();
+        PruneBreakpointsOutsideCommandLines();
+        EditorLineNumbersText = BuildLineNumbersText(
+            editorText,
+            _breakpointLineNumbers,
+            EligibleBreakpointLineNumbers());
+        UpdateBreakpointsText();
         UpdateGuiCurrentExecutionBlock();
         UpdateGuiBreakpointMarkers();
     }
@@ -614,7 +619,10 @@ public sealed class MainWorkbenchViewModel
 
     private void RefreshBreakpointViews()
     {
-        EditorLineNumbersText = BuildLineNumbersText(EditorText, _breakpointLineNumbers);
+        EditorLineNumbersText = BuildLineNumbersText(
+            EditorText,
+            _breakpointLineNumbers,
+            EligibleBreakpointLineNumbers());
         UpdateBreakpointsText();
         UpdateGuiBreakpointMarkers();
     }
@@ -643,9 +651,33 @@ public sealed class MainWorkbenchViewModel
         _breakpointLineNumbers.RemoveWhere(lineNumber => lineNumber > lineCount);
     }
 
+    private void PruneBreakpointsOutsideCommandLines()
+    {
+        var eligibleLines = EligibleBreakpointLineNumbers();
+        _breakpointLineNumbers.RemoveWhere(lineNumber => !eligibleLines.Contains(lineNumber));
+    }
+
+    private bool IsBreakpointEligibleLine(int lineNumber)
+    {
+        return lineNumber > 0
+            && lineNumber <= CountEditorLines(EditorText)
+            && EligibleBreakpointLineNumbers().Contains(lineNumber);
+    }
+
+    private IReadOnlySet<int> EligibleBreakpointLineNumbers()
+    {
+        return GuiModel.Testcases
+            .SelectMany(testcase => testcase.Phases)
+            .SelectMany(phase => FlattenCommands(phase.Blocks))
+            .Select(commandBlock => commandBlock.SourceLineStart)
+            .Where(lineNumber => lineNumber > 0)
+            .ToHashSet();
+    }
+
     private static string BuildLineNumbersText(
         string editorText,
-        IReadOnlySet<int> breakpointLineNumbers)
+        IReadOnlySet<int> breakpointLineNumbers,
+        IReadOnlySet<int> eligibleBreakpointLineNumbers)
     {
         var lineCount = CountEditorLines(editorText);
         return string.Join(
@@ -653,8 +685,10 @@ public sealed class MainWorkbenchViewModel
             Enumerable.Range(1, Math.Max(1, lineCount))
                 .Select(lineNumber =>
                     breakpointLineNumbers.Contains(lineNumber)
-                        ? $"{BreakpointMarker} {lineNumber}"
-                        : $"{lineNumber}"));
+                        ? $"{ActiveBreakpointMarker} {lineNumber}"
+                        : eligibleBreakpointLineNumbers.Contains(lineNumber)
+                            ? $"{AvailableBreakpointMarker} {lineNumber}"
+                            : $"{lineNumber}"));
     }
 
     private static int CountEditorLines(string editorText)

@@ -271,8 +271,15 @@
     }
 
     .gutter .bp {
-      color: var(--red);
       font-weight: 800;
+    }
+
+    .gutter .bp.available {
+      color: var(--muted-2);
+    }
+
+    .gutter .bp.active {
+      color: var(--red);
     }
 
     .code {
@@ -894,7 +901,7 @@
       <section class="pane yaml-editor-pane">
         <div class="pane-title">YAML Editor <span class="subtle">line synced</span></div>
         <div class="editor-wrap">
-          <div class="gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20<br><span class="bp">●</span> 21<br>22<br>23<br>24<br>25<br>26<br>27<br>28<br>29<br>30<br>31<br>32<br>33<br>34<br>35<br>36<br>37<br>38<br>39<br>40</div>
+          <div class="gutter">1<br>2<br>3<br>4<br>5<br><span class="bp available">□</span> 6<br>7<br><span class="bp available">□</span> 8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br><span class="bp available">□</span> 18<br>19<br>20<br><span class="bp active">▣</span> 21<br>22<br>23<br>24<br><span class="bp available">□</span> 25<br>26<br><span class="bp available">□</span> 27<br>28<br>29<br><span class="bp available">□</span> 30<br>31<br>32<br>33<br><span class="bp available">□</span> 34<br>35<br><span class="bp available">□</span> 36<br>37<br><span class="bp available">□</span> 38<br>39<br>40</div>
           <pre class="code"><span class="key">functions</span>:
   <span class="key">prepare_channel</span>:
     <span class="key">params</span>: [channel]
@@ -999,7 +1006,7 @@
 
               <article class="block loop running foldable" data-depth="1" data-fold-children="5">
                 <div class="block-head">
-                  <span class="bp-dot">●</span>
+                  <span class="bp-dot">▣</span>
                   <span class="block-id">2</span>
                   <button class="fold-toggle" type="button" aria-expanded="true" title="Fold block">▾</button>
                   <div class="block-main">

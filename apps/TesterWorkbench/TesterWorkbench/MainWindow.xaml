@@ -337,7 +337,7 @@
                                           Focusable="False"
                                           HorizontalScrollBarVisibility="Disabled"
                                           PreviewMouseLeftButtonDown="LineNumbers_PreviewMouseLeftButtonDown"
-                                          ToolTip="Click a line number to toggle a breakpoint."
+                                          ToolTip="Breakpoint boxes appear only on command lines."
                                           VerticalScrollBarVisibility="Hidden">
                                 <TextBlock x:Name="LineNumbersTextBlock"
                                            FontFamily="Consolas"
