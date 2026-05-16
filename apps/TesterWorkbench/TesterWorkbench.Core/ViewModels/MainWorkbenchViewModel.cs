@@ -41,6 +41,12 @@ public sealed class MainWorkbenchViewModel
 
     public IReadOnlyList<EngineVariableValue> Variables { get; private set; } = Array.Empty<EngineVariableValue>();
 
+    public WorkbenchGuiModel GuiModel { get; private set; } = WorkbenchGuiModel.Empty;
+
+    public WorkbenchGuiTestcase? SelectedGuiTestcase { get; private set; }
+
+    public WorkbenchCommandBlock? SelectedGuiCommand { get; private set; }
+
     public string CurrentSourceFile { get; private set; } = string.Empty;
 
     public int CurrentLineNumber { get; private set; }
@@ -137,6 +143,14 @@ public sealed class MainWorkbenchViewModel
     {
         EditorText = editorText;
         EditorLineNumbersText = BuildLineNumbersText(editorText);
+        var previousTestcaseName = SelectedGuiTestcase?.Name;
+        GuiModel = WorkbenchGuiModelBuilder.Build(editorText);
+        SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase => testcase.Name == previousTestcaseName)
+            ?? GuiModel.Testcases.FirstOrDefault();
+        SelectedGuiCommand = SelectedGuiTestcase?.Phases
+            .SelectMany(phase => FlattenCommands(phase.Blocks))
+            .FirstOrDefault();
+        UpdateGuiCurrentExecutionBlock();
     }
 
     public void SetAutoFocusExecutionLine(bool enabled)
@@ -176,6 +190,55 @@ public sealed class MainWorkbenchViewModel
         CurrentLocationText = runEvent.SourceLine > 0
             ? $"Line {runEvent.SourceLine} - {runEvent.CommandType}"
             : runEvent.CommandType;
+        UpdateGuiCurrentExecutionBlock();
+    }
+
+    public void SelectGuiCommand(WorkbenchCommandBlock? commandBlock)
+    {
+        SelectedGuiCommand = commandBlock;
+        if (commandBlock is null)
+        {
+            return;
+        }
+
+        CurrentLineNumber = commandBlock.SourceLineStart;
+        CurrentLocationText = $"Line {commandBlock.SourceLineStart} - {commandBlock.CommandType}";
+    }
+
+    public void SelectGuiTestcase(WorkbenchGuiTestcase? testcase)
+    {
+        SelectedGuiTestcase = testcase;
+        SelectedGuiCommand = SelectedGuiTestcase?.Phases
+            .SelectMany(phase => FlattenCommands(phase.Blocks))
+            .FirstOrDefault();
+        UpdateGuiCurrentExecutionBlock();
+    }
+
+    public void ExpandAllGuiBlocks()
+    {
+        foreach (var commandBlock in AllGuiCommandBlocks())
+        {
+            commandBlock.IsExpanded = true;
+        }
+    }
+
+    public void FoldAllGuiBlocks()
+    {
+        foreach (var commandBlock in AllGuiCommandBlocks())
+        {
+            if (commandBlock.IsFoldable)
+            {
+                commandBlock.IsExpanded = false;
+            }
+        }
+    }
+
+    public void FoldGuiBlocksFromLevel(int level)
+    {
+        foreach (var commandBlock in AllGuiCommandBlocks())
+        {
+            commandBlock.IsExpanded = !commandBlock.IsFoldable || commandBlock.Depth < level;
+        }
     }
 
     private void AppendExecutionTraceEvent(EngineRunEvent runEvent)
@@ -253,6 +316,36 @@ public sealed class MainWorkbenchViewModel
         CurrentSourceFile = string.Empty;
         CurrentLineNumber = 0;
         CurrentLocationText = "No execution line selected.";
+        UpdateGuiCurrentExecutionBlock();
+    }
+
+    private void UpdateGuiCurrentExecutionBlock()
+    {
+        foreach (var commandBlock in AllGuiCommandBlocks())
+        {
+            commandBlock.IsCurrentExecution = CurrentLineNumber >= commandBlock.SourceLineStart
+                && CurrentLineNumber <= commandBlock.SourceLineEnd;
+        }
+    }
+
+    private IEnumerable<WorkbenchCommandBlock> AllGuiCommandBlocks()
+    {
+        return SelectedGuiTestcase is null
+            ? Array.Empty<WorkbenchCommandBlock>()
+            : SelectedGuiTestcase.Phases.SelectMany(phase => FlattenCommands(phase.Blocks));
+    }
+
+    private static IEnumerable<WorkbenchCommandBlock> FlattenCommands(
+        IEnumerable<WorkbenchCommandBlock> commandBlocks)
+    {
+        foreach (var commandBlock in commandBlocks)
+        {
+            yield return commandBlock;
+            foreach (var childCommandBlock in FlattenCommands(commandBlock.Children))
+            {
+                yield return childCommandBlock;
+            }
+        }
     }
 
     private static string BuildLineNumbersText(string editorText)

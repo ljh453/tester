@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using Forms = System.Windows.Forms;
 using TesterWorkbench.Core.Engine;
@@ -12,8 +13,14 @@ namespace TesterWorkbench;
 
 public partial class MainWindow : Window
 {
+    private const double GuiEditorCollapseThreshold = 150.0;
+
     private readonly MainWorkbenchViewModel _viewModel;
     private double _editorVerticalOffset;
+    private GridLength _savedGuiEditorWidth = new(1.12, GridUnitType.Star);
+    private GridLength _savedGuiPropertiesWidth = new(280);
+    private bool _isGuiEditorVisible = true;
+    private bool _isRefreshingGuiTestcaseSelection;
 
     public MainWindow()
     {
@@ -93,6 +100,26 @@ public partial class MainWindow : Window
         WorkbenchThemeManager.Apply(themeMode);
     }
 
+    private void GuiEditorToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (GuiEditorToggleButton.IsChecked == true)
+        {
+            ShowGuiEditorGroup();
+        }
+        else
+        {
+            HideGuiEditorGroup();
+        }
+    }
+
+    private void YamlGuiSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        if (_isGuiEditorVisible && GuiEditorColumn.ActualWidth <= GuiEditorCollapseThreshold)
+        {
+            HideGuiEditorGroup();
+        }
+    }
+
     private void ExecutionTraceGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (ExecutionTraceGrid.SelectedItem is not EngineRunEvent runEvent)
@@ -104,6 +131,56 @@ public partial class MainWindow : Window
         VariablesGrid.ItemsSource = _viewModel.Variables;
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         HighlightCurrentExecutionLine();
+        RefreshGuiEditor();
+    }
+
+    private void GuiTestcaseComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRefreshingGuiTestcaseSelection)
+        {
+            return;
+        }
+
+        _viewModel.SelectGuiTestcase(GuiTestcaseComboBox.SelectedItem as WorkbenchGuiTestcase);
+        RefreshGuiEditor();
+    }
+
+    private void GuiBlockTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (e.NewValue is not WorkbenchCommandBlock commandBlock)
+        {
+            return;
+        }
+
+        _viewModel.SelectGuiCommand(commandBlock);
+        RefreshGuiCommandProperties();
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
+        FocusYamlLine(commandBlock.SourceLineStart);
+        UpdateCurrentExecutionLineMarker();
+    }
+
+    private void GuiExpandAll_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.ExpandAllGuiBlocks();
+        RefreshGuiEditor();
+    }
+
+    private void GuiFoldAll_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.FoldAllGuiBlocks();
+        RefreshGuiEditor();
+    }
+
+    private void GuiFoldLevel2_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.FoldGuiBlocksFromLevel(2);
+        RefreshGuiEditor();
+    }
+
+    private void GuiFoldLevel3_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.FoldGuiBlocksFromLevel(3);
+        RefreshGuiEditor();
     }
 
     private void EditorBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -219,7 +296,40 @@ public partial class MainWindow : Window
             ? "No report generated yet."
             : $"Report directory: {_viewModel.ReportDirectory}";
         RefreshConsole();
+        RefreshGuiEditor();
         HighlightCurrentExecutionLine();
+    }
+
+    private void RefreshGuiEditor()
+    {
+        _isRefreshingGuiTestcaseSelection = true;
+        try
+        {
+            GuiTestcaseComboBox.ItemsSource = _viewModel.GuiModel.Testcases;
+            GuiTestcaseComboBox.SelectedItem = _viewModel.SelectedGuiTestcase;
+        }
+        finally
+        {
+            _isRefreshingGuiTestcaseSelection = false;
+        }
+
+        var selectedTestcase = _viewModel.SelectedGuiTestcase;
+        GuiTestcaseLineText.Text = selectedTestcase?.LineRangeText ?? "";
+        GuiTestcaseMetadataText.Text = selectedTestcase is null
+            ? "No testcase in this YAML file."
+            : $"description: {EmptyToDash(selectedTestcase.Description)}  |  tags: {EmptyToDash(selectedTestcase.TagsText)}  |  failure: {selectedTestcase.FailurePolicy}";
+        GuiPhaseItems.ItemsSource = null;
+        GuiPhaseItems.ItemsSource = selectedTestcase?.Phases ?? Array.Empty<WorkbenchGuiPhase>();
+        RefreshGuiCommandProperties();
+    }
+
+    private void RefreshGuiCommandProperties()
+    {
+        var command = _viewModel.SelectedGuiCommand;
+        GuiCommandTypeBox.Text = command?.CommandType ?? "";
+        GuiCommandSummaryBox.Text = command?.Summary ?? "";
+        GuiCommandLineBox.Text = command?.LineRangeText ?? "";
+        GuiCommandSourceBox.Text = command?.SourcePreview ?? "";
     }
 
     private void RefreshConsole()
@@ -231,6 +341,68 @@ public partial class MainWindow : Window
 
         ConsoleBox.Text = _viewModel.ConsoleText;
         ConsoleBox.ScrollToEnd();
+    }
+
+    private void HideGuiEditorGroup()
+    {
+        if (!_isGuiEditorVisible)
+        {
+            GuiEditorToggleButton.IsChecked = false;
+            GuiEditorToggleButton.Content = "Show GUI Editor";
+            return;
+        }
+
+        if (GuiEditorColumn.ActualWidth > 0)
+        {
+            _savedGuiEditorWidth = new GridLength(GuiEditorColumn.ActualWidth);
+        }
+
+        if (GuiPropertiesColumn.ActualWidth > 0)
+        {
+            _savedGuiPropertiesWidth = new GridLength(GuiPropertiesColumn.ActualWidth);
+        }
+
+        GuiEditorColumn.MinWidth = 0;
+        GuiPropertiesColumn.MinWidth = 0;
+        GuiEditorColumn.Width = new GridLength(0);
+        GuiPropertiesColumn.Width = new GridLength(0);
+        YamlGuiSplitterColumn.Width = new GridLength(0);
+        GuiPropertiesSplitterColumn.Width = new GridLength(0);
+        GuiEditorPane.Visibility = Visibility.Collapsed;
+        GuiPropertiesPane.Visibility = Visibility.Collapsed;
+        YamlGuiSplitter.Visibility = Visibility.Collapsed;
+        GuiPropertiesSplitter.Visibility = Visibility.Collapsed;
+        GuiEditorToggleButton.IsChecked = false;
+        GuiEditorToggleButton.Content = "Show GUI Editor";
+        _isGuiEditorVisible = false;
+    }
+
+    private void ShowGuiEditorGroup()
+    {
+        if (_isGuiEditorVisible)
+        {
+            GuiEditorToggleButton.IsChecked = true;
+            GuiEditorToggleButton.Content = "GUI Editor";
+            return;
+        }
+
+        GuiEditorColumn.MinWidth = 300;
+        GuiPropertiesColumn.MinWidth = 220;
+        YamlGuiSplitterColumn.Width = new GridLength(5);
+        GuiPropertiesSplitterColumn.Width = new GridLength(5);
+        GuiEditorColumn.Width = IsUsableGridLength(_savedGuiEditorWidth)
+            ? _savedGuiEditorWidth
+            : new GridLength(1.12, GridUnitType.Star);
+        GuiPropertiesColumn.Width = IsUsableGridLength(_savedGuiPropertiesWidth)
+            ? _savedGuiPropertiesWidth
+            : new GridLength(280);
+        GuiEditorPane.Visibility = Visibility.Visible;
+        GuiPropertiesPane.Visibility = Visibility.Visible;
+        YamlGuiSplitter.Visibility = Visibility.Visible;
+        GuiPropertiesSplitter.Visibility = Visibility.Visible;
+        GuiEditorToggleButton.IsChecked = true;
+        GuiEditorToggleButton.Content = "GUI Editor";
+        _isGuiEditorVisible = true;
     }
 
     private void QueueRuntimeRefresh()
@@ -274,6 +446,21 @@ public partial class MainWindow : Window
         }
 
         UpdateCurrentExecutionLineMarker(lineIndex);
+    }
+
+    private void FocusYamlLine(int sourceLine)
+    {
+        var lineIndex = sourceLine - 1;
+        if (lineIndex < 0 || lineIndex >= EditorBox.LineCount)
+        {
+            return;
+        }
+
+        var start = EditorBox.GetCharacterIndexFromLineIndex(lineIndex);
+        EditorBox.Focus();
+        EditorBox.Select(start, 0);
+        EditorBox.ScrollToLine(lineIndex);
+        SyncLineNumberScroll();
     }
 
     private bool TryGetCurrentExecutionLineIndex(out int lineIndex)
@@ -441,6 +628,16 @@ public partial class MainWindow : Window
         var extension = Path.GetExtension(path);
         return extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".yml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string EmptyToDash(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    private static bool IsUsableGridLength(GridLength gridLength)
+    {
+        return gridLength.Value > 0;
     }
 
     private static string? FindRepositoryRoot(string startPath)

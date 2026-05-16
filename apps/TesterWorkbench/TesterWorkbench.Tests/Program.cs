@@ -15,6 +15,8 @@ await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
 await RunMainWorkbenchThemeModeSettingTest();
 await RunWorkbenchThemeResolverTest();
+await RunWorkbenchGuiModelBuilderTest();
+await RunMainWorkbenchViewModelRefreshesGuiModelTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
 
@@ -654,6 +656,101 @@ static Task RunWorkbenchThemeResolverTest()
         ResolvedWorkbenchTheme.Dark,
         WorkbenchThemeResolver.Resolve(WorkbenchThemeMode.System, systemPrefersDarkTheme: true),
         "system dark preference resolves to dark");
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchGuiModelBuilderTest()
+{
+    var model = WorkbenchGuiModelBuilder.Build(
+        """
+        testcases:
+          - name: gui_case
+            description: GUI editor sample
+            tags: [gui, sample]
+            on_step_failure: continue
+            preconditions:
+              - log.text:
+                  text: "prepare"
+            steps:
+              - set:
+                  var: channels
+                  value: [1, 2]
+              - for:
+                  each: "${channels}"
+                  as: channel
+                  do:
+                    - call:
+                        function: add_channel
+                    - delay:
+                        ms: 1000
+              - assert.eq:
+                  left: "${ok}"
+                  right: true
+            postconditions:
+              - log.value:
+                  name: summary
+                  value: "${summary}"
+        """);
+
+    AssertEqual(1, model.Testcases.Count, "gui model testcase count");
+    var testcase = model.Testcases[0];
+    AssertEqual("gui_case", testcase.Name, "gui model testcase name");
+    AssertEqual("GUI editor sample", testcase.Description, "gui model testcase description");
+    AssertEqual("gui, sample", testcase.TagsText, "gui model tags");
+    AssertEqual("continue", testcase.FailurePolicy, "gui model failure policy");
+    AssertEqual(3, testcase.Phases.Count, "gui model phase count");
+
+    var steps = testcase.Phases.Single(phase => phase.Name == "Steps");
+    AssertEqual(3, steps.Blocks.Count, "gui model root step count");
+    AssertEqual("set", steps.Blocks[0].CommandType, "gui model first command type");
+    AssertEqual("channels = [1, 2]", steps.Blocks[0].Summary, "gui model set summary");
+    AssertEqual("for", steps.Blocks[1].CommandType, "gui model second command type");
+    AssertEqual("each ${channels} as channel", steps.Blocks[1].Summary, "gui model for summary");
+    AssertEqual(2, steps.Blocks[1].Children.Count, "gui model nested command count");
+    AssertEqual("call", steps.Blocks[1].Children[0].CommandType, "gui model nested call type");
+    AssertEqual("add_channel(...)", steps.Blocks[1].Children[0].Summary, "gui model call summary");
+    AssertEqual("delay", steps.Blocks[1].Children[1].CommandType, "gui model nested delay type");
+    AssertEqual("1000 ms", steps.Blocks[1].Children[1].Summary, "gui model delay summary");
+    AssertEqual("2", steps.Blocks[1].DisplayIndex, "gui model root display index");
+    AssertEqual("2.2", steps.Blocks[1].Children[1].DisplayIndex, "gui model child display index");
+    AssertEqual("L13-L20", steps.Blocks[1].LineRangeText, "gui model line range");
+
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelRefreshesGuiModelTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: initial_case
+            steps:
+              - delay:
+                  ms: 100
+        """);
+
+    AssertEqual("initial_case", viewModel.SelectedGuiTestcase?.Name, "initial GUI testcase name");
+    AssertEqual("delay", viewModel.SelectedGuiTestcase?.Phases[1].Blocks[0].CommandType, "initial GUI command type");
+
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: updated_case
+            steps:
+              - log.text:
+                  text: "updated"
+        """);
+
+    AssertEqual("updated_case", viewModel.SelectedGuiTestcase?.Name, "updated GUI testcase name");
+    AssertEqual("log.text", viewModel.SelectedGuiTestcase?.Phases[1].Blocks[0].CommandType, "updated GUI command type");
+
     return Task.CompletedTask;
 }
 

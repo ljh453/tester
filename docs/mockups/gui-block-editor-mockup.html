@@ -1,0 +1,1441 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Embedded SW Tester - GUI Block Editor Mockup</title>
+  <style>
+    :root {
+      --app: #12161b;
+      --panel: #181d24;
+      --panel-2: #202631;
+      --panel-3: #252d39;
+      --line: #343d4b;
+      --line-soft: #29313d;
+      --text: #edf2f7;
+      --muted: #9eaabb;
+      --muted-2: #748194;
+      --blue: #65a8ff;
+      --green: #66d09a;
+      --yellow: #efca74;
+      --red: #f17b7b;
+      --violet: #b59cff;
+      --teal: #68d4cf;
+      --current: rgba(101, 168, 255, 0.18);
+      --shadow: 0 18px 46px rgba(0, 0, 0, 0.34);
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--app);
+      color: var(--text);
+      height: 100vh;
+      min-width: 1180px;
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .window {
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 44px 1fr 230px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.035), transparent 180px),
+        var(--app);
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      background: #1a2029;
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+
+    .toolbar .title {
+      font-weight: 650;
+      margin-right: 16px;
+    }
+
+    .toolbar .path {
+      width: 380px;
+      height: 28px;
+      border: 1px solid var(--line);
+      background: #10141a;
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 4px 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .btn {
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #242c37;
+      color: var(--text);
+      padding: 0 10px;
+    }
+
+    .btn.primary {
+      border-color: #3676bf;
+      background: #1f5f9f;
+    }
+
+    .btn.view-toggle.active {
+      border-color: #477db7;
+      background: #243952;
+      color: #dcecff;
+    }
+
+    .btn.view-toggle:not(.active) {
+      border-color: #3a4657;
+      background: #171d25;
+      color: var(--muted);
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      margin-left: 6px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--green);
+      box-shadow: 0 0 0 3px rgba(102, 208, 154, 0.13);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 236px minmax(430px, 1fr) 6px minmax(430px, 1.16fr) 6px 292px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .workspace.gui-collapsed {
+      grid-template-columns: 236px minmax(720px, 1fr) 6px 0 0 0;
+    }
+
+    .workspace.gui-collapsed .gui-editor-pane,
+    .workspace.gui-collapsed .gui-properties-splitter,
+    .workspace.gui-collapsed .properties-pane {
+      border-right: 0;
+      opacity: 0;
+      overflow: hidden;
+      pointer-events: none;
+      visibility: hidden;
+    }
+
+    .workspace.gui-collapsed .editor-splitter {
+      background: #26354a;
+    }
+
+    .pane {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pane:last-child {
+      border-right: 0;
+    }
+
+    .editor-splitter,
+    .gui-properties-splitter {
+      cursor: col-resize;
+      background: #11161c;
+      border-right: 1px solid var(--line);
+      border-left: 1px solid var(--line);
+      min-width: 6px;
+      position: relative;
+    }
+
+    .editor-splitter::after,
+    .gui-properties-splitter::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 2px;
+      width: 2px;
+      border-radius: 2px;
+      background: transparent;
+    }
+
+    .editor-splitter:hover::after,
+    .editor-splitter.dragging::after,
+    .gui-properties-splitter:hover::after,
+    .gui-properties-splitter.dragging::after {
+      background: var(--blue);
+    }
+
+    body.resizing-editors {
+      cursor: col-resize;
+      user-select: none;
+    }
+
+    .pane-title {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      background: #1c222b;
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .pane-title .subtle {
+      color: var(--muted-2);
+      font-weight: 500;
+    }
+
+    .tree {
+      padding: 10px 8px;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .tree .folder {
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .tree .file,
+    .tree .testcase {
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: var(--text);
+    }
+
+    .tree .file.active,
+    .tree .testcase.active {
+      background: #243246;
+      color: #dcecff;
+    }
+
+    .tree .indent {
+      margin-left: 14px;
+    }
+
+    .editor-wrap {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      flex: 1;
+      min-height: 0;
+      background: #11161c;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 22px;
+    }
+
+    .gutter {
+      color: #6f7c8f;
+      background: #161b22;
+      border-right: 1px solid var(--line-soft);
+      text-align: right;
+      padding: 9px 8px 0 4px;
+      user-select: none;
+    }
+
+    .code {
+      padding: 9px 12px 48px;
+      overflow: hidden;
+      white-space: pre;
+    }
+
+    .code .current {
+      display: inline-block;
+      width: calc(100% + 24px);
+      margin-left: -12px;
+      padding-left: 12px;
+      background: var(--current);
+      outline: 1px solid rgba(101, 168, 255, 0.28);
+    }
+
+    .code .key {
+      color: #7fc1ff;
+    }
+
+    .code .str {
+      color: #a9d58b;
+    }
+
+    .code .num {
+      color: #efca74;
+    }
+
+    .code .expr {
+      color: #d6b6ff;
+    }
+
+    .tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 8px;
+      border-bottom: 1px solid var(--line);
+      background: #1c222b;
+    }
+
+    .tab {
+      height: 28px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      padding: 0 9px;
+    }
+
+    .tab.active {
+      border-color: #3a4657;
+      background: #252d39;
+      color: var(--text);
+    }
+
+    .block-editor {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+      background: #151a21;
+    }
+
+    .test-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: start;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #1d242e;
+      margin-bottom: 12px;
+    }
+
+    .test-header h1 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .metadata {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pill {
+      border: 1px solid #3a4657;
+      background: #242c37;
+      border-radius: 99px;
+      padding: 3px 8px;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: #dff7e9;
+      background: rgba(102, 208, 154, 0.13);
+      border: 1px solid rgba(102, 208, 154, 0.28);
+      border-radius: 99px;
+      padding: 5px 9px;
+      font-size: 12px;
+    }
+
+    .phase {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      margin-bottom: 12px;
+      background: #1a2028;
+      overflow: hidden;
+    }
+
+    .phase-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      background: #202733;
+      font-weight: 650;
+      font-size: 13px;
+    }
+
+    .phase-title .count {
+      color: var(--muted-2);
+      font-weight: 500;
+    }
+
+    .fold-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #1c222b;
+      margin-bottom: 12px;
+    }
+
+    .fold-toolbar .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-right: 4px;
+    }
+
+    .fold-action {
+      height: 26px;
+      border: 1px solid #3a4657;
+      border-radius: 4px;
+      background: #242c37;
+      color: var(--text);
+      padding: 0 8px;
+      font-size: 12px;
+    }
+
+    .fold-action:hover,
+    .fold-toggle:hover {
+      border-color: #5584bd;
+      background: #2b3544;
+    }
+
+    .block-list {
+      padding: 9px;
+    }
+
+    .block {
+      position: relative;
+      border: 1px solid #3a4657;
+      border-left-width: 4px;
+      border-radius: 6px;
+      background: #222a35;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
+    }
+
+    .block:last-child {
+      margin-bottom: 0;
+    }
+
+    .block.running {
+      background: #263346;
+      border-color: #477db7;
+      border-left-color: var(--blue);
+      box-shadow: 0 0 0 2px rgba(101, 168, 255, 0.16), var(--shadow);
+    }
+
+    .block.set {
+      border-left-color: var(--teal);
+    }
+
+    .block.call {
+      border-left-color: var(--violet);
+    }
+
+    .block.loop {
+      border-left-color: var(--blue);
+    }
+
+    .block.log {
+      border-left-color: var(--green);
+    }
+
+    .block.delay {
+      border-left-color: var(--yellow);
+    }
+
+    .block.assert {
+      border-left-color: var(--red);
+    }
+
+    .block.condition {
+      border-left-color: #df95ff;
+    }
+
+    .block-head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+    }
+
+    .block-head:has(.fold-toggle),
+    .block-head:has(.fold-spacer) {
+      grid-template-columns: auto auto minmax(0, 1fr) auto;
+    }
+
+    .block-id {
+      color: var(--muted-2);
+      font-size: 12px;
+      width: 24px;
+      text-align: right;
+    }
+
+    .fold-toggle,
+    .fold-spacer {
+      width: 22px;
+      height: 22px;
+    }
+
+    .fold-toggle {
+      border: 1px solid #3a4657;
+      border-radius: 4px;
+      background: #1b222c;
+      color: var(--muted);
+      padding: 0;
+      line-height: 18px;
+      cursor: pointer;
+    }
+
+    .fold-spacer {
+      display: inline-block;
+    }
+
+    .block-main {
+      min-width: 0;
+    }
+
+    .block-type {
+      display: inline-block;
+      min-width: 68px;
+      color: #dcecff;
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .summary {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .summary .arg {
+      color: var(--yellow);
+    }
+
+    .summary .var {
+      color: var(--teal);
+    }
+
+    .line-ref {
+      color: var(--muted-2);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    .block-body {
+      padding: 0 10px 10px 42px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .nested {
+      margin: 2px 9px 9px 40px;
+      padding: 9px 9px 9px 12px;
+      border-left: 2px solid #3c7bc1;
+      background: rgba(0, 0, 0, 0.12);
+      border-radius: 0 5px 5px 0;
+    }
+
+    .nested.level-3 {
+      border-left-color: #6a65ff;
+      margin-left: 32px;
+    }
+
+    .fold-summary {
+      display: none;
+      margin: 0 10px 10px 64px;
+      padding: 7px 9px;
+      color: var(--muted);
+      font-size: 12px;
+      border: 1px dashed #435267;
+      border-radius: 5px;
+      background: rgba(255,255,255,0.025);
+    }
+
+    .block.collapsed > .block-body,
+    .block.collapsed > .nested {
+      display: none;
+    }
+
+    .block.collapsed > .fold-summary {
+      display: block;
+    }
+
+    .drop-slot {
+      height: 28px;
+      border: 1px dashed #435267;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted-2);
+      font-size: 12px;
+      margin-top: 8px;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .properties {
+      padding: 12px;
+      gap: 12px;
+      overflow: auto;
+    }
+
+    .prop-card {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #1c222b;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .prop-card h2 {
+      margin: 0;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      background: #222a35;
+    }
+
+    .form {
+      padding: 10px;
+      display: grid;
+      gap: 9px;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      height: 30px;
+      border: 1px solid #3a4657;
+      border-radius: 4px;
+      background: #11161c;
+      color: var(--text);
+      padding: 4px 8px;
+    }
+
+    .mini-yaml {
+      margin: 0;
+      padding: 10px;
+      overflow: auto;
+      color: #dbe6f4;
+      background: #11161c;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .palette {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      padding: 10px;
+    }
+
+    .palette .cmd {
+      border: 1px solid #374354;
+      border-radius: 5px;
+      background: #242c37;
+      color: var(--text);
+      padding: 7px;
+      font-size: 12px;
+    }
+
+    .bottom {
+      display: grid;
+      grid-template-columns: 1.1fr 1.1fr 1fr 0.8fr;
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .bottom .pane {
+      border-right: 1px solid var(--line);
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .table th,
+    .table td {
+      border-bottom: 1px solid var(--line-soft);
+      padding: 7px 8px;
+      text-align: left;
+      color: var(--muted);
+    }
+
+    .table th {
+      color: var(--text);
+      background: #202733;
+      font-weight: 650;
+    }
+
+    .console {
+      padding: 10px;
+      font-family: Consolas, "Courier New", monospace;
+      color: #b8c5d6;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .compact .block-head {
+      padding: 7px 9px;
+    }
+
+    .compact .block-body,
+    .compact .nested {
+      display: none;
+    }
+
+    .lane-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .lane-layout .phase {
+      margin-bottom: 0;
+    }
+
+    .lane-layout .block {
+      min-height: 72px;
+    }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header class="toolbar">
+      <div class="title">Embedded SW Tester Workbench</div>
+      <div class="path">C:\workspace\tester\samples\workbench-demo.yaml</div>
+      <button class="btn">Open</button>
+      <button class="btn">Compile</button>
+      <button class="btn primary">Run</button>
+      <span class="status-chip"><span class="dot"></span>Running</span>
+      <label class="toggle"><input type="checkbox" checked /> Auto Focus Line</label>
+      <button id="GuiEditorToggle" class="btn view-toggle active" type="button" aria-pressed="true">GUI Editor</button>
+      <button class="btn">Dark</button>
+    </header>
+
+    <section id="WorkspaceGrid" class="workspace">
+      <aside class="pane">
+        <div class="pane-title">Project / Test Explorer <span class="subtle">workspace</span></div>
+        <div class="tree">
+          <div class="folder">tests</div>
+          <div class="indent file active">workbench-demo.yaml</div>
+          <div class="indent file">boot-smoke.yaml</div>
+          <div class="folder">Testcases</div>
+          <div class="indent testcase active">control_flow_demo</div>
+          <div class="indent testcase">cleanup_demo</div>
+          <div class="folder">libs</div>
+          <div class="indent file">common-power-sequence.yaml</div>
+          <div class="indent file">can-diagnostics.yaml</div>
+          <div class="folder">tool-profiles</div>
+          <div class="indent file">lab-serial.tools.yaml</div>
+        </div>
+      </aside>
+
+      <section class="pane yaml-editor-pane">
+        <div class="pane-title">YAML Editor <span class="subtle">line synced</span></div>
+        <div class="editor-wrap">
+          <div class="gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20<br>21<br>22<br>23<br>24<br>25<br>26<br>27<br>28<br>29<br>30<br>31<br>32<br>33<br>34<br>35<br>36<br>37<br>38<br>39<br>40</div>
+          <pre class="code"><span class="key">functions</span>:
+  <span class="key">prepare_channel</span>:
+    <span class="key">params</span>: [channel]
+    <span class="key">returns</span>: [voltage_ok]
+    <span class="key">steps</span>:
+      - <span class="key">log.text</span>:
+          <span class="key">text</span>: <span class="str">"Prepare {{ channel }}"</span>
+      - <span class="key">set</span>:
+          <span class="key">var</span>: voltage_ok
+          <span class="key">value</span>: true
+
+<span class="key">testcases</span>:
+  - <span class="key">name</span>: control_flow_demo
+    <span class="key">tags</span>: [gui, control-flow]
+    <span class="key">on_step_failure</span>: stop
+    <span class="key">steps</span>:
+      - <span class="key">set</span>:
+          <span class="key">var</span>: channels
+          <span class="key">value</span>: [1, 2, 3]
+<span class="current">      - <span class="key">for</span>:</span>
+<span class="current">          <span class="key">each</span>: <span class="expr">"${channels}"</span></span>
+<span class="current">          <span class="key">as</span>: channel</span>
+<span class="current">          <span class="key">do</span>:</span>
+<span class="current">            - <span class="key">log.text</span>:</span>
+<span class="current">                <span class="key">text</span>: <span class="str">"Turn on {{ channel }}"</span></span>
+<span class="current">            - <span class="key">if</span>:</span>
+<span class="current">                <span class="key">condition</span>: <span class="expr">"${channel == 2}"</span></span>
+<span class="current">                <span class="key">then</span>:</span>
+<span class="current">                  - <span class="key">for</span>:</span>
+<span class="current">                      <span class="key">each</span>: <span class="expr">"${retries}"</span></span>
+<span class="current">                      <span class="key">as</span>: retry</span>
+<span class="current">                      <span class="key">do</span>:</span>
+<span class="current">                        - <span class="key">delay</span>:</span>
+<span class="current">                            <span class="key">ms</span>: <span class="num">250</span></span>
+<span class="current">            - <span class="key">delay</span>:</span>
+<span class="current">                <span class="key">ms</span>: <span class="num">1000</span></span>
+      - <span class="key">assert.eq</span>:
+          <span class="key">left</span>: <span class="expr">"${voltage_ok}"</span>
+          <span class="key">right</span>: true</pre>
+        </div>
+      </section>
+
+      <div id="EditorSplitter"
+           class="editor-splitter"
+           role="separator"
+           aria-orientation="vertical"
+           aria-label="Resize YAML and GUI editors"
+           title="Drag right to collapse GUI Editor"></div>
+
+      <section class="pane gui-editor-pane">
+        <div class="pane-title">GUI Testcase Editor <span class="subtle">block flow</span></div>
+        <div class="tabs">
+          <button class="tab active" data-target="mockup-a">A Split Flow</button>
+          <button class="tab" data-target="mockup-b">B Phase Lanes</button>
+          <button class="tab" data-target="mockup-c">C Compact Flow</button>
+        </div>
+
+        <div id="mockup-a" class="block-editor mockup">
+          <div class="test-header">
+            <div>
+              <h1>control_flow_demo</h1>
+              <div class="metadata">
+                <span class="pill">tag: gui</span>
+                <span class="pill">tag: control-flow</span>
+                <span class="pill">failure: stop</span>
+                <span class="pill">source: lines 14-40</span>
+              </div>
+            </div>
+            <span class="status-chip"><span class="dot"></span>Step 2 running</span>
+          </div>
+
+          <div class="fold-toolbar" data-fold-scope="mockup-a">
+            <span class="label">Fold</span>
+            <button class="fold-action" data-fold-action="expand-all">Expand All</button>
+            <button class="fold-action" data-fold-action="fold-all">Fold All</button>
+            <button class="fold-action" data-fold-action="fold-level" data-fold-level="2">Fold Level 2</button>
+            <button class="fold-action" data-fold-action="fold-level" data-fold-level="3">Fold Level 3</button>
+          </div>
+
+          <div class="phase">
+            <div class="phase-title">Preconditions <span class="count">0 commands</span></div>
+            <div class="block-list">
+              <div class="drop-slot">Drop setup commands here</div>
+            </div>
+          </div>
+
+          <div class="phase">
+            <div class="phase-title">Steps <span class="count">3 commands · 3 foldable regions</span></div>
+            <div class="block-list">
+              <article class="block set" data-depth="1">
+                <div class="block-head">
+                  <span class="block-id">1</span>
+                  <span class="fold-spacer"></span>
+                  <div class="block-main">
+                    <span class="block-type">set</span>
+                    <span class="summary"><span class="var">channels</span> = [1, 2, 3]</span>
+                  </div>
+                  <span class="line-ref">L18-L20</span>
+                </div>
+              </article>
+
+              <article class="block loop running foldable" data-depth="1" data-fold-children="5">
+                <div class="block-head">
+                  <span class="block-id">2</span>
+                  <button class="fold-toggle" type="button" aria-expanded="true" title="Fold block">▾</button>
+                  <div class="block-main">
+                    <span class="block-type">for</span>
+                    <span class="summary">each <span class="arg">${channels}</span> as <span class="var">channel</span></span>
+                  </div>
+                  <span class="line-ref">L21-L28</span>
+                </div>
+                <div class="block-body">Container command with a nested do block. The whole YAML range is highlighted while this block runs.</div>
+                <div class="nested">
+                  <article class="block log" data-depth="2">
+                    <div class="block-head">
+                      <span class="block-id">2.1</span>
+                      <span class="fold-spacer"></span>
+                      <div class="block-main">
+                        <span class="block-type">log</span>
+                        <span class="summary">"Turn on {{ channel }}"</span>
+                      </div>
+                      <span class="line-ref">L25-L26</span>
+                    </div>
+                  </article>
+                  <article class="block condition foldable" data-depth="2" data-fold-children="1">
+                    <div class="block-head">
+                      <span class="block-id">2.2</span>
+                      <button class="fold-toggle" type="button" aria-expanded="true" title="Fold block">▾</button>
+                      <div class="block-main">
+                        <span class="block-type">if</span>
+                        <span class="summary"><span class="arg">${channel == 2}</span></span>
+                      </div>
+                      <span class="line-ref">L27-L35</span>
+                    </div>
+                    <div class="block-body">Then branch contains retry behavior. Fold Level 2 hides this branch detail.</div>
+                    <div class="nested level-3">
+                      <article class="block loop foldable" data-depth="3" data-fold-children="1">
+                        <div class="block-head">
+                          <span class="block-id">2.2.1</span>
+                          <button class="fold-toggle" type="button" aria-expanded="true" title="Fold block">▾</button>
+                          <div class="block-main">
+                            <span class="block-type">for</span>
+                            <span class="summary">retry in <span class="arg">${retries}</span></span>
+                          </div>
+                          <span class="line-ref">L30-L35</span>
+                        </div>
+                        <div class="nested level-3">
+                          <article class="block delay" data-depth="4">
+                            <div class="block-head">
+                              <span class="block-id">2.2.1.1</span>
+                              <span class="fold-spacer"></span>
+                              <div class="block-main">
+                                <span class="block-type">delay</span>
+                                <span class="summary"><span class="arg">250</span> ms</span>
+                              </div>
+                              <span class="line-ref">L34-L35</span>
+                            </div>
+                          </article>
+                        </div>
+                        <div class="fold-summary">1 level 4 command hidden</div>
+                      </article>
+                    </div>
+                    <div class="fold-summary">1 level 3 region hidden</div>
+                  </article>
+
+                  <article class="block delay" data-depth="2">
+                    <div class="block-head">
+                      <span class="block-id">2.3</span>
+                      <span class="fold-spacer"></span>
+                      <div class="block-main">
+                        <span class="block-type">delay</span>
+                        <span class="summary"><span class="arg">1000</span> ms</span>
+                      </div>
+                      <span class="line-ref">L36-L37</span>
+                    </div>
+                  </article>
+                  <div class="drop-slot">Drop command inside loop</div>
+                </div>
+                <div class="fold-summary">5 nested commands hidden</div>
+              </article>
+
+              <article class="block assert" data-depth="1">
+                <div class="block-head">
+                  <span class="block-id">3</span>
+                  <span class="fold-spacer"></span>
+                  <div class="block-main">
+                    <span class="block-type">assert</span>
+                    <span class="summary"><span class="arg">${voltage_ok}</span> == true</span>
+                  </div>
+                  <span class="line-ref">L38-L40</span>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div class="phase">
+            <div class="phase-title">Postconditions <span class="count">1 command</span></div>
+            <div class="block-list">
+              <article class="block log">
+                <div class="block-head">
+                  <span class="block-id">1</span>
+                  <div class="block-main">
+                    <span class="block-type">log</span>
+                    <span class="summary">"cleanup completed"</span>
+                  </div>
+                  <span class="line-ref">L34-L35</span>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <div id="mockup-b" class="block-editor mockup hidden">
+          <div class="test-header">
+            <div>
+              <h1>control_flow_demo</h1>
+              <div class="metadata">
+                <span class="pill">phase lane view</span>
+                <span class="pill">good for wide monitors</span>
+              </div>
+            </div>
+            <span class="status-chip"><span class="dot"></span>Running</span>
+          </div>
+          <div class="lane-layout">
+            <div class="phase">
+              <div class="phase-title">Preconditions <span class="count">0</span></div>
+              <div class="block-list">
+                <div class="drop-slot">Drop setup</div>
+              </div>
+            </div>
+            <div class="phase">
+              <div class="phase-title">Steps <span class="count">3</span></div>
+              <div class="block-list">
+                <article class="block set">
+                  <div class="block-head">
+                    <span class="block-id">1</span>
+                    <div class="block-main"><span class="block-type">set</span><span class="summary">channels = [1,2,3]</span></div>
+                    <span class="line-ref">L18</span>
+                  </div>
+                </article>
+                <article class="block loop running">
+                  <div class="block-head">
+                    <span class="block-id">2</span>
+                    <div class="block-main"><span class="block-type">for</span><span class="summary">channel in channels</span></div>
+                    <span class="line-ref">L21</span>
+                  </div>
+                  <div class="nested">
+                    <article class="block log"><div class="block-head"><span class="block-id">2.1</span><div class="block-main"><span class="block-type">log</span><span class="summary">Turn on channel</span></div></div></article>
+                    <article class="block delay"><div class="block-head"><span class="block-id">2.2</span><div class="block-main"><span class="block-type">delay</span><span class="summary">1000 ms</span></div></div></article>
+                  </div>
+                </article>
+                <article class="block assert">
+                  <div class="block-head">
+                    <span class="block-id">3</span>
+                    <div class="block-main"><span class="block-type">assert</span><span class="summary">voltage_ok == true</span></div>
+                    <span class="line-ref">L29</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+            <div class="phase">
+              <div class="phase-title">Postconditions <span class="count">1</span></div>
+              <div class="block-list">
+                <article class="block log">
+                  <div class="block-head">
+                    <span class="block-id">1</span>
+                    <div class="block-main"><span class="block-type">log</span><span class="summary">cleanup completed</span></div>
+                    <span class="line-ref">L34</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="mockup-c" class="block-editor mockup compact hidden">
+          <div class="test-header">
+            <div>
+              <h1>control_flow_demo</h1>
+              <div class="metadata">
+                <span class="pill">compact mode</span>
+                <span class="pill">best for long testcases</span>
+              </div>
+            </div>
+            <span class="status-chip"><span class="dot"></span>Running</span>
+          </div>
+          <div class="phase">
+            <div class="phase-title">Steps <span class="count">compact command flow</span></div>
+            <div class="block-list">
+              <article class="block set">
+                <div class="block-head"><span class="block-id">1</span><div class="block-main"><span class="block-type">set</span><span class="summary">channels = [1, 2, 3]</span></div><span class="line-ref">L18</span></div>
+              </article>
+              <article class="block call">
+                <div class="block-head"><span class="block-id">2</span><div class="block-main"><span class="block-type">call</span><span class="summary">prepare_channel(channel: 1) -> voltage_ok</span></div><span class="line-ref">L21</span></div>
+              </article>
+              <article class="block loop running">
+                <div class="block-head"><span class="block-id">3</span><div class="block-main"><span class="block-type">for</span><span class="summary">channel in channels, 2 nested commands</span></div><span class="line-ref">L24</span></div>
+              </article>
+              <article class="block assert">
+                <div class="block-head"><span class="block-id">4</span><div class="block-main"><span class="block-type">assert</span><span class="summary">voltage_ok == true</span></div><span class="line-ref">L29</span></div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div id="GuiPropertiesSplitter"
+           class="gui-properties-splitter"
+           role="separator"
+           aria-orientation="vertical"
+           aria-label="Resize GUI editor and properties"
+           title="Drag to resize GUI Editor and Properties"></div>
+
+      <aside class="pane properties-pane">
+        <div class="pane-title">Properties <span class="subtle">selected block</span></div>
+        <div class="properties">
+          <section class="prop-card">
+            <h2>Command</h2>
+            <div class="form">
+              <div class="field">
+                <label>Type</label>
+                <select>
+                  <option>for</option>
+                  <option>set</option>
+                  <option>delay</option>
+                  <option>log.text</option>
+                  <option>assert.eq</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Each</label>
+                <input value="${channels}" />
+              </div>
+              <div class="field">
+                <label>As</label>
+                <input value="channel" />
+              </div>
+            </div>
+          </section>
+
+          <section class="prop-card">
+            <h2>Insert Command</h2>
+            <div class="palette">
+              <button class="cmd">set</button>
+              <button class="cmd">call</button>
+              <button class="cmd">if</button>
+              <button class="cmd">for</button>
+              <button class="cmd">delay</button>
+              <button class="cmd">assert</button>
+              <button class="cmd">log.text</button>
+              <button class="cmd">serial</button>
+            </div>
+          </section>
+
+          <section class="prop-card">
+            <h2>YAML Source</h2>
+            <pre class="mini-yaml">- for:
+    each: "${channels}"
+    as: channel
+    do:
+      - log.text:
+          text: "Turn on {{ channel }}"
+      - if:
+          condition: "${channel == 2}"
+          then:
+            - for:
+                each: "${retries}"
+                as: retry
+                do:
+                  - delay:
+                      ms: 250
+      - delay:
+          ms: 1000</pre>
+          </section>
+        </div>
+      </aside>
+    </section>
+
+    <section class="bottom">
+      <section class="pane">
+        <div class="pane-title">Problems</div>
+        <table class="table">
+          <thead><tr><th>Severity</th><th>Code</th><th>Message</th></tr></thead>
+          <tbody>
+            <tr><td>info</td><td>YAML_SYNC</td><td>GUI blocks match YAML source.</td></tr>
+            <tr><td>warning</td><td>UNUSED_VAR</td><td>last_channel is set but not asserted.</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="pane">
+        <div class="pane-title">Console</div>
+        <div class="console">Run 'gui-run-20260516-154012' started.
+[control_flow_demo/steps L25] Turn on 2
+[control_flow_demo/steps L27] delay 1000 ms</div>
+      </section>
+      <section class="pane">
+        <div class="pane-title">Execution Trace</div>
+        <table class="table">
+          <thead><tr><th>Command</th><th>Status</th><th>Line</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr><td>set</td><td>passed</td><td>18</td><td>channels = [1,2,3]</td></tr>
+            <tr><td>for</td><td>running</td><td>21</td><td>channel = 2</td></tr>
+            <tr><td>delay</td><td>running</td><td>27</td><td>1000 ms</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="pane">
+        <div class="pane-title">Variables</div>
+        <table class="table">
+          <thead><tr><th>Name</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>channels</td><td>[1,2,3]</td></tr>
+            <tr><td>channel</td><td>2</td></tr>
+            <tr><td>voltage_ok</td><td>true</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll(".tab");
+    const mockups = document.querySelectorAll(".mockup");
+    const setBlockCollapsed = (block, collapsed) => {
+      block.classList.toggle("collapsed", collapsed);
+      const toggle = block.querySelector(":scope > .block-head .fold-toggle");
+      if (toggle) {
+        toggle.textContent = collapsed ? "▸" : "▾";
+        toggle.setAttribute("aria-expanded", String(!collapsed));
+        toggle.title = collapsed ? "Expand block" : "Fold block";
+      }
+    };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        tabs.forEach((candidate) => candidate.classList.remove("active"));
+        mockups.forEach((mockup) => mockup.classList.add("hidden"));
+        tab.classList.add("active");
+        document.getElementById(tab.dataset.target).classList.remove("hidden");
+      });
+    });
+
+    document.querySelectorAll(".fold-toggle").forEach((toggle) => {
+      toggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const block = toggle.closest(".foldable");
+        setBlockCollapsed(block, !block.classList.contains("collapsed"));
+      });
+    });
+
+    document.querySelectorAll(".fold-action").forEach((action) => {
+      action.addEventListener("click", () => {
+        const scope = document.getElementById(action.closest("[data-fold-scope]").dataset.foldScope);
+        const foldableBlocks = [...scope.querySelectorAll(".foldable")];
+        const requestedAction = action.dataset.foldAction;
+
+        if (requestedAction === "expand-all") {
+          foldableBlocks.forEach((block) => setBlockCollapsed(block, false));
+          return;
+        }
+
+        if (requestedAction === "fold-all") {
+          foldableBlocks.forEach((block) => setBlockCollapsed(block, true));
+          return;
+        }
+
+        if (requestedAction === "fold-level") {
+          const level = Number(action.dataset.foldLevel);
+          foldableBlocks.forEach((block) => {
+            const depth = Number(block.dataset.depth);
+            setBlockCollapsed(block, depth >= level);
+          });
+        }
+      });
+    });
+
+    const workspaceGrid = document.getElementById("WorkspaceGrid");
+    const editorSplitter = document.getElementById("EditorSplitter");
+    const guiPropertiesSplitter = document.getElementById("GuiPropertiesSplitter");
+    const guiEditorToggle = document.getElementById("GuiEditorToggle");
+    const yamlEditorPane = document.querySelector(".yaml-editor-pane");
+    const guiEditorPane = document.querySelector(".gui-editor-pane");
+    const propertiesPane = document.querySelector(".properties-pane");
+    const explorerWidth = 236;
+    const splitterWidth = 6;
+    const guiPropertiesSplitterWidth = 6;
+    const propertiesWidth = 292;
+    const minimumYamlWidth = 430;
+    const minimumGuiWidth = 260;
+    const minimumPropertiesWidth = 220;
+    const collapseGuiThreshold = 150;
+    let savedGuiWidth = 560;
+    let savedPropertiesWidth = propertiesWidth;
+
+    const getEditorAreaWidth = () => {
+      const rect = workspaceGrid.getBoundingClientRect();
+      return Math.max(
+        0,
+        rect.width - explorerWidth - splitterWidth - guiPropertiesSplitterWidth - savedPropertiesWidth);
+    };
+
+    const getCollapsedYamlWidth = () => {
+      const rect = workspaceGrid.getBoundingClientRect();
+      return Math.max(0, rect.width - explorerWidth - splitterWidth);
+    };
+
+    const setGuiButtonState = (visible) => {
+      guiEditorToggle.classList.toggle("active", visible);
+      guiEditorToggle.setAttribute("aria-pressed", String(visible));
+      guiEditorToggle.textContent = visible ? "GUI Editor" : "Show GUI Editor";
+    };
+
+    const setEditorGroupWidths = (
+      yamlWidth,
+      guiWidth,
+      propertiesPaneWidth = savedPropertiesWidth,
+      guiPropertiesSplitterPaneWidth = guiPropertiesSplitterWidth) => {
+      workspaceGrid.style.gridTemplateColumns =
+        `${explorerWidth}px ${yamlWidth}px ${splitterWidth}px ${guiWidth}px ${guiPropertiesSplitterPaneWidth}px ${propertiesPaneWidth}px`;
+    };
+
+    const collapseGuiEditor = () => {
+      const availableWidth = getCollapsedYamlWidth();
+      workspaceGrid.classList.add("gui-collapsed");
+      setEditorGroupWidths(availableWidth, 0, 0, 0);
+      setGuiButtonState(false);
+    };
+
+    const expandGuiEditor = () => {
+      const availableWidth = getEditorAreaWidth();
+      const guiWidth = Math.min(
+        Math.max(savedGuiWidth, minimumGuiWidth),
+        Math.max(minimumGuiWidth, availableWidth - minimumYamlWidth));
+      const yamlWidth = Math.max(minimumYamlWidth, availableWidth - guiWidth);
+      workspaceGrid.classList.remove("gui-collapsed");
+      setEditorGroupWidths(yamlWidth, guiWidth, savedPropertiesWidth);
+      setGuiButtonState(true);
+    };
+
+    guiEditorToggle.addEventListener("click", () => {
+      if (workspaceGrid.classList.contains("gui-collapsed")) {
+        expandGuiEditor();
+      } else {
+        collapseGuiEditor();
+      }
+    });
+
+    let isResizingEditors = false;
+    const resizeEditorsFromClientX = (clientX) => {
+      const rect = workspaceGrid.getBoundingClientRect();
+      const availableWidth = getEditorAreaWidth();
+      const rawYamlWidth = clientX - rect.left - explorerWidth;
+      const yamlWidth = Math.min(Math.max(rawYamlWidth, minimumYamlWidth), availableWidth);
+      const guiWidth = Math.max(0, availableWidth - yamlWidth);
+
+      if (guiWidth <= collapseGuiThreshold) {
+        collapseGuiEditor();
+        return;
+      }
+
+      savedGuiWidth = Math.max(guiWidth, minimumGuiWidth);
+      workspaceGrid.classList.remove("gui-collapsed");
+      setEditorGroupWidths(yamlWidth, guiWidth, savedPropertiesWidth);
+      setGuiButtonState(true);
+    };
+
+    const resizeGuiPropertiesFromClientX = (clientX) => {
+      if (workspaceGrid.classList.contains("gui-collapsed")) {
+        return;
+      }
+
+      const yamlWidth = yamlEditorPane.getBoundingClientRect().width;
+      const guiRect = guiEditorPane.getBoundingClientRect();
+      const propertiesRect = propertiesPane.getBoundingClientRect();
+      const totalRightGroupWidth = guiRect.width + guiPropertiesSplitterWidth + propertiesRect.width;
+      const rawGuiWidth = clientX - guiRect.left;
+      const maxGuiWidth = Math.max(
+        minimumGuiWidth,
+        totalRightGroupWidth - guiPropertiesSplitterWidth - minimumPropertiesWidth);
+      const guiWidth = Math.min(Math.max(rawGuiWidth, minimumGuiWidth), maxGuiWidth);
+      const propertiesPaneWidth = Math.max(
+        minimumPropertiesWidth,
+        totalRightGroupWidth - guiPropertiesSplitterWidth - guiWidth);
+
+      savedGuiWidth = guiWidth;
+      savedPropertiesWidth = propertiesPaneWidth;
+      setEditorGroupWidths(yamlWidth, guiWidth, propertiesPaneWidth);
+    };
+
+    const startResize = (
+      event,
+      splitter,
+      resizeFromClientX,
+      moveEventName,
+      upEventName,
+      cancelEventName) => {
+      if (isResizingEditors) {
+        return;
+      }
+
+      event.preventDefault();
+      isResizingEditors = true;
+      document.body.classList.add("resizing-editors");
+      splitter.classList.add("dragging");
+
+      const resizeEditors = (moveEvent) => {
+        resizeFromClientX(moveEvent.clientX);
+      };
+
+      const stopResize = () => {
+        isResizingEditors = false;
+        document.body.classList.remove("resizing-editors");
+        splitter.classList.remove("dragging");
+        window.removeEventListener(moveEventName, resizeEditors);
+        window.removeEventListener(upEventName, stopResize);
+        if (cancelEventName) {
+          window.removeEventListener(cancelEventName, stopResize);
+        }
+      };
+
+      window.addEventListener(moveEventName, resizeEditors);
+      window.addEventListener(upEventName, stopResize);
+      if (cancelEventName) {
+        window.addEventListener(cancelEventName, stopResize);
+      }
+    };
+
+    editorSplitter.addEventListener("pointerdown", (event) => {
+      startResize(event, editorSplitter, resizeEditorsFromClientX, "pointermove", "pointerup", "pointercancel");
+    });
+
+    editorSplitter.addEventListener("mousedown", (event) => {
+      startResize(event, editorSplitter, resizeEditorsFromClientX, "mousemove", "mouseup", null);
+    });
+
+    guiPropertiesSplitter.addEventListener("pointerdown", (event) => {
+      startResize(
+        event,
+        guiPropertiesSplitter,
+        resizeGuiPropertiesFromClientX,
+        "pointermove",
+        "pointerup",
+        "pointercancel");
+    });
+
+    guiPropertiesSplitter.addEventListener("mousedown", (event) => {
+      startResize(
+        event,
+        guiPropertiesSplitter,
+        resizeGuiPropertiesFromClientX,
+        "mousemove",
+        "mouseup",
+        null);
+    });
+  </script>
+</body>
+</html>
