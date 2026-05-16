@@ -4,12 +4,12 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import Optional, Sequence
 
 from embsw_tester.adapters import create_adapter_registry_from_tool_profile
 from embsw_tester.dsl.compiler import compile_file
 from embsw_tester.reports import write_report
-from embsw_tester.runtime import run_package
+from embsw_tester.runtime import RuntimeControl, run_package
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -27,6 +27,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser.add_argument("--reports-root", type=Path)
     run_parser.add_argument("--use-tool-profile-adapters", action="store_true")
     run_parser.add_argument("--events-jsonl", action="store_true")
+    run_parser.add_argument("--control-file", type=Path)
+    run_parser.add_argument(
+        "--breakpoint-line",
+        type=int,
+        action="append",
+        default=[],
+        dest="breakpoint_lines",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "compile":
@@ -51,6 +59,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_id=args.run_id,
             adapter_registry=adapter_registry,
             event_callback=_event_jsonl_callback if args.events_jsonl else None,
+            run_control=_runtime_control(args),
         )
         payload = result.to_dict()
         if args.reports_root is not None:
@@ -90,6 +99,15 @@ def _event_jsonl_callback(event: object) -> None:
         f"__EMBSW_EVENT__ {json.dumps(payload, ensure_ascii=False)}",
         file=sys.stderr,
         flush=True,
+    )
+
+
+def _runtime_control(args: argparse.Namespace) -> Optional[RuntimeControl]:
+    if args.control_file is None:
+        return None
+    return RuntimeControl(
+        control_file=args.control_file,
+        breakpoint_lines=set(args.breakpoint_lines or []),
     )
 
 

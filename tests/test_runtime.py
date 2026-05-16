@@ -6,7 +6,7 @@ from embsw_tester.adapters.inca import IncaAdapter
 from embsw_tester.adapters.serial import FakeSerialPort, SerialAdapter
 from embsw_tester.adapters.trace32 import FakeTrace32Transport, Trace32Adapter
 from embsw_tester.dsl.compiler import compile_file
-from embsw_tester.runtime import run_package
+from embsw_tester.runtime import RuntimeControl, run_package
 
 
 class RecordingAdapter:
@@ -118,6 +118,90 @@ testcases:
     assert testcase.events[0].source_line == 4
     assert testcase.events[1].source_line == 7
     assert testcase.events[1].to_dict()["source_line"] == 7
+
+
+def test_runtime_pauses_on_breakpoint_and_resumes_from_control_file(tmp_path: Path):
+    test_file = tmp_path / "breakpoint.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: breakpoint_case
+    steps:
+      - set:
+          var: rpm
+          value: 700
+      - assert.eq:
+          left: "${rpm}"
+          right: 700
+""".strip(),
+        encoding="utf-8",
+    )
+    control_file = tmp_path / "control.json"
+    control_file.write_text('{"state": "running"}', encoding="utf-8")
+    streamed_events = []
+
+    def resume_on_pause(event):
+        streamed_events.append(event)
+        if event.status == "paused":
+            control_file.write_text('{"state": "running"}', encoding="utf-8")
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="breakpoint-run",
+        event_callback=resume_on_pause,
+        run_control=RuntimeControl(
+            control_file=control_file,
+            breakpoint_lines={4},
+            poll_interval_s=0,
+        ),
+    )
+
+    testcase = result.testcase_results[0]
+    paused_event = next(event for event in streamed_events if event.status == "paused")
+    assert result.status == "passed"
+    assert paused_event.command_type == "set"
+    assert paused_event.source_line == 4
+    assert paused_event.outputs["reason"] == "breakpoint"
+    assert testcase.events[0].status == "paused"
+    assert testcase.events[1].status == "passed"
+
+
+def test_runtime_honors_manual_pause_request_before_next_command(tmp_path: Path):
+    test_file = tmp_path / "manual-pause.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: manual_pause_case
+    steps:
+      - set:
+          var: rpm
+          value: 700
+""".strip(),
+        encoding="utf-8",
+    )
+    control_file = tmp_path / "control.json"
+    control_file.write_text('{"state": "paused"}', encoding="utf-8")
+    streamed_events = []
+
+    def resume_on_pause(event):
+        streamed_events.append(event)
+        if event.status == "paused":
+            control_file.write_text('{"state": "running"}', encoding="utf-8")
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="manual-pause-run",
+        event_callback=resume_on_pause,
+        run_control=RuntimeControl(
+            control_file=control_file,
+            poll_interval_s=0,
+        ),
+    )
+
+    paused_event = next(event for event in streamed_events if event.status == "paused")
+    assert result.status == "passed"
+    assert paused_event.command_type == "set"
+    assert paused_event.outputs["reason"] == "pause_requested"
 
 
 def test_runtime_runs_for_loop_and_nested_call_with_shared_frame(tmp_path: Path):

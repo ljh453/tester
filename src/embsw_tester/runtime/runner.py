@@ -4,6 +4,8 @@ import time
 import uuid
 from copy import deepcopy
 from dataclasses import dataclass, field
+import json
+from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from embsw_tester.adapters import AdapterContext, AdapterRegistry, create_default_adapter_registry
@@ -30,6 +32,52 @@ class RuntimeContext:
     sleep_fn: Callable[[float], None]
     adapter_registry: AdapterRegistry
     event_callback: Optional[Callable[[CommandEvent], None]] = None
+    run_control: Optional["RuntimeControl"] = None
+
+
+@dataclass
+class RuntimeControl:
+    control_file: Optional[Path] = None
+    breakpoint_lines: set[int] = field(default_factory=set)
+    poll_interval_s: float = 0.05
+
+    def pause_reason(self, command: NormalizedCommand) -> Optional[str]:
+        if self.control_file is None:
+            return None
+        if command.source_line in self.breakpoint_lines:
+            self.write_state("paused", reason="breakpoint")
+            return "breakpoint"
+        if self.read_state() == "paused":
+            return "pause_requested"
+        return None
+
+    def wait_until_resumed(self, sleep_fn: Callable[[float], None]) -> None:
+        if self.control_file is None:
+            return
+        while self.read_state() == "paused":
+            sleep_fn(self.poll_interval_s)
+
+    def read_state(self) -> str:
+        if self.control_file is None or not self.control_file.exists():
+            return "running"
+        try:
+            payload = json.loads(self.control_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return "running"
+        state = payload.get("state") if isinstance(payload, Mapping) else None
+        return str(state) if state else "running"
+
+    def write_state(self, state: str, reason: Optional[str] = None) -> None:
+        if self.control_file is None:
+            return
+        payload = {"state": state}
+        if reason is not None:
+            payload["reason"] = reason
+        self.control_file.parent.mkdir(parents=True, exist_ok=True)
+        self.control_file.write_text(
+            json.dumps(payload, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
 
 def run_package(
@@ -38,6 +86,7 @@ def run_package(
     sleep_fn: Callable[[float], None] = time.sleep,
     adapter_registry: Optional[AdapterRegistry] = None,
     event_callback: Optional[Callable[[CommandEvent], None]] = None,
+    run_control: Optional[RuntimeControl] = None,
 ) -> RunResult:
     resolved_run_id = run_id or str(uuid.uuid4())
     diagnostics = [diagnostic.to_dict() for diagnostic in package.diagnostics]
@@ -55,6 +104,7 @@ def run_package(
         sleep_fn=sleep_fn,
         adapter_registry=adapter_registry or create_default_adapter_registry(),
         event_callback=event_callback,
+        run_control=run_control,
     )
     testcase_results = [
         _run_testcase(context, testcase)
@@ -116,6 +166,12 @@ def _run_commands(
     events: List[CommandEvent],
 ) -> tuple[str, Optional[str]]:
     for command in commands:
+        pause_event = _pause_event_if_needed(context, testcase_name, phase, command, frame)
+        if pause_event is not None:
+            events.append(pause_event)
+            if context.event_callback is not None:
+                context.event_callback(pause_event)
+            context.run_control.wait_until_resumed(context.sleep_fn)
         if context.event_callback is not None:
             context.event_callback(_running_event(context, testcase_name, phase, command, frame))
         event = _execute_command(context, testcase_name, phase, command, frame, events)
@@ -125,6 +181,30 @@ def _run_commands(
         if event.status == "failed":
             return "failed", event.error
     return "passed", None
+
+
+def _pause_event_if_needed(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    frame: Frame,
+) -> Optional[CommandEvent]:
+    if context.run_control is None:
+        return None
+    reason = context.run_control.pause_reason(command)
+    if reason is None:
+        return None
+    return _event(
+        context,
+        testcase_name,
+        phase,
+        command,
+        "paused",
+        {},
+        {"reason": reason},
+        local_variables=deepcopy(frame.variables),
+    )
 
 
 def _running_event(

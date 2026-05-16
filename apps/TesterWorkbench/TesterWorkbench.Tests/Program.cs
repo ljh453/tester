@@ -4,8 +4,11 @@ using TesterWorkbench.Core.Workspace;
 
 await RunWorkspaceScannerTest();
 await RunEngineBridgeTest();
+await RunEngineBridgePassesDebugControlArgumentsTest();
 await RunMainWorkbenchViewModelTest();
 await RunMainWorkbenchViewModelStreamingTest();
+await RunMainWorkbenchViewModelDebugControlTest();
+await RunMainWorkbenchViewModelUpdatesStatusFromPausedEventTest();
 await RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest();
 await RunMainWorkbenchViewModelShowsLogEventsInConsoleTest();
 await RunMainWorkbenchViewModelStreamsLogEventsInConsoleTest();
@@ -143,6 +146,52 @@ static async Task RunEngineBridgeTest()
         new[] { "-m", "embsw_tester.cli", "run", "/repo/samples/boot-smoke.yaml", "--json", "--run-id", "gui-run", "--reports-root", "/repo/reports" },
         runner.Calls[1].Arguments,
         "run args");
+}
+
+static async Task RunEngineBridgePassesDebugControlArgumentsTest()
+{
+    var runner = new FakeEngineProcessRunner(
+        new EngineProcessResult(
+            0,
+            """
+            {
+              "run_id": "gui-run",
+              "status": "passed",
+              "testcase_results": [],
+              "report": {"report_dir": "reports/gui-run"}
+            }
+            """,
+            ""));
+    var bridge = new TesterEngineBridge("python", "/repo", runner);
+
+    await bridge.RunAsync(
+        "/repo/tests/debug.yaml",
+        "gui-run",
+        "/repo/reports",
+        controlFile: "/repo/reports/gui-run/control.json",
+        breakpointLines: new[] { 7, 4, 4 });
+
+    AssertSequence(
+        new[]
+        {
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            "/repo/tests/debug.yaml",
+            "--json",
+            "--run-id",
+            "gui-run",
+            "--reports-root",
+            "/repo/reports",
+            "--control-file",
+            "/repo/reports/gui-run/control.json",
+            "--breakpoint-line",
+            "4",
+            "--breakpoint-line",
+            "7"
+        },
+        runner.Calls[0].Arguments,
+        "debug run args");
 }
 
 static async Task RunMainWorkbenchViewModelTest()
@@ -352,9 +401,134 @@ static async Task RunMainWorkbenchViewModelStreamingTest()
     AssertEqual("rpm_ok", viewModel.Variables[1].Name, "streaming second variable name");
     AssertEqual("passed", viewModel.ExecutionTrace[0].Status, "streaming replaced first running event");
     AssertSequence(
-        new[] { "-m", "embsw_tester.cli", "run", yamlPath, "--json", "--run-id", "gui-run", "--reports-root", Path.Combine(root, "reports"), "--events-jsonl" },
+        new[]
+        {
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            yamlPath,
+            "--json",
+            "--run-id",
+            "gui-run",
+            "--reports-root",
+            Path.Combine(root, "reports"),
+            "--events-jsonl",
+            "--control-file",
+            Path.Combine(root, "reports", "gui-run", "control.json")
+        },
         runner.Calls[1].Arguments,
         "streaming run args");
+}
+
+static async Task RunMainWorkbenchViewModelDebugControlTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/debug.yaml",
+            """
+            testcases:
+              - name: debug_case
+                steps:
+                  - set:
+                      var: rpm
+                      value: 700
+            """));
+    var yamlPath = Path.Combine(root, "tests", "debug.yaml");
+    var runner = new FakeEngineProcessRunner(
+        new EngineProcessResult(
+            0,
+            """
+            {
+              "run_id": "debug-run",
+              "status": "passed",
+              "testcase_results": [],
+              "report": {"report_dir": "reports/debug-run"}
+            }
+            """,
+            ""));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+
+    await viewModel.OpenWorkspaceAsync(root);
+    await viewModel.OpenFileAsync(yamlPath);
+    viewModel.ToggleBreakpointAtLine(4);
+    await viewModel.RunAsync("debug-run");
+
+    AssertTrue(viewModel.BreakpointLineNumbers.Contains(4), "view model keeps breakpoint line");
+    AssertTrue(viewModel.EditorLineNumbersText.Contains("\u25CF 4", StringComparison.Ordinal), "line numbers show breakpoint marker");
+    AssertEqual("L4", viewModel.BreakpointsText, "breakpoints summary");
+    AssertTrue(
+        runner.Calls[0].Arguments.Contains("--control-file"),
+        "debug run includes control file");
+    AssertTrue(
+        runner.Calls[0].Arguments.Contains("--breakpoint-line")
+            && runner.Calls[0].Arguments.Contains("4"),
+        "debug run includes breakpoint line");
+
+    viewModel.ToggleBreakpointAtLine(4);
+
+    AssertFalse(viewModel.BreakpointLineNumbers.Contains(4), "view model removes breakpoint line");
+}
+
+static async Task RunMainWorkbenchViewModelUpdatesStatusFromPausedEventTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/pause.yaml", "testcases:\n  - name: pause_case\n    steps: []"));
+    var yamlPath = Path.Combine(root, "tests", "pause.yaml");
+    var pausedEventJson =
+        """
+        {
+          "testcase": "pause_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 0],
+          "command_type": "set",
+          "status": "paused",
+          "source_file": "/repo/tests/pause.yaml",
+          "source_line": 4,
+          "local_variables": {"rpm": 700},
+          "outputs": {"reason": "breakpoint"},
+          "error": null
+        }
+        """;
+    var runningEventJson =
+        """
+        {
+          "testcase": "pause_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 0],
+          "command_type": "set",
+          "status": "running",
+          "source_file": "/repo/tests/pause.yaml",
+          "source_line": 4,
+          "local_variables": {"rpm": 700},
+          "error": null
+        }
+        """;
+    var runner = new FakeEngineProcessRunner(
+        (
+            new EngineProcessResult(
+                0,
+                """
+                {
+                  "run_id": "pause-run",
+                  "status": "passed",
+                  "testcase_results": [],
+                  "report": {"report_dir": "reports/pause-run"}
+                }
+                """,
+                ""),
+            new[] { pausedEventJson, runningEventJson }
+        ));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+    var statusSnapshots = new List<string>();
+
+    await viewModel.OpenFileAsync(yamlPath);
+    await viewModel.RunAsync("pause-run", () => statusSnapshots.Add(viewModel.RunStatus));
+
+    AssertTrue(statusSnapshots.Contains("Paused"), "view model reports paused status from event");
+    AssertTrue(statusSnapshots.Contains("Running"), "view model reports running status after resume event");
 }
 
 static async Task RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest()

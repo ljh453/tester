@@ -53,25 +53,32 @@
                     </Border.Style>
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="22" />
                             <ColumnDefinition Width="42" />
                             <ColumnDefinition Width="82" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="72" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
+                                   Text="{Binding BreakpointMarker}"
+                                   Foreground="{DynamicResource Workbench.Brush.Accent}"
+                                   FontSize="13"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
                                    Text="{Binding DisplayIndex}"
                                    Foreground="{DynamicResource Workbench.Brush.TextMuted}"
                                    VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1"
+                        <TextBlock Grid.Column="2"
                                    Text="{Binding DisplayType}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="2"
+                        <TextBlock Grid.Column="3"
                                    Text="{Binding Summary}"
                                    Foreground="{DynamicResource Workbench.Brush.TextSecondary}"
                                    TextTrimming="CharacterEllipsis"
                                    VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="3"
+                        <TextBlock Grid.Column="4"
                                    Text="{Binding LineRangeText}"
                                    FontFamily="Consolas"
                                    FontSize="11"
@@ -185,6 +192,9 @@
             <Separator />
             <Button Content="Compile" Click="Compile_Click" />
             <Button Content="Run" Click="Run_Click" />
+            <Button Content="Pause" Click="Pause_Click" />
+            <Button Content="Resume" Click="Resume_Click" />
+            <Button Content="Toggle Breakpoint" Click="ToggleBreakpoint_Click" />
             <TextBlock x:Name="RunStatusText" Text="Idle" VerticalAlignment="Center" Margin="14,0,0,0" />
             <Separator />
             <CheckBox x:Name="AutoFocusLineCheckBox"
@@ -282,9 +292,11 @@
                             <ScrollViewer x:Name="LineNumbersScrollViewer"
                                           Grid.Column="0"
                                           Background="{DynamicResource Workbench.Brush.EditorGutter}"
+                                          Cursor="Hand"
                                           Focusable="False"
                                           HorizontalScrollBarVisibility="Disabled"
-                                          IsHitTestVisible="False"
+                                          PreviewMouseLeftButtonDown="LineNumbers_PreviewMouseLeftButtonDown"
+                                          ToolTip="Click a line number to toggle a breakpoint."
                                           VerticalScrollBarVisibility="Hidden">
                                 <TextBlock x:Name="LineNumbersTextBlock"
                                            FontFamily="Consolas"
@@ -549,6 +561,8 @@
                                 <TextBlock x:Name="SelectedFileText" TextWrapping="Wrap" Margin="0,4,0,12" />
                                 <TextBlock Text="Current Line" FontWeight="SemiBold" />
                                 <TextBlock x:Name="CurrentLineText" TextWrapping="Wrap" Margin="0,4,0,12" />
+                                <TextBlock Text="Breakpoints" FontWeight="SemiBold" />
+                                <TextBlock x:Name="BreakpointsTextBlock" TextWrapping="Wrap" Margin="0,4,0,12" />
                                 <TextBlock Text="Report" FontWeight="SemiBold" />
                                 <TextBlock x:Name="ReportPathText" TextWrapping="Wrap" Margin="0,4,0,16" />
 

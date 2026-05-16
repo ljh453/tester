@@ -262,6 +262,11 @@
       user-select: none;
     }
 
+    .gutter .bp {
+      color: var(--red);
+      font-weight: 800;
+    }
+
     .code {
       padding: 9px 12px 48px;
       overflow: hidden;
@@ -368,6 +373,17 @@
       border-radius: 99px;
       padding: 5px 9px;
       font-size: 12px;
+    }
+
+    .status-chip.paused {
+      color: #fff4cf;
+      background: rgba(239, 202, 116, 0.14);
+      border-color: rgba(239, 202, 116, 0.32);
+    }
+
+    .status-chip.paused .dot {
+      background: var(--yellow);
+      box-shadow: 0 0 0 3px rgba(239, 202, 116, 0.14);
     }
 
     .phase {
@@ -499,6 +515,14 @@
       font-size: 12px;
       width: 24px;
       text-align: right;
+    }
+
+    .bp-dot {
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 800;
+      width: 12px;
+      text-align: center;
     }
 
     .fold-toggle,
@@ -832,7 +856,10 @@
       <button class="btn">Open</button>
       <button class="btn">Compile</button>
       <button class="btn primary">Run</button>
-      <span class="status-chip"><span class="dot"></span>Running</span>
+      <button class="btn">Pause</button>
+      <button class="btn">Resume</button>
+      <button class="btn">Toggle Breakpoint</button>
+      <span class="status-chip paused"><span class="dot"></span>Paused at L21</span>
       <label class="toggle"><input type="checkbox" checked /> Auto Focus Line</label>
       <button id="GuiEditorToggle" class="btn view-toggle active" type="button" aria-pressed="true">GUI Editor</button>
       <button class="btn">Dark</button>
@@ -859,7 +886,7 @@
       <section class="pane yaml-editor-pane">
         <div class="pane-title">YAML Editor <span class="subtle">line synced</span></div>
         <div class="editor-wrap">
-          <div class="gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20<br>21<br>22<br>23<br>24<br>25<br>26<br>27<br>28<br>29<br>30<br>31<br>32<br>33<br>34<br>35<br>36<br>37<br>38<br>39<br>40</div>
+          <div class="gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20<br><span class="bp">●</span> 21<br>22<br>23<br>24<br>25<br>26<br>27<br>28<br>29<br>30<br>31<br>32<br>33<br>34<br>35<br>36<br>37<br>38<br>39<br>40</div>
           <pre class="code"><span class="key">functions</span>:
   <span class="key">prepare_channel</span>:
     <span class="key">params</span>: [channel]
@@ -928,7 +955,7 @@
                 <span class="pill">source: lines 14-40</span>
               </div>
             </div>
-            <span class="status-chip"><span class="dot"></span>Step 2 running</span>
+            <span class="status-chip paused"><span class="dot"></span>Breakpoint L21</span>
           </div>
 
           <div class="fold-toolbar" data-fold-scope="mockup-a">
@@ -964,6 +991,7 @@
 
               <article class="block loop running foldable" data-depth="1" data-fold-children="5">
                 <div class="block-head">
+                  <span class="bp-dot">●</span>
                   <span class="block-id">2</span>
                   <button class="fold-toggle" type="button" aria-expanded="true" title="Fold block">▾</button>
                   <div class="block-main">
@@ -1202,6 +1230,16 @@
           </section>
 
           <section class="prop-card">
+            <h2>Breakpoints</h2>
+            <div class="form">
+              <div class="field">
+                <label>Active lines</label>
+                <input value="L21" />
+              </div>
+            </div>
+          </section>
+
+          <section class="prop-card">
             <h2>Insert Command</h2>
             <div class="palette">
               <div class="cmd-group">
@@ -1316,6 +1354,7 @@
       <section class="pane">
         <div class="pane-title">Console</div>
         <div class="console">Run 'gui-run-20260516-154012' started.
+[control_flow_demo/steps L21] paused: breakpoint
 [control_flow_demo/steps L25] Turn on 2
 [control_flow_demo/steps L27] delay 1000 ms</div>
       </section>
@@ -1325,7 +1364,7 @@
           <thead><tr><th>Command</th><th>Status</th><th>Line</th><th>Detail</th></tr></thead>
           <tbody>
             <tr><td>set</td><td>passed</td><td>18</td><td>channels = [1,2,3]</td></tr>
-            <tr><td>for</td><td>running</td><td>21</td><td>channel = 2</td></tr>
+            <tr><td>for</td><td>paused</td><td>21</td><td>reason: breakpoint</td></tr>
             <tr><td>delay</td><td>running</td><td>27</td><td>1000 ms</td></tr>
           </tbody>
         </table>

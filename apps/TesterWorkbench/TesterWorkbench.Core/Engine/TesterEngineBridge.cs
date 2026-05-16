@@ -44,7 +44,9 @@ public sealed class TesterEngineBridge
         string runId,
         string reportsRoot,
         CancellationToken cancellationToken = default,
-        Action<EngineRunEvent>? onEvent = null)
+        Action<EngineRunEvent>? onEvent = null,
+        string? controlFile = null,
+        IReadOnlyCollection<int>? breakpointLines = null)
     {
         var arguments = new List<string>
         {
@@ -61,6 +63,19 @@ public sealed class TesterEngineBridge
         if (onEvent is not null)
         {
             arguments.Add("--events-jsonl");
+        }
+        if (!string.IsNullOrWhiteSpace(controlFile))
+        {
+            arguments.Add("--control-file");
+            arguments.Add(controlFile);
+        }
+        foreach (var breakpointLine in (breakpointLines ?? Array.Empty<int>())
+            .Where(line => line > 0)
+            .Distinct()
+            .Order())
+        {
+            arguments.Add("--breakpoint-line");
+            arguments.Add(breakpointLine.ToString());
         }
 
         var result = await _processRunner.RunAsync(

@@ -92,6 +92,23 @@ public partial class MainWindow : Window
             onExecutionChanged: QueueRuntimeRefresh));
     }
 
+    private async void Pause_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiAction(() => _viewModel.PauseRunAsync());
+    }
+
+    private async void Resume_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiAction(() => _viewModel.ResumeRunAsync());
+    }
+
+    private void ToggleBreakpoint_Click(object sender, RoutedEventArgs e)
+    {
+        var lineNumber = EditorBox.GetLineIndexFromCharacterIndex(EditorBox.CaretIndex) + 1;
+        _viewModel.ToggleBreakpointAtLine(lineNumber);
+        RefreshBreakpointViews();
+    }
+
     private void AutoFocusLine_Changed(object sender, RoutedEventArgs e)
     {
         _viewModel.SetAutoFocusExecutionLine(AutoFocusLineCheckBox.IsChecked == true);
@@ -343,6 +360,7 @@ public partial class MainWindow : Window
         }
 
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
+        BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
         SyncLineNumberScroll();
         UpdateCurrentExecutionLineMarker();
     }
@@ -391,6 +409,14 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void LineNumbers_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var lineNumber = GetEditorLineNumberFromPoint(e.GetPosition(EditorBox));
+        _viewModel.ToggleBreakpointAtLine(lineNumber);
+        RefreshBreakpointViews();
+        e.Handled = true;
+    }
+
     private async Task RunUiAction(Func<Task> action)
     {
         try
@@ -425,6 +451,7 @@ public partial class MainWindow : Window
         ThemeModeComboBox.SelectedItem = _viewModel.ThemeMode;
         ApplyEditorFontSize();
         SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
+        BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
         RefreshRuntimeViews();
         SyncLineNumberScroll();
     }
@@ -444,6 +471,7 @@ public partial class MainWindow : Window
 
         VariablesGrid.ItemsSource = _viewModel.Variables;
         RunStatusText.Text = _viewModel.RunStatus;
+        BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
         ReportPathText.Text = _viewModel.ReportDirectory ?? "";
         ReportTabText.Text = _viewModel.ReportDirectory is null
             ? "No report generated yet."
@@ -462,6 +490,7 @@ public partial class MainWindow : Window
 
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         CurrentLineText.Text = _viewModel.CurrentLocationText;
+        BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
         RefreshGuiEditor();
         FocusYamlLine(_viewModel.CurrentLineNumber);
         UpdateCurrentExecutionLineMarker();
@@ -508,6 +537,14 @@ public partial class MainWindow : Window
 
         ConsoleBox.Text = _viewModel.ConsoleText;
         ConsoleBox.ScrollToEnd();
+    }
+
+    private void RefreshBreakpointViews()
+    {
+        LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
+        BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
+        RefreshGuiEditor();
+        UpdateCurrentExecutionLineMarker();
     }
 
     private void HideGuiEditorGroup()
@@ -655,6 +692,17 @@ public partial class MainWindow : Window
         }
 
         return true;
+    }
+
+    private int GetEditorLineNumberFromPoint(System.Windows.Point editorPoint)
+    {
+        var characterIndex = EditorBox.GetCharacterIndexFromPoint(editorPoint, snapToText: true);
+        if (characterIndex < 0)
+        {
+            return 0;
+        }
+
+        return EditorBox.GetLineIndexFromCharacterIndex(characterIndex) + 1;
     }
 
     private void SyncLineNumberScroll()

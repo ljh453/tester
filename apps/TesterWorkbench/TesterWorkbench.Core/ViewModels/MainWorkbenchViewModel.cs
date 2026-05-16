@@ -1,17 +1,22 @@
 using TesterWorkbench.Core.Engine;
 using TesterWorkbench.Core.Workspace;
+using System.Text.Json;
 
 namespace TesterWorkbench.Core.ViewModels;
 
 public sealed class MainWorkbenchViewModel
 {
+    public const string BreakpointMarker = "\u25CF";
+
     private const double MinimumEditorFontSize = 8.0;
     private const double MaximumEditorFontSize = 32.0;
     private const double EditorFontSizeStep = 1.0;
 
     private readonly WorkspaceScanner _workspaceScanner;
     private readonly TesterEngineBridge _engineBridge;
+    private readonly SortedSet<int> _breakpointLineNumbers = new();
     private IReadOnlyList<EngineVariableValue> _runVariables = Array.Empty<EngineVariableValue>();
+    private string? _activeRunControlFile;
 
     public MainWorkbenchViewModel(
         WorkspaceScanner workspaceScanner,
@@ -30,6 +35,10 @@ public sealed class MainWorkbenchViewModel
     public string EditorText { get; private set; } = string.Empty;
 
     public string EditorLineNumbersText { get; private set; } = "1";
+
+    public IReadOnlyCollection<int> BreakpointLineNumbers => _breakpointLineNumbers;
+
+    public string BreakpointsText { get; private set; } = "No breakpoints.";
 
     public IReadOnlyList<EngineDiagnostic> Problems { get; private set; } = Array.Empty<EngineDiagnostic>();
 
@@ -76,6 +85,8 @@ public sealed class MainWorkbenchViewModel
     public async Task OpenFileAsync(string yamlFilePath, CancellationToken cancellationToken = default)
     {
         SelectedFilePath = Path.GetFullPath(yamlFilePath);
+        _breakpointLineNumbers.Clear();
+        UpdateBreakpointsText();
         UpdateEditorText(await File.ReadAllTextAsync(SelectedFilePath, cancellationToken));
         ClearCurrentExecutionLocation();
         ConsoleText = $"Opened file: {SelectedFilePath}";
@@ -103,6 +114,7 @@ public sealed class MainWorkbenchViewModel
         var reportsRoot = WorkspacePath is null
             ? Path.Combine(Path.GetDirectoryName(SelectedFilePath!)!, "reports")
             : Path.Combine(WorkspacePath, "reports");
+        var runControlFile = CreateRunControlFilePath(reportsRoot, effectiveRunId);
 
         RunStatus = "Running";
         ReportDirectory = null;
@@ -113,16 +125,29 @@ public sealed class MainWorkbenchViewModel
         ClearCurrentExecutionLocation();
         NotifyExecutionChanged(onExecutionChanged);
 
-        var result = await _engineBridge.RunAsync(
-            SelectedFilePath!,
-            effectiveRunId,
-            reportsRoot,
-            cancellationToken,
-            runEvent =>
-            {
-                AppendExecutionTraceEvent(runEvent);
-                NotifyExecutionChanged(onExecutionChanged);
-            });
+        EngineRunResult result;
+        _activeRunControlFile = runControlFile;
+        await WriteRunControlStateAsync(runControlFile, "running", cancellationToken);
+        try
+        {
+            result = await _engineBridge.RunAsync(
+                SelectedFilePath!,
+                effectiveRunId,
+                reportsRoot,
+                cancellationToken,
+                runEvent =>
+                {
+                    AppendExecutionTraceEvent(runEvent);
+                    NotifyExecutionChanged(onExecutionChanged);
+                },
+                runControlFile,
+                _breakpointLineNumbers.ToArray());
+        }
+        finally
+        {
+            _activeRunControlFile = null;
+            TryDeleteRunControlFile(runControlFile);
+        }
         RunStatus = result.Status;
         ReportDirectory = result.ReportDirectory;
         var streamedEvents = ExecutionTrace;
@@ -141,10 +166,66 @@ public sealed class MainWorkbenchViewModel
                 : result.StandardError);
     }
 
+    public async Task PauseRunAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_activeRunControlFile))
+        {
+            AppendConsoleLine("No active run to pause.");
+            return;
+        }
+
+        await WriteRunControlStateAsync(_activeRunControlFile, "paused", cancellationToken);
+        RunStatus = "Pause Requested";
+        AppendConsoleLine("Pause requested.");
+    }
+
+    public async Task ResumeRunAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_activeRunControlFile))
+        {
+            AppendConsoleLine("No active run to resume.");
+            return;
+        }
+
+        await WriteRunControlStateAsync(_activeRunControlFile, "running", cancellationToken);
+        RunStatus = "Running";
+        AppendConsoleLine("Resume requested.");
+    }
+
+    public void ToggleBreakpointAtCurrentLine()
+    {
+        ToggleBreakpointAtLine(CurrentLineNumber);
+    }
+
+    public void ToggleBreakpointForSelectedCommand()
+    {
+        if (SelectedGuiCommand is not null)
+        {
+            ToggleBreakpointAtLine(SelectedGuiCommand.SourceLineStart);
+        }
+    }
+
+    public void ToggleBreakpointAtLine(int lineNumber)
+    {
+        if (lineNumber <= 0 || lineNumber > CountEditorLines(EditorText))
+        {
+            return;
+        }
+
+        if (!_breakpointLineNumbers.Add(lineNumber))
+        {
+            _breakpointLineNumbers.Remove(lineNumber);
+        }
+
+        RefreshBreakpointViews();
+    }
+
     public void UpdateEditorText(string editorText)
     {
         EditorText = editorText;
-        EditorLineNumbersText = BuildLineNumbersText(editorText);
+        PruneBreakpointsOutsideEditor();
+        EditorLineNumbersText = BuildLineNumbersText(editorText, _breakpointLineNumbers);
+        UpdateBreakpointsText();
         var previousTestcaseName = SelectedGuiTestcase?.Name;
         GuiModel = WorkbenchGuiModelBuilder.Build(editorText);
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase => testcase.Name == previousTestcaseName)
@@ -153,6 +234,7 @@ public sealed class MainWorkbenchViewModel
             .SelectMany(phase => FlattenCommands(phase.Blocks))
             .FirstOrDefault();
         UpdateGuiCurrentExecutionBlock();
+        UpdateGuiBreakpointMarkers();
     }
 
     public void SetAutoFocusExecutionLine(bool enabled)
@@ -399,6 +481,15 @@ public sealed class MainWorkbenchViewModel
 
     private void AppendExecutionTraceEvent(EngineRunEvent runEvent)
     {
+        if (runEvent.Status == "paused")
+        {
+            RunStatus = "Paused";
+        }
+        else if (runEvent.Status == "running")
+        {
+            RunStatus = "Running";
+        }
+
         var events = ExecutionTrace.ToList();
         var runningEventIndex = events.FindLastIndex(
             candidate => candidate.Status == "running"
@@ -484,6 +575,14 @@ public sealed class MainWorkbenchViewModel
         }
     }
 
+    private void UpdateGuiBreakpointMarkers()
+    {
+        foreach (var commandBlock in AllGuiCommandBlocks())
+        {
+            commandBlock.IsBreakpoint = _breakpointLineNumbers.Contains(commandBlock.SourceLineStart);
+        }
+    }
+
     private IEnumerable<WorkbenchCommandBlock> AllGuiCommandBlocks()
     {
         return SelectedGuiTestcase is null
@@ -504,12 +603,75 @@ public sealed class MainWorkbenchViewModel
         }
     }
 
-    private static string BuildLineNumbersText(string editorText)
+    private void RefreshBreakpointViews()
     {
-        var lineCount = editorText.Count(character => character == '\n') + 1;
+        EditorLineNumbersText = BuildLineNumbersText(EditorText, _breakpointLineNumbers);
+        UpdateBreakpointsText();
+        UpdateGuiBreakpointMarkers();
+    }
+
+    private void UpdateBreakpointsText()
+    {
+        BreakpointsText = _breakpointLineNumbers.Count == 0
+            ? "No breakpoints."
+            : string.Join(", ", _breakpointLineNumbers.Select(lineNumber => $"L{lineNumber}"));
+    }
+
+    private void PruneBreakpointsOutsideEditor()
+    {
+        var lineCount = CountEditorLines(EditorText);
+        _breakpointLineNumbers.RemoveWhere(lineNumber => lineNumber > lineCount);
+    }
+
+    private static string BuildLineNumbersText(
+        string editorText,
+        IReadOnlySet<int> breakpointLineNumbers)
+    {
+        var lineCount = CountEditorLines(editorText);
         return string.Join(
             Environment.NewLine,
-            Enumerable.Range(1, Math.Max(1, lineCount)));
+            Enumerable.Range(1, Math.Max(1, lineCount))
+                .Select(lineNumber =>
+                    breakpointLineNumbers.Contains(lineNumber)
+                        ? $"{BreakpointMarker} {lineNumber}"
+                        : $"{lineNumber}"));
+    }
+
+    private static int CountEditorLines(string editorText)
+    {
+        return editorText.Count(character => character == '\n') + 1;
+    }
+
+    private static string CreateRunControlFilePath(string reportsRoot, string runId)
+    {
+        return Path.Combine(reportsRoot, runId, "control.json");
+    }
+
+    private static async Task WriteRunControlStateAsync(
+        string controlFile,
+        string state,
+        CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(controlFile)!);
+        await File.WriteAllTextAsync(
+            controlFile,
+            JsonSerializer.Serialize(new { state }),
+            cancellationToken);
+    }
+
+    private static void TryDeleteRunControlFile(string controlFile)
+    {
+        try
+        {
+            if (File.Exists(controlFile))
+            {
+                File.Delete(controlFile);
+            }
+        }
+        catch
+        {
+            // Control files are transient debug IPC; stale files should not mask run results.
+        }
     }
 
     private void EnsureFileSelected()
