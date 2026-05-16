@@ -91,6 +91,14 @@
       padding: 0 10px;
     }
 
+    .btn.icon,
+    .fold-action.icon {
+      width: 30px;
+      padding: 0;
+      text-align: center;
+      font-weight: 700;
+    }
+
     .btn.primary {
       border-color: #3676bf;
       background: #1f5f9f;
@@ -853,16 +861,16 @@
     <header class="toolbar">
       <div class="title">Embedded SW Tester Workbench</div>
       <div class="path">C:\workspace\tester\samples\workbench-demo.yaml</div>
-      <button class="btn">Open</button>
-      <button class="btn">Compile</button>
-      <button class="btn primary">Run</button>
-      <button class="btn">Pause</button>
-      <button class="btn">Resume</button>
-      <button class="btn">Toggle Breakpoint</button>
+      <button class="btn icon" title="Open workspace" aria-label="Open workspace">...</button>
+      <button class="btn icon" title="Compile" aria-label="Compile">✓</button>
+      <button class="btn icon primary" title="Run" aria-label="Run">▶</button>
+      <button class="btn icon" title="Pause" aria-label="Pause">⏸</button>
+      <button class="btn icon" title="Resume" aria-label="Resume">▶</button>
+      <button class="btn icon" title="Toggle breakpoint" aria-label="Toggle breakpoint">●</button>
       <span class="status-chip paused"><span class="dot"></span>Paused at L21</span>
       <label class="toggle"><input type="checkbox" checked /> Auto Focus Line</label>
-      <button id="GuiEditorToggle" class="btn view-toggle active" type="button" aria-pressed="true">GUI Editor</button>
-      <button class="btn">Dark</button>
+      <button id="GuiEditorToggle" class="btn icon view-toggle active" type="button" aria-pressed="true" title="Show or hide GUI Editor" aria-label="Show or hide GUI Editor">◨</button>
+      <button class="btn icon" title="Theme" aria-label="Theme">◐</button>
     </header>
 
     <section id="WorkspaceGrid" class="workspace">
@@ -960,10 +968,10 @@
 
           <div class="fold-toolbar" data-fold-scope="mockup-a">
             <span class="label">Fold</span>
-            <button class="fold-action" data-fold-action="expand-all">Expand All</button>
-            <button class="fold-action" data-fold-action="fold-all">Fold All</button>
-            <button class="fold-action" data-fold-action="fold-level" data-fold-level="2">Fold Level 2</button>
-            <button class="fold-action" data-fold-action="fold-level" data-fold-level="3">Fold Level 3</button>
+            <button class="fold-action icon" data-fold-action="expand-all" title="Expand all blocks" aria-label="Expand all blocks">⤢</button>
+            <button class="fold-action icon" data-fold-action="fold-all" title="Fold all blocks" aria-label="Fold all blocks">⤡</button>
+            <button class="fold-action icon" data-fold-action="fold-level" data-fold-level="2" title="Fold from level 2" aria-label="Fold from level 2">2</button>
+            <button class="fold-action icon" data-fold-action="fold-level" data-fold-level="3" title="Fold from level 3" aria-label="Fold from level 3">3</button>
           </div>
 
           <div class="phase">
@@ -1565,7 +1573,7 @@
     const setGuiButtonState = (visible) => {
       guiEditorToggle.classList.toggle("active", visible);
       guiEditorToggle.setAttribute("aria-pressed", String(visible));
-      guiEditorToggle.textContent = visible ? "GUI Editor" : "Show GUI Editor";
+      guiEditorToggle.textContent = visible ? "◨" : "◧";
     };
 
     const setEditorGroupWidths = (

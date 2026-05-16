@@ -166,6 +166,41 @@ testcases:
     assert testcase.events[1].status == "passed"
 
 
+def test_runtime_uses_latest_breakpoint_lines_from_control_file(tmp_path: Path):
+    test_file = tmp_path / "breakpoint-removed.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: breakpoint_removed_case
+    steps:
+      - set:
+          var: rpm
+          value: 700
+""".strip(),
+        encoding="utf-8",
+    )
+    control_file = tmp_path / "control.json"
+    control_file.write_text(
+        '{"state": "running", "breakpoint_lines": []}',
+        encoding="utf-8",
+    )
+    streamed_events = []
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="breakpoint-removed-run",
+        event_callback=streamed_events.append,
+        run_control=RuntimeControl(
+            control_file=control_file,
+            breakpoint_lines={4},
+            poll_interval_s=0,
+        ),
+    )
+
+    assert result.status == "passed"
+    assert all(event.status != "paused" for event in streamed_events)
+
+
 def test_runtime_honors_manual_pause_request_before_next_command(tmp_path: Path):
     test_file = tmp_path / "manual-pause.yaml"
     test_file.write_text(

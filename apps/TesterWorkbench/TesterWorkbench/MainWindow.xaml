@@ -24,6 +24,26 @@
             <Setter Property="BorderThickness" Value="1" />
         </Style>
 
+        <Style x:Key="IdeToolbarButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="IdeToggleButtonStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
         <HierarchicalDataTemplate DataType="{x:Type vm:WorkbenchCommandBlock}"
                                   ItemsSource="{Binding Children}">
             <StackPanel>
@@ -188,13 +208,32 @@
         <ToolBar DockPanel.Dock="Top">
             <TextBlock Text="Workspace" VerticalAlignment="Center" Margin="8,0,4,0" />
             <TextBox x:Name="WorkspacePathBox" Width="420" />
-            <Button Content="Open" Click="OpenWorkspace_Click" Margin="6,0,0,0" />
+            <Button Content="..."
+                    Click="OpenWorkspace_Click"
+                    Margin="6,0,0,0"
+                    Style="{StaticResource IdeToolbarButtonStyle}"
+                    ToolTip="Open workspace" />
             <Separator />
-            <Button Content="Compile" Click="Compile_Click" />
-            <Button Content="Run" Click="Run_Click" />
-            <Button Content="Pause" Click="Pause_Click" />
-            <Button Content="Resume" Click="Resume_Click" />
-            <Button Content="Toggle Breakpoint" Click="ToggleBreakpoint_Click" />
+            <Button Content="✓"
+                    Click="Compile_Click"
+                    Style="{StaticResource IdeToolbarButtonStyle}"
+                    ToolTip="Compile" />
+            <Button Content="▶"
+                    Click="Run_Click"
+                    Style="{StaticResource IdeToolbarButtonStyle}"
+                    ToolTip="Run" />
+            <Button Content="⏸"
+                    Click="Pause_Click"
+                    Style="{StaticResource IdeToolbarButtonStyle}"
+                    ToolTip="Pause" />
+            <Button Content="▶"
+                    Click="Resume_Click"
+                    Style="{StaticResource IdeToolbarButtonStyle}"
+                    ToolTip="Resume" />
+            <Button Content="●"
+                    Click="ToggleBreakpoint_Click"
+                    Style="{StaticResource IdeToolbarButtonStyle}"
+                    ToolTip="Toggle breakpoint at caret line" />
             <TextBlock x:Name="RunStatusText" Text="Idle" VerticalAlignment="Center" Margin="14,0,0,0" />
             <Separator />
             <CheckBox x:Name="AutoFocusLineCheckBox"
@@ -204,9 +243,11 @@
                       VerticalAlignment="Center" />
             <Separator />
             <ToggleButton x:Name="GuiEditorToggleButton"
-                          Content="GUI Editor"
+                          Content="◨"
                           IsChecked="True"
                           Click="GuiEditorToggle_Click"
+                          Style="{StaticResource IdeToggleButtonStyle}"
+                          ToolTip="Show or hide GUI Editor"
                           VerticalAlignment="Center" />
             <Separator />
             <TextBlock Text="Theme" VerticalAlignment="Center" Margin="8,0,4,0" />
@@ -402,10 +443,25 @@
                                            Foreground="{DynamicResource Workbench.Brush.TextMuted}"
                                            VerticalAlignment="Center"
                                            Margin="0,0,8,0" />
-                                <Button Content="Expand All" Click="GuiExpandAll_Click" Margin="0,0,6,0" />
-                                <Button Content="Fold All" Click="GuiFoldAll_Click" Margin="0,0,6,0" />
-                                <Button Content="Fold Level 2" Click="GuiFoldLevel2_Click" Margin="0,0,6,0" />
-                                <Button Content="Fold Level 3" Click="GuiFoldLevel3_Click" />
+                                <Button Content="⤢"
+                                        Click="GuiExpandAll_Click"
+                                        Margin="0,0,6,0"
+                                        Style="{StaticResource IdeToolbarButtonStyle}"
+                                        ToolTip="Expand all blocks" />
+                                <Button Content="⤡"
+                                        Click="GuiFoldAll_Click"
+                                        Margin="0,0,6,0"
+                                        Style="{StaticResource IdeToolbarButtonStyle}"
+                                        ToolTip="Fold all blocks" />
+                                <Button Content="2"
+                                        Click="GuiFoldLevel2_Click"
+                                        Margin="0,0,6,0"
+                                        Style="{StaticResource IdeToolbarButtonStyle}"
+                                        ToolTip="Fold from level 2" />
+                                <Button Content="3"
+                                        Click="GuiFoldLevel3_Click"
+                                        Style="{StaticResource IdeToolbarButtonStyle}"
+                                        ToolTip="Fold from level 3" />
                             </StackPanel>
                         </StackPanel>
 

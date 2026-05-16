@@ -127,7 +127,7 @@ public sealed class MainWorkbenchViewModel
 
         EngineRunResult result;
         _activeRunControlFile = runControlFile;
-        await WriteRunControlStateAsync(runControlFile, "running", cancellationToken);
+        await WriteRunControlStateAsync(runControlFile, "running", _breakpointLineNumbers, cancellationToken);
         try
         {
             result = await _engineBridge.RunAsync(
@@ -174,7 +174,11 @@ public sealed class MainWorkbenchViewModel
             return;
         }
 
-        await WriteRunControlStateAsync(_activeRunControlFile, "paused", cancellationToken);
+        await WriteRunControlStateAsync(
+            _activeRunControlFile,
+            "paused",
+            _breakpointLineNumbers,
+            cancellationToken);
         RunStatus = "Pause Requested";
         AppendConsoleLine("Pause requested.");
     }
@@ -187,7 +191,11 @@ public sealed class MainWorkbenchViewModel
             return;
         }
 
-        await WriteRunControlStateAsync(_activeRunControlFile, "running", cancellationToken);
+        await WriteRunControlStateAsync(
+            _activeRunControlFile,
+            "running",
+            _breakpointLineNumbers,
+            cancellationToken);
         RunStatus = "Running";
         AppendConsoleLine("Resume requested.");
     }
@@ -218,6 +226,7 @@ public sealed class MainWorkbenchViewModel
         }
 
         RefreshBreakpointViews();
+        SyncActiveRunBreakpoints();
     }
 
     public void UpdateEditorText(string editorText)
@@ -610,6 +619,17 @@ public sealed class MainWorkbenchViewModel
         UpdateGuiBreakpointMarkers();
     }
 
+    private void SyncActiveRunBreakpoints()
+    {
+        if (string.IsNullOrWhiteSpace(_activeRunControlFile))
+        {
+            return;
+        }
+
+        var state = ReadRunControlState(_activeRunControlFile);
+        WriteRunControlState(_activeRunControlFile, state, _breakpointLineNumbers);
+    }
+
     private void UpdateBreakpointsText()
     {
         BreakpointsText = _breakpointLineNumbers.Count == 0
@@ -650,13 +670,60 @@ public sealed class MainWorkbenchViewModel
     private static async Task WriteRunControlStateAsync(
         string controlFile,
         string state,
+        IEnumerable<int> breakpointLineNumbers,
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(controlFile)!);
         await File.WriteAllTextAsync(
             controlFile,
-            JsonSerializer.Serialize(new { state }),
+            JsonSerializer.Serialize(RunControlPayload(state, breakpointLineNumbers)),
             cancellationToken);
+    }
+
+    private static void WriteRunControlState(
+        string controlFile,
+        string state,
+        IEnumerable<int> breakpointLineNumbers)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(controlFile)!);
+        File.WriteAllText(
+            controlFile,
+            JsonSerializer.Serialize(RunControlPayload(state, breakpointLineNumbers)));
+    }
+
+    private static string ReadRunControlState(string controlFile)
+    {
+        try
+        {
+            if (!File.Exists(controlFile))
+            {
+                return "running";
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(controlFile));
+            return document.RootElement.TryGetProperty("state", out var stateElement)
+                ? stateElement.GetString() ?? "running"
+                : "running";
+        }
+        catch
+        {
+            return "running";
+        }
+    }
+
+    private static object RunControlPayload(
+        string state,
+        IEnumerable<int> breakpointLineNumbers)
+    {
+        return new
+        {
+            state,
+            breakpoint_lines = breakpointLineNumbers
+                .Where(lineNumber => lineNumber > 0)
+                .Distinct()
+                .Order()
+                .ToArray()
+        };
     }
 
     private static void TryDeleteRunControlFile(string controlFile)

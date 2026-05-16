@@ -44,10 +44,11 @@ class RuntimeControl:
     def pause_reason(self, command: NormalizedCommand) -> Optional[str]:
         if self.control_file is None:
             return None
-        if command.source_line in self.breakpoint_lines:
+        payload = self.read_payload()
+        if command.source_line in self.active_breakpoint_lines(payload):
             self.write_state("paused", reason="breakpoint")
             return "breakpoint"
-        if self.read_state() == "paused":
+        if self.read_state(payload) == "paused":
             return "pause_requested"
         return None
 
@@ -57,20 +58,42 @@ class RuntimeControl:
         while self.read_state() == "paused":
             sleep_fn(self.poll_interval_s)
 
-    def read_state(self) -> str:
+    def read_payload(self) -> Mapping[str, Any]:
         if self.control_file is None or not self.control_file.exists():
-            return "running"
+            return {}
         try:
             payload = json.loads(self.control_file.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return "running"
-        state = payload.get("state") if isinstance(payload, Mapping) else None
+            return {}
+        return payload if isinstance(payload, Mapping) else {}
+
+    def read_state(self, payload: Optional[Mapping[str, Any]] = None) -> str:
+        current_payload = self.read_payload() if payload is None else payload
+        state = current_payload.get("state")
         return str(state) if state else "running"
+
+    def active_breakpoint_lines(self, payload: Optional[Mapping[str, Any]] = None) -> set[int]:
+        current_payload = self.read_payload() if payload is None else payload
+        if "breakpoint_lines" not in current_payload:
+            return set(self.breakpoint_lines)
+        raw_lines = current_payload.get("breakpoint_lines")
+        if not isinstance(raw_lines, Sequence) or isinstance(raw_lines, (str, bytes)):
+            return set()
+        return {
+            int(line)
+            for line in raw_lines
+            if isinstance(line, int) or isinstance(line, str) and line.isdigit()
+        }
 
     def write_state(self, state: str, reason: Optional[str] = None) -> None:
         if self.control_file is None:
             return
-        payload = {"state": state}
+        current_payload = self.read_payload()
+        breakpoint_lines = self.active_breakpoint_lines(current_payload)
+        payload: Dict[str, Any] = {
+            "state": state,
+            "breakpoint_lines": sorted(breakpoint_lines),
+        }
         if reason is not None:
             payload["reason"] = reason
         self.control_file.parent.mkdir(parents=True, exist_ok=True)

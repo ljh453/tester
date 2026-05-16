@@ -552,7 +552,7 @@ public partial class MainWindow : Window
         if (!_isGuiEditorVisible)
         {
             GuiEditorToggleButton.IsChecked = false;
-            GuiEditorToggleButton.Content = "Show GUI Editor";
+            GuiEditorToggleButton.Content = "◧";
             return;
         }
 
@@ -577,7 +577,7 @@ public partial class MainWindow : Window
         YamlGuiSplitter.Visibility = Visibility.Collapsed;
         GuiPropertiesSplitter.Visibility = Visibility.Collapsed;
         GuiEditorToggleButton.IsChecked = false;
-        GuiEditorToggleButton.Content = "Show GUI Editor";
+        GuiEditorToggleButton.Content = "◧";
         _isGuiEditorVisible = false;
     }
 
@@ -586,7 +586,7 @@ public partial class MainWindow : Window
         if (_isGuiEditorVisible)
         {
             GuiEditorToggleButton.IsChecked = true;
-            GuiEditorToggleButton.Content = "GUI Editor";
+            GuiEditorToggleButton.Content = "◨";
             return;
         }
 
@@ -605,7 +605,7 @@ public partial class MainWindow : Window
         YamlGuiSplitter.Visibility = Visibility.Visible;
         GuiPropertiesSplitter.Visibility = Visibility.Visible;
         GuiEditorToggleButton.IsChecked = true;
-        GuiEditorToggleButton.Content = "GUI Editor";
+        GuiEditorToggleButton.Content = "◨";
         _isGuiEditorVisible = true;
     }
 
