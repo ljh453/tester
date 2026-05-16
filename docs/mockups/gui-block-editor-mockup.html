@@ -708,6 +708,10 @@
       color: #dcecff;
     }
 
+    .block.dragging {
+      opacity: 0.48;
+    }
+
     .drop-slot.drag-over,
     .block.drag-over,
     .phase.drag-over {
@@ -1408,6 +1412,25 @@
       });
     });
 
+    let draggedBlock = null;
+    const enableBlockDrag = (block) => {
+      block.setAttribute("draggable", "true");
+      block.addEventListener("dragstart", (event) => {
+        draggedBlock = block;
+        block.classList.add("dragging");
+        const type = block.querySelector(".block-type")?.textContent?.trim() || "command";
+        event.dataTransfer.setData("text/plain", type);
+        event.dataTransfer.effectAllowed = "move";
+      });
+
+      block.addEventListener("dragend", () => {
+        block.classList.remove("dragging");
+        draggedBlock = null;
+      });
+    };
+
+    document.querySelectorAll(".block").forEach(enableBlockDrag);
+
     document.querySelectorAll(".phase, .block, .drop-slot").forEach((target) => {
       target.addEventListener("dragover", (event) => {
         if (![...event.dataTransfer.types].includes("text/plain")) {
@@ -1418,14 +1441,15 @@
         event.preventDefault();
         target.classList.add("drag-over");
         const mode = target.dataset.insertMode || "";
+        const action = draggedBlock ? "Move" : "Insert";
         target.dataset.insertPreview = mode === "top"
-          ? `Insert ${type} before the first command`
+          ? `${action} ${type} before the first command`
           : mode === "inside"
-            ? `Insert ${type} inside this loop`
+            ? `${action} ${type} inside this loop`
             : target.classList.contains("block")
-              ? `Insert ${type} after this command`
-              : `Append ${type} here`;
-        event.dataTransfer.dropEffect = "copy";
+              ? `${action} ${type} after this command`
+              : `${action} ${type} here`;
+        event.dataTransfer.dropEffect = draggedBlock ? "move" : "copy";
       });
 
       target.addEventListener("dragleave", () => {
@@ -1443,9 +1467,16 @@
           return;
         }
 
-        const inserted = document.createElement("article");
-        inserted.className = "block mock-inserted";
-        inserted.innerHTML = `<div class="block-head"><span class="block-id">+</span><span class="fold-spacer"></span><div class="block-main"><span class="block-type">${type}</span><span class="summary">new command</span></div><span class="line-ref">new</span></div>`;
+        if (draggedBlock && (target === draggedBlock || draggedBlock.contains(target))) {
+          return;
+        }
+
+        const inserted = draggedBlock || document.createElement("article");
+        if (!draggedBlock) {
+          inserted.className = "block mock-inserted";
+          inserted.innerHTML = `<div class="block-head"><span class="block-id">+</span><span class="fold-spacer"></span><div class="block-main"><span class="block-type">${type}</span><span class="summary">new command</span></div><span class="line-ref">new</span></div>`;
+          enableBlockDrag(inserted);
+        }
         const nested = target.closest(".nested");
         const list = target.classList.contains("phase")
           ? target.querySelector(".block-list")

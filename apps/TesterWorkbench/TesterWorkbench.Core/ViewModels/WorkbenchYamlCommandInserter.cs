@@ -72,7 +72,7 @@ public static class WorkbenchYamlCommandInserter
             resolvedTarget.InsertAtLineIndex + 1);
     }
 
-    private static InsertionTarget ResolveInsertionTarget(
+    internal static InsertionTarget ResolveInsertionTarget(
         List<string> lines,
         WorkbenchGuiTestcase testcase,
         WorkbenchCommandInsertionTarget target)
@@ -289,7 +289,7 @@ public static class WorkbenchYamlCommandInserter
         return snippetLines;
     }
 
-    private static List<string> SplitLines(string text, string newline)
+    internal static List<string> SplitLines(string text, string newline)
     {
         var normalized = newline == "\r\n"
             ? text.Replace("\r\n", "\n", StringComparison.Ordinal)
@@ -297,22 +297,22 @@ public static class WorkbenchYamlCommandInserter
         return normalized.Split('\n').ToList();
     }
 
-    private static string JoinLines(IReadOnlyList<string> lines, string newline)
+    internal static string JoinLines(IReadOnlyList<string> lines, string newline)
     {
         return string.Join(newline, lines);
     }
 
-    private static int ToLineIndex(int lineNumber, int lineCount)
+    internal static int ToLineIndex(int lineNumber, int lineCount)
     {
         return Math.Clamp(lineNumber - 1, 0, Math.Max(0, lineCount - 1));
     }
 
-    private static int ToInsertionIndex(int lineNumber, int lineCount)
+    internal static int ToInsertionIndex(int lineNumber, int lineCount)
     {
         return Math.Clamp(lineNumber, 0, lineCount);
     }
 
-    private static int LeadingSpaceCount(string line)
+    internal static int LeadingSpaceCount(string line)
     {
         var count = 0;
         while (count < line.Length && line[count] == ' ')
@@ -323,7 +323,7 @@ public static class WorkbenchYamlCommandInserter
         return count;
     }
 
-    private sealed record InsertionTarget(
+    internal sealed record InsertionTarget(
         int InsertAtLineIndex,
         int CommandIndent);
 }

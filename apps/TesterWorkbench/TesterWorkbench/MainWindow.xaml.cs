@@ -16,6 +16,7 @@ public partial class MainWindow : Window
 {
     private const double GuiEditorCollapseThreshold = 150.0;
     private const string CommandDragDataFormat = "TesterWorkbench.CommandType";
+    private const string CommandBlockDragDataFormat = "TesterWorkbench.CommandBlock";
 
     private readonly MainWorkbenchViewModel _viewModel;
     private double _editorVerticalOffset;
@@ -25,6 +26,8 @@ public partial class MainWindow : Window
     private bool _isRefreshingGuiTestcaseSelection;
     private System.Windows.Point? _commandDragStartPoint;
     private WorkbenchCommandDefinition? _dragCommandDefinition;
+    private System.Windows.Point? _commandBlockDragStartPoint;
+    private WorkbenchCommandBlock? _dragCommandBlock;
 
     public MainWindow()
     {
@@ -225,18 +228,66 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void GuiCommandBlock_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: WorkbenchCommandBlock commandBlock })
+        {
+            return;
+        }
+
+        _dragCommandBlock = commandBlock;
+        _commandBlockDragStartPoint = e.GetPosition(null);
+    }
+
+    private void GuiCommandBlock_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed
+            || _dragCommandBlock is null
+            || _commandBlockDragStartPoint is null
+            || sender is not DependencyObject dragSource)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(null);
+        var diff = _commandBlockDragStartPoint.Value - position;
+        if (Math.Abs(diff.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(diff.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        var dragData = new System.Windows.DataObject(CommandBlockDragDataFormat, _dragCommandBlock);
+        DragDrop.DoDragDrop(dragSource, dragData, System.Windows.DragDropEffects.Move);
+        _viewModel.ClearGuiCommandInsertionPreview();
+        _dragCommandBlock = null;
+        _commandBlockDragStartPoint = null;
+        e.Handled = true;
+    }
+
     private void GuiPhase_DragOver(object sender, System.Windows.DragEventArgs e)
     {
         var commandDefinition = GetDraggedCommand(e.Data);
+        var movingCommand = GetDraggedCommandBlock(e.Data);
         var target = ResolveCommandInsertionTarget(sender, e.OriginalSource);
         if (commandDefinition is not null && target is not null)
         {
             _viewModel.ShowGuiCommandInsertionPreview(commandDefinition, target);
         }
+        else if (movingCommand is not null
+            && target is not null
+            && IsMoveTargetAllowed(movingCommand, target))
+        {
+            _viewModel.ShowGuiCommandMovePreview(movingCommand, target);
+        }
 
         e.Effects = commandDefinition is not null && target is not null
             ? System.Windows.DragDropEffects.Copy
-            : System.Windows.DragDropEffects.None;
+            : movingCommand is not null
+                && target is not null
+                && IsMoveTargetAllowed(movingCommand, target)
+                    ? System.Windows.DragDropEffects.Move
+                    : System.Windows.DragDropEffects.None;
         e.Handled = true;
     }
 
@@ -253,8 +304,11 @@ public partial class MainWindow : Window
     private void GuiPhase_Drop(object sender, System.Windows.DragEventArgs e)
     {
         var commandDefinition = GetDraggedCommand(e.Data);
+        var movingCommand = GetDraggedCommandBlock(e.Data);
         var target = ResolveCommandInsertionTarget(sender, e.OriginalSource);
-        if (commandDefinition is null || target is null)
+        if (target is null
+            || commandDefinition is null
+            && movingCommand is null)
         {
             e.Effects = System.Windows.DragDropEffects.None;
             e.Handled = true;
@@ -262,9 +316,22 @@ public partial class MainWindow : Window
         }
 
         _viewModel.ClearGuiCommandInsertionPreview();
-        _viewModel.InsertGuiCommand(commandDefinition, target);
+        if (commandDefinition is not null)
+        {
+            _viewModel.InsertGuiCommand(commandDefinition, target);
+            e.Effects = System.Windows.DragDropEffects.Copy;
+        }
+        else if (movingCommand is not null && IsMoveTargetAllowed(movingCommand, target))
+        {
+            _viewModel.MoveGuiCommand(movingCommand, target);
+            e.Effects = System.Windows.DragDropEffects.Move;
+        }
+        else
+        {
+            e.Effects = System.Windows.DragDropEffects.None;
+        }
+
         RefreshEditorAfterGuiEdit();
-        e.Effects = System.Windows.DragDropEffects.Copy;
         e.Handled = true;
     }
 
@@ -743,6 +810,13 @@ public partial class MainWindow : Window
             : WorkbenchCommandCatalog.Find(commandType);
     }
 
+    private static WorkbenchCommandBlock? GetDraggedCommandBlock(System.Windows.IDataObject data)
+    {
+        return data.GetDataPresent(CommandBlockDragDataFormat)
+            ? data.GetData(CommandBlockDragDataFormat) as WorkbenchCommandBlock
+            : null;
+    }
+
     private WorkbenchCommandInsertionTarget? ResolveCommandInsertionTarget(
         object sender,
         object originalSource)
@@ -795,6 +869,20 @@ public partial class MainWindow : Window
     {
         return _viewModel.SelectedGuiTestcase?.Phases.FirstOrDefault(phase =>
             FlattenCommands(phase.Blocks).Contains(commandBlock));
+    }
+
+    private static bool IsMoveTargetAllowed(
+        WorkbenchCommandBlock movingCommand,
+        WorkbenchCommandInsertionTarget target)
+    {
+        if (target.ReferenceCommand is null)
+        {
+            return true;
+        }
+
+        return target.ReferenceCommand != movingCommand
+            && (target.ReferenceCommand.SourceLineStart < movingCommand.SourceLineStart
+                || target.ReferenceCommand.SourceLineStart > movingCommand.SourceLineEnd);
     }
 
     private static WorkbenchGuiPhase? FindPhaseFromDropTarget(object sender, object originalSource)

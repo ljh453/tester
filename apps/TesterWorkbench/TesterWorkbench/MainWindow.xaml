@@ -32,7 +32,10 @@
                         Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}"
                         BorderBrush="{Binding AccentColor}"
                         BorderThickness="4,1,1,1"
-                        CornerRadius="4">
+                        CornerRadius="4"
+                        Cursor="Hand"
+                        PreviewMouseLeftButtonDown="GuiCommandBlock_MouseLeftButtonDown"
+                        PreviewMouseMove="GuiCommandBlock_PreviewMouseMove">
                     <Border.Style>
                         <Style TargetType="{x:Type Border}">
                             <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
@@ -107,11 +110,11 @@
                     <Border.Style>
                         <Style TargetType="{x:Type Border}">
                             <Setter Property="Visibility" Value="Collapsed" />
-                            <Setter Property="Background" Value="Transparent" />
-                            <Setter Property="BorderBrush" Value="Transparent" />
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
                             <Setter Property="BorderThickness" Value="1" />
                             <Setter Property="CornerRadius" Value="3" />
-                            <Setter Property="MinHeight" Value="8" />
+                            <Setter Property="MinHeight" Value="20" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding CanInsertInside}" Value="True">
                                     <Setter Property="Visibility" Value="Visible" />

@@ -19,7 +19,9 @@ await RunWorkbenchGuiModelBuilderTest();
 await RunMainWorkbenchViewModelRefreshesGuiModelTest();
 await RunWorkbenchCommandCatalogTest();
 await RunWorkbenchYamlCommandInserterTest();
+await RunWorkbenchYamlCommandMoverTest();
 await RunMainWorkbenchViewModelInsertsGuiCommandTest();
+await RunMainWorkbenchViewModelMovesGuiCommandTest();
 await RunMainWorkbenchViewModelShowsDragInsertionPreviewTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
@@ -904,6 +906,115 @@ static Task RunMainWorkbenchViewModelInsertsGuiCommandTest()
     AssertEqual("assert.eq", viewModel.SelectedGuiCommand?.CommandType, "view model selects inserted command");
     AssertEqual(7, viewModel.CurrentLineNumber, "view model focuses inserted command line");
     AssertEqual("Line 7 - assert.eq", viewModel.CurrentLocationText, "view model current location after insert");
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchYamlCommandMoverTest()
+{
+    var yaml =
+        """
+        testcases:
+          - name: move_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - delay:
+                  ms: 1000
+              - log.text:
+                  text: "done"
+        """;
+    var model = WorkbenchGuiModelBuilder.Build(yaml);
+    var testcase = model.Testcases[0];
+    var steps = testcase.Phases.Single(phase => phase.YamlName == "steps");
+    var logBlock = steps.Blocks[2];
+
+    var movedToTop = WorkbenchYamlCommandMover.Move(
+        yaml,
+        testcase,
+        logBlock,
+        new WorkbenchCommandInsertionTarget(
+            steps,
+            WorkbenchCommandInsertPlacement.BeforeFirstInPhase));
+    var normalizedTopMove = movedToTop.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    AssertTrue(
+        normalizedTopMove.Contains(
+            "    steps:\n      - log.text:\n          text: \"done\"\n      - set:",
+            StringComparison.Ordinal),
+        "YAML command mover supports moving block to top of phase");
+
+    var loopYaml =
+        """
+        testcases:
+          - name: nested_move_case
+            steps:
+              - for:
+                  each: "${channels}"
+                  as: channel
+                  do:
+                    - delay:
+                        ms: 100
+              - log.text:
+                  text: "outer"
+        """;
+    var loopModel = WorkbenchGuiModelBuilder.Build(loopYaml);
+    var loopTestcase = loopModel.Testcases[0];
+    var loopSteps = loopTestcase.Phases.Single(phase => phase.YamlName == "steps");
+    var outerFor = loopSteps.Blocks[0];
+    var outerLog = loopSteps.Blocks[1];
+
+    var movedInsideFor = WorkbenchYamlCommandMover.Move(
+        loopYaml,
+        loopTestcase,
+        outerLog,
+        new WorkbenchCommandInsertionTarget(
+            loopSteps,
+            WorkbenchCommandInsertPlacement.InsideCommand,
+            outerFor));
+    var normalizedInsideMove = movedInsideFor.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    AssertTrue(
+        normalizedInsideMove.Contains(
+            "            - delay:\n                ms: 100\n            - log.text:\n                text: \"outer\"",
+            StringComparison.Ordinal),
+        "YAML command mover supports moving block inside for loop");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelMovesGuiCommandTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: gui_move_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - log.text:
+                  text: "done"
+        """);
+    var steps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+    var logBlock = steps.Blocks[1];
+
+    viewModel.MoveGuiCommand(
+        logBlock,
+        new WorkbenchCommandInsertionTarget(
+            steps,
+            WorkbenchCommandInsertPlacement.BeforeFirstInPhase));
+
+    AssertTrue(
+        viewModel.EditorText.Contains("    steps:\n      - log.text:", StringComparison.Ordinal),
+        "view model moves command in editor text");
+    AssertEqual("log.text", viewModel.SelectedGuiCommand?.CommandType, "view model selects moved command");
+    AssertEqual(4, viewModel.CurrentLineNumber, "view model focuses moved command line");
     return Task.CompletedTask;
 }
 
