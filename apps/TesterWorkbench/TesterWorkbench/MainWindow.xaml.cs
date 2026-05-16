@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using Forms = System.Windows.Forms;
 using TesterWorkbench.Core.Engine;
 using TesterWorkbench.Core.ViewModels;
@@ -14,6 +15,7 @@ namespace TesterWorkbench;
 public partial class MainWindow : Window
 {
     private const double GuiEditorCollapseThreshold = 150.0;
+    private const string CommandDragDataFormat = "TesterWorkbench.CommandType";
 
     private readonly MainWorkbenchViewModel _viewModel;
     private double _editorVerticalOffset;
@@ -21,6 +23,8 @@ public partial class MainWindow : Window
     private GridLength _savedGuiPropertiesWidth = new(280);
     private bool _isGuiEditorVisible = true;
     private bool _isRefreshingGuiTestcaseSelection;
+    private System.Windows.Point? _commandDragStartPoint;
+    private WorkbenchCommandDefinition? _dragCommandDefinition;
 
     public MainWindow()
     {
@@ -39,6 +43,7 @@ public partial class MainWindow : Window
         ThemeModeComboBox.ItemsSource = Enum.GetValues<WorkbenchThemeMode>();
         ThemeModeComboBox.SelectedItem = _viewModel.ThemeMode;
         WorkbenchThemeManager.Apply(_viewModel.ThemeMode);
+        CommandCatalogGroupsControl.ItemsSource = _viewModel.CommandCatalogGroups;
         ApplyEditorFontSize();
         RefreshView();
     }
@@ -183,6 +188,68 @@ public partial class MainWindow : Window
         RefreshGuiEditor();
     }
 
+    private void CommandCatalogItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: WorkbenchCommandDefinition commandDefinition })
+        {
+            return;
+        }
+
+        _dragCommandDefinition = commandDefinition;
+        _commandDragStartPoint = e.GetPosition(null);
+    }
+
+    private void CommandCatalogItem_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed
+            || _dragCommandDefinition is null
+            || _commandDragStartPoint is null
+            || sender is not DependencyObject dragSource)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(null);
+        var diff = _commandDragStartPoint.Value - position;
+        if (Math.Abs(diff.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(diff.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        var dragData = new System.Windows.DataObject(CommandDragDataFormat, _dragCommandDefinition.CommandType);
+        DragDrop.DoDragDrop(dragSource, dragData, System.Windows.DragDropEffects.Copy);
+        _dragCommandDefinition = null;
+        _commandDragStartPoint = null;
+        e.Handled = true;
+    }
+
+    private void GuiPhase_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Effects = GetDraggedCommand(e.Data) is not null
+            ? System.Windows.DragDropEffects.Copy
+            : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void GuiPhase_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        var commandDefinition = GetDraggedCommand(e.Data);
+        var phase = FindPhaseFromDropTarget(sender, e.OriginalSource);
+        if (commandDefinition is null || phase is null)
+        {
+            e.Effects = System.Windows.DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        var afterCommand = FindCommandBlockFromDropTarget(e.OriginalSource as DependencyObject);
+        _viewModel.InsertGuiCommand(commandDefinition, phase, afterCommand);
+        RefreshEditorAfterGuiEdit();
+        e.Effects = System.Windows.DragDropEffects.Copy;
+        e.Handled = true;
+    }
+
     private void EditorBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (EditorBox.Text != _viewModel.EditorText)
@@ -268,6 +335,7 @@ public partial class MainWindow : Window
 
         EditorBox.Text = _viewModel.EditorText;
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
+        CommandCatalogGroupsControl.ItemsSource = _viewModel.CommandCatalogGroups;
         AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
         ThemeModeComboBox.SelectedItem = _viewModel.ThemeMode;
         ApplyEditorFontSize();
@@ -298,6 +366,20 @@ public partial class MainWindow : Window
         RefreshConsole();
         RefreshGuiEditor();
         HighlightCurrentExecutionLine();
+    }
+
+    private void RefreshEditorAfterGuiEdit()
+    {
+        if (EditorBox.Text != _viewModel.EditorText)
+        {
+            EditorBox.Text = _viewModel.EditorText;
+        }
+
+        LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
+        RefreshGuiEditor();
+        FocusYamlLine(_viewModel.CurrentLineNumber);
+        UpdateCurrentExecutionLineMarker();
     }
 
     private void RefreshGuiEditor()
@@ -628,6 +710,68 @@ public partial class MainWindow : Window
         var extension = Path.GetExtension(path);
         return extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".yml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static WorkbenchCommandDefinition? GetDraggedCommand(System.Windows.IDataObject data)
+    {
+        if (!data.GetDataPresent(CommandDragDataFormat))
+        {
+            return null;
+        }
+
+        var commandType = data.GetData(CommandDragDataFormat) as string;
+        return string.IsNullOrWhiteSpace(commandType)
+            ? null
+            : WorkbenchCommandCatalog.Find(commandType);
+    }
+
+    private static WorkbenchGuiPhase? FindPhaseFromDropTarget(object sender, object originalSource)
+    {
+        if (sender is FrameworkElement { DataContext: WorkbenchGuiPhase senderPhase })
+        {
+            return senderPhase;
+        }
+
+        return FindDataContext<WorkbenchGuiPhase>(originalSource as DependencyObject);
+    }
+
+    private static WorkbenchCommandBlock? FindCommandBlockFromDropTarget(DependencyObject? originalSource)
+    {
+        return FindDataContext<WorkbenchCommandBlock>(originalSource);
+    }
+
+    private static T? FindDataContext<T>(DependencyObject? source)
+        where T : class
+    {
+        var current = source;
+        while (current is not null)
+        {
+            if (current is FrameworkElement { DataContext: T dataContext })
+            {
+                return dataContext;
+            }
+
+            current = GetParent(current);
+        }
+
+        return null;
+    }
+
+    private static DependencyObject? GetParent(DependencyObject current)
+    {
+        try
+        {
+            var visualParent = VisualTreeHelper.GetParent(current);
+            if (visualParent is not null)
+            {
+                return visualParent;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        return LogicalTreeHelper.GetParent(current);
     }
 
     private static string EmptyToDash(string value)

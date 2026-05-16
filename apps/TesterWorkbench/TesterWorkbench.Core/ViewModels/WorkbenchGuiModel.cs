@@ -21,6 +21,8 @@ public sealed class WorkbenchGuiTestcase
         string tagsText,
         string failurePolicy,
         string lineRangeText,
+        int sourceLineStart,
+        int sourceLineEnd,
         IReadOnlyList<WorkbenchGuiPhase> phases)
     {
         Name = name;
@@ -28,6 +30,8 @@ public sealed class WorkbenchGuiTestcase
         TagsText = tagsText;
         FailurePolicy = failurePolicy;
         LineRangeText = lineRangeText;
+        SourceLineStart = sourceLineStart;
+        SourceLineEnd = sourceLineEnd;
         Phases = phases;
     }
 
@@ -41,6 +45,10 @@ public sealed class WorkbenchGuiTestcase
 
     public string LineRangeText { get; }
 
+    public int SourceLineStart { get; }
+
+    public int SourceLineEnd { get; }
+
     public IReadOnlyList<WorkbenchGuiPhase> Phases { get; }
 }
 
@@ -49,16 +57,28 @@ public sealed class WorkbenchGuiPhase
     public WorkbenchGuiPhase(
         string name,
         string yamlName,
+        int sourceLineStart,
+        int sourceLineEnd,
+        bool hasYamlSection,
         IReadOnlyList<WorkbenchCommandBlock> blocks)
     {
         Name = name;
         YamlName = yamlName;
+        SourceLineStart = sourceLineStart;
+        SourceLineEnd = sourceLineEnd;
+        HasYamlSection = hasYamlSection;
         Blocks = blocks;
     }
 
     public string Name { get; }
 
     public string YamlName { get; }
+
+    public int SourceLineStart { get; }
+
+    public int SourceLineEnd { get; }
+
+    public bool HasYamlSection { get; }
 
     public IReadOnlyList<WorkbenchCommandBlock> Blocks { get; }
 

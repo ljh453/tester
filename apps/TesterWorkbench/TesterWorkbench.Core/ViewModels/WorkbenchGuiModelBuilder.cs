@@ -52,6 +52,8 @@ public static class WorkbenchGuiModelBuilder
             tagsText,
             string.IsNullOrWhiteSpace(failurePolicy) ? "stop" : failurePolicy,
             LineRange(startLineIndex + 1, endLineIndex + 1),
+            startLineIndex + 1,
+            endLineIndex + 1,
             phases);
     }
 
@@ -65,7 +67,13 @@ public static class WorkbenchGuiModelBuilder
         var phaseLineIndex = FindPhaseLine(lines, testcaseStartLineIndex, testcaseEndLineIndex, yamlName);
         if (phaseLineIndex < 0)
         {
-            return new WorkbenchGuiPhase(displayName, yamlName, Array.Empty<WorkbenchCommandBlock>());
+            return new WorkbenchGuiPhase(
+                displayName,
+                yamlName,
+                0,
+                0,
+                hasYamlSection: false,
+                Array.Empty<WorkbenchCommandBlock>());
         }
 
         var phaseEndLineIndex = FindPhaseEnd(lines, phaseLineIndex + 1, testcaseEndLineIndex);
@@ -77,7 +85,13 @@ public static class WorkbenchGuiModelBuilder
             .Select(block => ToCommandBlock(lines, block))
             .ToArray();
 
-        return new WorkbenchGuiPhase(displayName, yamlName, rootBlocks);
+        return new WorkbenchGuiPhase(
+            displayName,
+            yamlName,
+            phaseLineIndex + 1,
+            phaseEndLineIndex + 1,
+            hasYamlSection: true,
+            rootBlocks);
     }
 
     private static List<TempCommandBlock> FindCommandBlocks(

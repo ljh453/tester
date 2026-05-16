@@ -17,6 +17,9 @@ await RunMainWorkbenchThemeModeSettingTest();
 await RunWorkbenchThemeResolverTest();
 await RunWorkbenchGuiModelBuilderTest();
 await RunMainWorkbenchViewModelRefreshesGuiModelTest();
+await RunWorkbenchCommandCatalogTest();
+await RunWorkbenchYamlCommandInserterTest();
+await RunMainWorkbenchViewModelInsertsGuiCommandTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
 
@@ -751,6 +754,110 @@ static Task RunMainWorkbenchViewModelRefreshesGuiModelTest()
     AssertEqual("updated_case", viewModel.SelectedGuiTestcase?.Name, "updated GUI testcase name");
     AssertEqual("log.text", viewModel.SelectedGuiTestcase?.Phases[1].Blocks[0].CommandType, "updated GUI command type");
 
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchCommandCatalogTest()
+{
+    var commandTypes = WorkbenchCommandCatalog.AllCommands
+        .Select(command => command.CommandType)
+        .ToArray();
+
+    AssertEqual(26, commandTypes.Length, "GUI command catalog command count");
+    AssertTrue(commandTypes.Contains("set"), "GUI command catalog includes set");
+    AssertTrue(commandTypes.Contains("assert.eq"), "GUI command catalog includes assert.eq");
+    AssertTrue(commandTypes.Contains("serial.write_bytes"), "GUI command catalog includes serial.write_bytes");
+    AssertTrue(commandTypes.Contains("sent_usb.command"), "GUI command catalog includes sent_usb.command");
+    AssertTrue(commandTypes.Contains("power_supply.command"), "GUI command catalog includes power_supply.command");
+    AssertTrue(commandTypes.Contains("inca.measure.read"), "GUI command catalog includes inca.measure.read");
+    AssertTrue(commandTypes.Contains("canoe.sysvar.set"), "GUI command catalog includes canoe.sysvar.set");
+    AssertTrue(commandTypes.Contains("trace32.command"), "GUI command catalog includes trace32.command");
+    AssertTrue(
+        WorkbenchCommandCatalog.Groups.All(group => group.Commands.Count > 0),
+        "GUI command catalog groups are populated");
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchYamlCommandInserterTest()
+{
+    var yaml =
+        """
+        testcases:
+          - name: insert_case
+            preconditions:
+              - log.text:
+                  text: "prepare"
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+            postconditions: []
+        """;
+    var model = WorkbenchGuiModelBuilder.Build(yaml);
+    var testcase = model.Testcases[0];
+    var steps = testcase.Phases.Single(phase => phase.YamlName == "steps");
+    var delay = WorkbenchCommandCatalog.Find("delay")!;
+
+    var insertedAfterSet = WorkbenchYamlCommandInserter.Insert(
+        yaml,
+        testcase,
+        steps,
+        delay,
+        steps.Blocks[0]);
+
+    var normalizedAfterSet = insertedAfterSet.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+    AssertTrue(
+        normalizedAfterSet.Contains("      - delay:\n          ms: 1000", StringComparison.Ordinal),
+        "YAML command insertion adds command after dropped block");
+    AssertEqual(10, insertedAfterSet.InsertedLineNumber, "YAML command insertion line number");
+
+    var postconditions = WorkbenchGuiModelBuilder.Build(insertedAfterSet.Text)
+        .Testcases[0]
+        .Phases.Single(phase => phase.YamlName == "postconditions");
+    var logValue = WorkbenchCommandCatalog.Find("log.value")!;
+
+    var insertedIntoInlinePhase = WorkbenchYamlCommandInserter.Insert(
+        insertedAfterSet.Text,
+        testcase,
+        postconditions,
+        logValue);
+
+    var normalizedInlinePhase = insertedIntoInlinePhase.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+    AssertTrue(
+        normalizedInlinePhase.Contains(
+            "    postconditions:\n      - log.value:\n          name: value_name\n          value: \"${value}\"",
+            StringComparison.Ordinal),
+        "YAML command insertion expands inline empty phase");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelInsertsGuiCommandTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: gui_insert_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+        """);
+    var steps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+    var setBlock = steps.Blocks[0];
+    var command = WorkbenchCommandCatalog.Find("assert.eq")!;
+
+    viewModel.InsertGuiCommand(command, steps, setBlock);
+
+    AssertTrue(viewModel.EditorText.Contains("  - assert.eq:"), "view model inserts command into editor text");
+    AssertEqual("assert.eq", viewModel.SelectedGuiCommand?.CommandType, "view model selects inserted command");
+    AssertEqual(7, viewModel.CurrentLineNumber, "view model focuses inserted command line");
+    AssertEqual("Line 7 - assert.eq", viewModel.CurrentLocationText, "view model current location after insert");
     return Task.CompletedTask;
 }
 

@@ -73,6 +73,48 @@
                 </Grid>
             </Border>
         </HierarchicalDataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:WorkbenchCommandCatalogGroup}">
+            <StackPanel Margin="0,0,0,10">
+                <TextBlock Text="{Binding Name}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource Workbench.Brush.TextSecondary}"
+                           Margin="0,0,0,5" />
+                <ItemsControl ItemsSource="{Binding Commands}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:WorkbenchCommandDefinition}">
+                            <Border Margin="0,0,6,6"
+                                    Padding="7,5"
+                                    Background="{DynamicResource Workbench.Brush.ControlBackground}"
+                                    BorderBrush="{DynamicResource Workbench.Brush.Border}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    Cursor="Hand"
+                                    PreviewMouseLeftButtonDown="CommandCatalogItem_MouseLeftButtonDown"
+                                    PreviewMouseMove="CommandCatalogItem_PreviewMouseMove"
+                                    ToolTip="{Binding Description}">
+                                <StackPanel MinWidth="96">
+                                    <TextBlock Text="{Binding CommandType}"
+                                               FontFamily="Consolas"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding RequiredArgsText}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource Workbench.Brush.TextMuted}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
     <DockPanel Background="{DynamicResource Workbench.Brush.AppBackground}">
@@ -300,10 +342,13 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:WorkbenchGuiPhase}">
                                         <Border Margin="0,0,0,10"
+                                                AllowDrop="True"
                                                 Background="{DynamicResource Workbench.Brush.PanelBackground}"
                                                 BorderBrush="{DynamicResource Workbench.Brush.Border}"
                                                 BorderThickness="1"
-                                                CornerRadius="4">
+                                                CornerRadius="4"
+                                                DragOver="GuiPhase_DragOver"
+                                                Drop="GuiPhase_Drop">
                                             <DockPanel>
                                                 <Border DockPanel.Dock="Top"
                                                         Padding="9,7"
@@ -319,7 +364,10 @@
                                                     </Grid>
                                                 </Border>
                                                 <TreeView ItemsSource="{Binding Blocks}"
+                                                          AllowDrop="True"
                                                           BorderThickness="0"
+                                                          DragOver="GuiPhase_DragOver"
+                                                          Drop="GuiPhase_Drop"
                                                           SelectedItemChanged="GuiBlockTree_SelectedItemChanged">
                                                     <TreeView.ItemContainerStyle>
                                                         <Style TargetType="{x:Type TreeViewItem}">
@@ -404,16 +452,8 @@
                                         <TextBlock Text="Insert Command"
                                                    FontWeight="SemiBold"
                                                    Padding="9,7" />
-                                        <UniformGrid Columns="2" Margin="9,0,9,9">
-                                            <Button Content="set" Margin="0,0,6,6" />
-                                            <Button Content="call" Margin="0,0,0,6" />
-                                            <Button Content="if" Margin="0,0,6,6" />
-                                            <Button Content="for" Margin="0,0,0,6" />
-                                            <Button Content="delay" Margin="0,0,6,6" />
-                                            <Button Content="assert" Margin="0,0,0,6" />
-                                            <Button Content="log.text" Margin="0,0,6,0" />
-                                            <Button Content="serial" />
-                                        </UniformGrid>
+                                        <ItemsControl x:Name="CommandCatalogGroupsControl"
+                                                      Margin="9,0,9,9" />
                                     </StackPanel>
                                 </Border>
 

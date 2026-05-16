@@ -43,6 +43,8 @@ public sealed class MainWorkbenchViewModel
 
     public WorkbenchGuiModel GuiModel { get; private set; } = WorkbenchGuiModel.Empty;
 
+    public IReadOnlyList<WorkbenchCommandCatalogGroup> CommandCatalogGroups => WorkbenchCommandCatalog.Groups;
+
     public WorkbenchGuiTestcase? SelectedGuiTestcase { get; private set; }
 
     public WorkbenchCommandBlock? SelectedGuiCommand { get; private set; }
@@ -211,6 +213,37 @@ public sealed class MainWorkbenchViewModel
         SelectedGuiCommand = SelectedGuiTestcase?.Phases
             .SelectMany(phase => FlattenCommands(phase.Blocks))
             .FirstOrDefault();
+        UpdateGuiCurrentExecutionBlock();
+    }
+
+    public void InsertGuiCommand(
+        WorkbenchCommandDefinition command,
+        WorkbenchGuiPhase phase,
+        WorkbenchCommandBlock? afterCommand = null)
+    {
+        if (SelectedGuiTestcase is null)
+        {
+            throw new InvalidOperationException("No testcase is selected.");
+        }
+
+        var testcaseName = SelectedGuiTestcase.Name;
+        var result = WorkbenchYamlCommandInserter.Insert(
+            EditorText,
+            SelectedGuiTestcase,
+            phase,
+            command,
+            afterCommand);
+        UpdateEditorText(result.Text);
+        SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
+            testcase.Name == testcaseName)
+            ?? GuiModel.Testcases.FirstOrDefault();
+        SelectedGuiCommand = SelectedGuiTestcase?.Phases
+            .SelectMany(phaseModel => FlattenCommands(phaseModel.Blocks))
+            .FirstOrDefault(commandBlock =>
+                commandBlock.SourceLineStart == result.InsertedLineNumber
+                && commandBlock.CommandType == command.CommandType);
+        CurrentLineNumber = result.InsertedLineNumber;
+        CurrentLocationText = $"Line {CurrentLineNumber} - {command.CommandType}";
         UpdateGuiCurrentExecutionBlock();
     }
 

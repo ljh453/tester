@@ -663,9 +663,25 @@
 
     .palette {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 7px;
+      gap: 11px;
       padding: 10px;
+    }
+
+    .cmd-group {
+      display: grid;
+      gap: 6px;
+    }
+
+    .cmd-group-title {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .cmd-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
     }
 
     .palette .cmd {
@@ -673,8 +689,34 @@
       border-radius: 5px;
       background: #242c37;
       color: var(--text);
-      padding: 7px;
+      cursor: grab;
       font-size: 12px;
+      min-width: 88px;
+      padding: 6px 7px;
+      text-align: left;
+    }
+
+    .palette .cmd:active {
+      cursor: grabbing;
+    }
+
+    .palette .cmd.dragging {
+      border-color: var(--blue);
+      background: #26384d;
+      color: #dcecff;
+    }
+
+    .drop-slot.drag-over,
+    .block.drag-over,
+    .phase.drag-over {
+      outline: 2px solid rgba(101, 168, 255, 0.58);
+      outline-offset: -2px;
+    }
+
+    .mock-inserted {
+      border-style: dashed;
+      border-left-color: var(--blue);
+      background: rgba(101, 168, 255, 0.11);
     }
 
     .bottom {
@@ -1125,14 +1167,77 @@
           <section class="prop-card">
             <h2>Insert Command</h2>
             <div class="palette">
-              <button class="cmd">set</button>
-              <button class="cmd">call</button>
-              <button class="cmd">if</button>
-              <button class="cmd">for</button>
-              <button class="cmd">delay</button>
-              <button class="cmd">assert</button>
-              <button class="cmd">log.text</button>
-              <button class="cmd">serial</button>
+              <div class="cmd-group">
+                <div class="cmd-group-title">Runtime</div>
+                <div class="cmd-list">
+                  <button class="cmd" draggable="true">set</button>
+                  <button class="cmd" draggable="true">delay</button>
+                </div>
+              </div>
+              <div class="cmd-group">
+                <div class="cmd-group-title">Control</div>
+                <div class="cmd-list">
+                  <button class="cmd" draggable="true">call</button>
+                  <button class="cmd" draggable="true">for</button>
+                </div>
+              </div>
+              <div class="cmd-group">
+                <div class="cmd-group-title">Assert</div>
+                <div class="cmd-list">
+                  <button class="cmd" draggable="true">assert.eq</button>
+                  <button class="cmd" draggable="true">assert.gt</button>
+                  <button class="cmd" draggable="true">assert.fail</button>
+                </div>
+              </div>
+              <div class="cmd-group">
+                <div class="cmd-group-title">Log</div>
+                <div class="cmd-list">
+                  <button class="cmd" draggable="true">log.text</button>
+                  <button class="cmd" draggable="true">log.value</button>
+                </div>
+              </div>
+              <div class="cmd-group">
+                <div class="cmd-group-title">Serial</div>
+                <div class="cmd-list">
+                  <button class="cmd" draggable="true">serial.write</button>
+                  <button class="cmd" draggable="true">serial.read</button>
+                  <button class="cmd" draggable="true">serial.write_bytes</button>
+                  <button class="cmd" draggable="true">serial.read_bytes</button>
+                </div>
+              </div>
+              <div class="cmd-group">
+                <div class="cmd-group-title">Device</div>
+                <div class="cmd-list">
+                  <button class="cmd" draggable="true">sent_usb.read</button>
+                  <button class="cmd" draggable="true">sent_usb.command</button>
+                  <button class="cmd" draggable="true">power_supply.command</button>
+                </div>
+              </div>
+              <div class="cmd-group">
+                <div class="cmd-group-title">CANoe</div>
+                <div class="cmd-list">
+                  <button class="cmd" draggable="true">canoe.measurement.start</button>
+                  <button class="cmd" draggable="true">canoe.measurement.stop</button>
+                  <button class="cmd" draggable="true">canoe.signal.read</button>
+                  <button class="cmd" draggable="true">canoe.sysvar.read</button>
+                  <button class="cmd" draggable="true">canoe.sysvar.set</button>
+                </div>
+              </div>
+              <div class="cmd-group">
+                <div class="cmd-group-title">INCA</div>
+                <div class="cmd-list">
+                  <button class="cmd" draggable="true">inca.measure.read</button>
+                  <button class="cmd" draggable="true">inca.calibration.set</button>
+                  <button class="cmd" draggable="true">inca.recording.start</button>
+                  <button class="cmd" draggable="true">inca.recording.stop</button>
+                </div>
+              </div>
+              <div class="cmd-group">
+                <div class="cmd-group-title">Trace32</div>
+                <div class="cmd-list">
+                  <button class="cmd" draggable="true">trace32.command</button>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -1254,6 +1359,56 @@
             const depth = Number(block.dataset.depth);
             setBlockCollapsed(block, depth >= level);
           });
+        }
+      });
+    });
+
+    document.querySelectorAll(".palette .cmd").forEach((command) => {
+      command.addEventListener("dragstart", (event) => {
+        command.classList.add("dragging");
+        event.dataTransfer.setData("text/plain", command.textContent.trim());
+        event.dataTransfer.effectAllowed = "copy";
+      });
+
+      command.addEventListener("dragend", () => {
+        command.classList.remove("dragging");
+      });
+    });
+
+    document.querySelectorAll(".phase, .block, .drop-slot").forEach((target) => {
+      target.addEventListener("dragover", (event) => {
+        if (![...event.dataTransfer.types].includes("text/plain")) {
+          return;
+        }
+
+        event.preventDefault();
+        target.classList.add("drag-over");
+        event.dataTransfer.dropEffect = "copy";
+      });
+
+      target.addEventListener("dragleave", () => {
+        target.classList.remove("drag-over");
+      });
+
+      target.addEventListener("drop", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        target.classList.remove("drag-over");
+        const type = event.dataTransfer.getData("text/plain");
+        if (!type) {
+          return;
+        }
+
+        const inserted = document.createElement("article");
+        inserted.className = "block mock-inserted";
+        inserted.innerHTML = `<div class="block-head"><span class="block-id">+</span><span class="fold-spacer"></span><div class="block-main"><span class="block-type">${type}</span><span class="summary">new command</span></div><span class="line-ref">new</span></div>`;
+        const list = target.classList.contains("phase")
+          ? target.querySelector(".block-list")
+          : target.closest(".block-list");
+        if (target.classList.contains("block")) {
+          target.insertAdjacentElement("afterend", inserted);
+        } else if (list) {
+          list.appendChild(inserted);
         }
       });
     });
