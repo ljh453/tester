@@ -37,6 +37,36 @@ public abstract class WorkbenchDragInsertionPreviewTarget : INotifyPropertyChang
     }
 }
 
+public sealed class WorkbenchPhaseStartDropTarget : WorkbenchDragInsertionPreviewTarget
+{
+    public WorkbenchPhaseStartDropTarget(WorkbenchGuiPhase phase)
+    {
+        Phase = phase;
+    }
+
+    public WorkbenchGuiPhase Phase { get; }
+}
+
+public sealed class WorkbenchPhaseEndDropTarget : WorkbenchDragInsertionPreviewTarget
+{
+    public WorkbenchPhaseEndDropTarget(WorkbenchGuiPhase phase)
+    {
+        Phase = phase;
+    }
+
+    public WorkbenchGuiPhase Phase { get; }
+}
+
+public sealed class WorkbenchCommandInsideDropTarget : WorkbenchDragInsertionPreviewTarget
+{
+    public WorkbenchCommandInsideDropTarget(WorkbenchCommandBlock commandBlock)
+    {
+        CommandBlock = commandBlock;
+    }
+
+    public WorkbenchCommandBlock CommandBlock { get; }
+}
+
 public sealed class WorkbenchGuiModel
 {
     public WorkbenchGuiModel(IReadOnlyList<WorkbenchGuiTestcase> testcases)
@@ -105,6 +135,8 @@ public sealed class WorkbenchGuiPhase : WorkbenchDragInsertionPreviewTarget
         SourceLineEnd = sourceLineEnd;
         HasYamlSection = hasYamlSection;
         Blocks = blocks;
+        StartDropTarget = new WorkbenchPhaseStartDropTarget(this);
+        EndDropTarget = new WorkbenchPhaseEndDropTarget(this);
     }
 
     public string Name { get; }
@@ -118,6 +150,10 @@ public sealed class WorkbenchGuiPhase : WorkbenchDragInsertionPreviewTarget
     public bool HasYamlSection { get; }
 
     public IReadOnlyList<WorkbenchCommandBlock> Blocks { get; }
+
+    public WorkbenchPhaseStartDropTarget StartDropTarget { get; }
+
+    public WorkbenchPhaseEndDropTarget EndDropTarget { get; }
 
     public string CountText => Blocks.Count == 1
         ? "1 command"
@@ -148,6 +184,7 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
         SourcePreview = sourcePreview;
         AccentColor = accentColor;
         Children = children;
+        InsideDropTarget = new WorkbenchCommandInsideDropTarget(this);
     }
 
     public string DisplayIndex { get; }
@@ -170,11 +207,15 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
 
     public IReadOnlyList<WorkbenchCommandBlock> Children { get; }
 
+    public WorkbenchCommandInsideDropTarget InsideDropTarget { get; }
+
     public bool IsExpanded { get; set; } = true;
 
     public bool IsCurrentExecution { get; set; }
 
     public bool IsFoldable => Children.Count > 0;
+
+    public bool CanInsertInside => CommandType == "for";
 
     public string LineRangeText => SourceLineStart == SourceLineEnd
         ? $"L{SourceLineStart}"

@@ -221,6 +221,18 @@ public sealed class MainWorkbenchViewModel
         WorkbenchGuiPhase phase,
         WorkbenchCommandBlock? afterCommand = null)
     {
+        var placement = afterCommand is null
+            ? WorkbenchCommandInsertPlacement.AtPhaseEnd
+            : WorkbenchCommandInsertPlacement.AfterCommand;
+        InsertGuiCommand(
+            command,
+            new WorkbenchCommandInsertionTarget(phase, placement, afterCommand));
+    }
+
+    public void InsertGuiCommand(
+        WorkbenchCommandDefinition command,
+        WorkbenchCommandInsertionTarget target)
+    {
         if (SelectedGuiTestcase is null)
         {
             throw new InvalidOperationException("No testcase is selected.");
@@ -230,9 +242,8 @@ public sealed class MainWorkbenchViewModel
         var result = WorkbenchYamlCommandInserter.Insert(
             EditorText,
             SelectedGuiTestcase,
-            phase,
             command,
-            afterCommand);
+            target);
         UpdateEditorText(result.Text);
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
             testcase.Name == testcaseName)
@@ -265,16 +276,52 @@ public sealed class MainWorkbenchViewModel
         phase.DragInsertionText = $"Insert {command.CommandType} at end of {phase.Name}";
     }
 
+    public void ShowGuiCommandInsertionPreview(
+        WorkbenchCommandDefinition command,
+        WorkbenchCommandInsertionTarget target)
+    {
+        ClearGuiCommandInsertionPreview();
+        switch (target.Placement)
+        {
+            case WorkbenchCommandInsertPlacement.BeforeFirstInPhase:
+                target.Phase.StartDropTarget.IsDragInsertionTarget = true;
+                target.Phase.StartDropTarget.DragInsertionText =
+                    $"Insert {command.CommandType} at top of {target.Phase.Name}";
+                break;
+            case WorkbenchCommandInsertPlacement.InsideCommand when target.ReferenceCommand is not null:
+                target.ReferenceCommand.InsideDropTarget.IsDragInsertionTarget = true;
+                target.ReferenceCommand.InsideDropTarget.DragInsertionText =
+                    $"Insert {command.CommandType} inside {target.ReferenceCommand.DisplayIndex}";
+                break;
+            case WorkbenchCommandInsertPlacement.AfterCommand when target.ReferenceCommand is not null:
+                target.ReferenceCommand.IsDragInsertionTarget = true;
+                target.ReferenceCommand.DragInsertionText =
+                    $"Insert {command.CommandType} after command {target.ReferenceCommand.DisplayIndex}";
+                break;
+            default:
+                target.Phase.EndDropTarget.IsDragInsertionTarget = true;
+                target.Phase.EndDropTarget.DragInsertionText =
+                    $"Insert {command.CommandType} at end of {target.Phase.Name}";
+                break;
+        }
+    }
+
     public void ClearGuiCommandInsertionPreview()
     {
         foreach (var phase in SelectedGuiTestcase?.Phases ?? Array.Empty<WorkbenchGuiPhase>())
         {
             phase.IsDragInsertionTarget = false;
             phase.DragInsertionText = string.Empty;
+            phase.StartDropTarget.IsDragInsertionTarget = false;
+            phase.StartDropTarget.DragInsertionText = string.Empty;
+            phase.EndDropTarget.IsDragInsertionTarget = false;
+            phase.EndDropTarget.DragInsertionText = string.Empty;
             foreach (var commandBlock in FlattenCommands(phase.Blocks))
             {
                 commandBlock.IsDragInsertionTarget = false;
                 commandBlock.DragInsertionText = string.Empty;
+                commandBlock.InsideDropTarget.IsDragInsertionTarget = false;
+                commandBlock.InsideDropTarget.DragInsertionText = string.Empty;
             }
         }
     }

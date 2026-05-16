@@ -228,14 +228,13 @@ public partial class MainWindow : Window
     private void GuiPhase_DragOver(object sender, System.Windows.DragEventArgs e)
     {
         var commandDefinition = GetDraggedCommand(e.Data);
-        var phase = FindPhaseFromDropTarget(sender, e.OriginalSource);
-        var afterCommand = FindCommandBlockFromDropTarget(e.OriginalSource as DependencyObject);
-        if (commandDefinition is not null && phase is not null)
+        var target = ResolveCommandInsertionTarget(sender, e.OriginalSource);
+        if (commandDefinition is not null && target is not null)
         {
-            _viewModel.ShowGuiCommandInsertionPreview(commandDefinition, phase, afterCommand);
+            _viewModel.ShowGuiCommandInsertionPreview(commandDefinition, target);
         }
 
-        e.Effects = commandDefinition is not null && phase is not null
+        e.Effects = commandDefinition is not null && target is not null
             ? System.Windows.DragDropEffects.Copy
             : System.Windows.DragDropEffects.None;
         e.Handled = true;
@@ -254,17 +253,16 @@ public partial class MainWindow : Window
     private void GuiPhase_Drop(object sender, System.Windows.DragEventArgs e)
     {
         var commandDefinition = GetDraggedCommand(e.Data);
-        var phase = FindPhaseFromDropTarget(sender, e.OriginalSource);
-        if (commandDefinition is null || phase is null)
+        var target = ResolveCommandInsertionTarget(sender, e.OriginalSource);
+        if (commandDefinition is null || target is null)
         {
             e.Effects = System.Windows.DragDropEffects.None;
             e.Handled = true;
             return;
         }
 
-        var afterCommand = FindCommandBlockFromDropTarget(e.OriginalSource as DependencyObject);
         _viewModel.ClearGuiCommandInsertionPreview();
-        _viewModel.InsertGuiCommand(commandDefinition, phase, afterCommand);
+        _viewModel.InsertGuiCommand(commandDefinition, target);
         RefreshEditorAfterGuiEdit();
         e.Effects = System.Windows.DragDropEffects.Copy;
         e.Handled = true;
@@ -745,6 +743,60 @@ public partial class MainWindow : Window
             : WorkbenchCommandCatalog.Find(commandType);
     }
 
+    private WorkbenchCommandInsertionTarget? ResolveCommandInsertionTarget(
+        object sender,
+        object originalSource)
+    {
+        var explicitDropTarget = FindDropTarget(sender as DependencyObject)
+            ?? FindDropTarget(originalSource as DependencyObject);
+        if (explicitDropTarget is WorkbenchPhaseStartDropTarget startTarget)
+        {
+            return new WorkbenchCommandInsertionTarget(
+                startTarget.Phase,
+                WorkbenchCommandInsertPlacement.BeforeFirstInPhase);
+        }
+
+        if (explicitDropTarget is WorkbenchPhaseEndDropTarget endTarget)
+        {
+            return new WorkbenchCommandInsertionTarget(
+                endTarget.Phase,
+                WorkbenchCommandInsertPlacement.AtPhaseEnd);
+        }
+
+        if (explicitDropTarget is WorkbenchCommandInsideDropTarget insideTarget
+            && insideTarget.CommandBlock.CanInsertInside)
+        {
+            var phase = FindPhaseContainingCommand(insideTarget.CommandBlock)
+                ?? FindPhaseFromDropTarget(sender, originalSource);
+            return phase is null
+                ? null
+                : new WorkbenchCommandInsertionTarget(
+                    phase,
+                    WorkbenchCommandInsertPlacement.InsideCommand,
+                    insideTarget.CommandBlock);
+        }
+
+        var phaseTarget = FindPhaseFromDropTarget(sender, originalSource);
+        if (phaseTarget is null)
+        {
+            return null;
+        }
+
+        var afterCommand = FindCommandBlockFromDropTarget(originalSource as DependencyObject);
+        return afterCommand is null
+            ? new WorkbenchCommandInsertionTarget(phaseTarget, WorkbenchCommandInsertPlacement.AtPhaseEnd)
+            : new WorkbenchCommandInsertionTarget(
+                phaseTarget,
+                WorkbenchCommandInsertPlacement.AfterCommand,
+                afterCommand);
+    }
+
+    private WorkbenchGuiPhase? FindPhaseContainingCommand(WorkbenchCommandBlock commandBlock)
+    {
+        return _viewModel.SelectedGuiTestcase?.Phases.FirstOrDefault(phase =>
+            FlattenCommands(phase.Blocks).Contains(commandBlock));
+    }
+
     private static WorkbenchGuiPhase? FindPhaseFromDropTarget(object sender, object originalSource)
     {
         if (sender is FrameworkElement { DataContext: WorkbenchGuiPhase senderPhase })
@@ -758,6 +810,30 @@ public partial class MainWindow : Window
     private static WorkbenchCommandBlock? FindCommandBlockFromDropTarget(DependencyObject? originalSource)
     {
         return FindDataContext<WorkbenchCommandBlock>(originalSource);
+    }
+
+    private static object? FindDropTarget(DependencyObject? source)
+    {
+        var current = source;
+        while (current is not null)
+        {
+            if (current is FrameworkElement { Tag: WorkbenchCommandInsideDropTarget insideDropTarget })
+            {
+                return insideDropTarget;
+            }
+
+            if (current is FrameworkElement
+                {
+                    DataContext: WorkbenchPhaseStartDropTarget or WorkbenchPhaseEndDropTarget
+                } element)
+            {
+                return element.DataContext;
+            }
+
+            current = GetParent(current);
+        }
+
+        return null;
     }
 
     private static T? FindDataContext<T>(DependencyObject? source)
@@ -800,6 +876,19 @@ public partial class MainWindow : Window
             && position.Y >= 0
             && position.X <= element.ActualWidth
             && position.Y <= element.ActualHeight;
+    }
+
+    private static IEnumerable<WorkbenchCommandBlock> FlattenCommands(
+        IEnumerable<WorkbenchCommandBlock> commandBlocks)
+    {
+        foreach (var commandBlock in commandBlocks)
+        {
+            yield return commandBlock;
+            foreach (var childCommandBlock in FlattenCommands(commandBlock.Children))
+            {
+                yield return childCommandBlock;
+            }
+        }
     }
 
     private static string EmptyToDash(string value)

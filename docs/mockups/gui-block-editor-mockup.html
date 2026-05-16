@@ -944,7 +944,8 @@
 
           <div class="phase">
             <div class="phase-title">Steps <span class="count">3 commands · 3 foldable regions</span></div>
-            <div class="block-list">
+              <div class="block-list">
+              <div class="drop-slot" data-insert-mode="top">Drop here to insert before first command</div>
               <article class="block set" data-depth="1">
                 <div class="block-head">
                   <span class="block-id">1</span>
@@ -1032,7 +1033,7 @@
                       <span class="line-ref">L36-L37</span>
                     </div>
                   </article>
-                  <div class="drop-slot">Drop command inside loop</div>
+                  <div class="drop-slot" data-insert-mode="inside">Drop command inside loop</div>
                 </div>
                 <div class="fold-summary">5 nested commands hidden</div>
               </article>
@@ -1416,9 +1417,14 @@
         const type = event.dataTransfer.getData("text/plain") || "command";
         event.preventDefault();
         target.classList.add("drag-over");
-        target.dataset.insertPreview = target.classList.contains("block")
-          ? `Insert ${type} after this command`
-          : `Append ${type} here`;
+        const mode = target.dataset.insertMode || "";
+        target.dataset.insertPreview = mode === "top"
+          ? `Insert ${type} before the first command`
+          : mode === "inside"
+            ? `Insert ${type} inside this loop`
+            : target.classList.contains("block")
+              ? `Insert ${type} after this command`
+              : `Append ${type} here`;
         event.dataTransfer.dropEffect = "copy";
       });
 
@@ -1440,11 +1446,16 @@
         const inserted = document.createElement("article");
         inserted.className = "block mock-inserted";
         inserted.innerHTML = `<div class="block-head"><span class="block-id">+</span><span class="fold-spacer"></span><div class="block-main"><span class="block-type">${type}</span><span class="summary">new command</span></div><span class="line-ref">new</span></div>`;
+        const nested = target.closest(".nested");
         const list = target.classList.contains("phase")
           ? target.querySelector(".block-list")
           : target.closest(".block-list");
         if (target.classList.contains("block")) {
           target.insertAdjacentElement("afterend", inserted);
+        } else if (target.dataset.insertMode === "top") {
+          target.insertAdjacentElement("afterend", inserted);
+        } else if (target.dataset.insertMode === "inside" && nested) {
+          nested.insertBefore(inserted, target);
         } else if (list) {
           list.appendChild(inserted);
         }

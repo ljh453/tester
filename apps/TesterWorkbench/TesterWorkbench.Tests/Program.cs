@@ -829,6 +829,51 @@ static Task RunWorkbenchYamlCommandInserterTest()
             "    postconditions:\n      - log.value:\n          name: value_name\n          value: \"${value}\"",
             StringComparison.Ordinal),
         "YAML command insertion expands inline empty phase");
+
+    var topInserted = WorkbenchYamlCommandInserter.Insert(
+        insertedIntoInlinePhase.Text,
+        testcase,
+        WorkbenchCommandCatalog.Find("log.text")!,
+        new WorkbenchCommandInsertionTarget(
+            steps,
+            WorkbenchCommandInsertPlacement.BeforeFirstInPhase));
+    var normalizedTopInserted = topInserted.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+    AssertTrue(
+        normalizedTopInserted.Contains(
+            "    steps:\n      - log.text:\n          text: \"message\"\n      - set:",
+            StringComparison.Ordinal),
+        "YAML command insertion supports first command in phase");
+    AssertEqual(7, topInserted.InsertedLineNumber, "YAML top insertion line number");
+
+    var loopYaml =
+        """
+        testcases:
+          - name: loop_case
+            steps:
+              - for:
+                  each: "${channels}"
+                  as: channel
+                  do:
+                    - log.text:
+                        text: "inner"
+        """;
+    var loopModel = WorkbenchGuiModelBuilder.Build(loopYaml);
+    var loopSteps = loopModel.Testcases[0].Phases.Single(phase => phase.YamlName == "steps");
+    var outerLoop = loopSteps.Blocks[0];
+    var nestedForInserted = WorkbenchYamlCommandInserter.Insert(
+        loopYaml,
+        loopModel.Testcases[0],
+        WorkbenchCommandCatalog.Find("for")!,
+        new WorkbenchCommandInsertionTarget(
+            loopSteps,
+            WorkbenchCommandInsertPlacement.InsideCommand,
+            outerLoop));
+    var normalizedNestedFor = nestedForInserted.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+    AssertTrue(
+        normalizedNestedFor.Contains(
+            "            - log.text:\n                text: \"inner\"\n            - for:\n                each: \"${items}\"",
+            StringComparison.Ordinal),
+        "YAML command insertion supports nested for loop body");
     return Task.CompletedTask;
 }
 

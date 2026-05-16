@@ -6,6 +6,19 @@ public sealed record WorkbenchYamlCommandInsertionResult(
     string Text,
     int InsertedLineNumber);
 
+public enum WorkbenchCommandInsertPlacement
+{
+    AtPhaseEnd,
+    BeforeFirstInPhase,
+    AfterCommand,
+    InsideCommand
+}
+
+public sealed record WorkbenchCommandInsertionTarget(
+    WorkbenchGuiPhase Phase,
+    WorkbenchCommandInsertPlacement Placement,
+    WorkbenchCommandBlock? ReferenceCommand = null);
+
 public static class WorkbenchYamlCommandInserter
 {
     private static readonly Regex PhaseLineRegex = new(@"^(\s*)([A-Za-z0-9_.-]+)\s*:\s*(.*)$", RegexOptions.Compiled);
@@ -17,14 +30,30 @@ public static class WorkbenchYamlCommandInserter
         WorkbenchCommandDefinition command,
         WorkbenchCommandBlock? afterCommand = null)
     {
+        var placement = afterCommand is null
+            ? WorkbenchCommandInsertPlacement.AtPhaseEnd
+            : WorkbenchCommandInsertPlacement.AfterCommand;
+        return Insert(
+            yamlText,
+            testcase,
+            command,
+            new WorkbenchCommandInsertionTarget(phase, placement, afterCommand));
+    }
+
+    public static WorkbenchYamlCommandInsertionResult Insert(
+        string yamlText,
+        WorkbenchGuiTestcase testcase,
+        WorkbenchCommandDefinition command,
+        WorkbenchCommandInsertionTarget target)
+    {
         if (testcase is null)
         {
             throw new ArgumentNullException(nameof(testcase));
         }
 
-        if (phase is null)
+        if (target is null)
         {
-            throw new ArgumentNullException(nameof(phase));
+            throw new ArgumentNullException(nameof(target));
         }
 
         if (command is null)
@@ -34,27 +63,42 @@ public static class WorkbenchYamlCommandInserter
 
         var newline = yamlText.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var lines = SplitLines(yamlText, newline);
-        var target = ResolveInsertionTarget(lines, testcase, phase, afterCommand);
-        var snippetLines = BuildSnippetLines(command, target.CommandIndent);
-        lines.InsertRange(target.InsertAtLineIndex, snippetLines);
+        var resolvedTarget = ResolveInsertionTarget(lines, testcase, target);
+        var snippetLines = BuildSnippetLines(command, resolvedTarget.CommandIndent);
+        lines.InsertRange(resolvedTarget.InsertAtLineIndex, snippetLines);
 
         return new WorkbenchYamlCommandInsertionResult(
             JoinLines(lines, newline),
-            target.InsertAtLineIndex + 1);
+            resolvedTarget.InsertAtLineIndex + 1);
     }
 
     private static InsertionTarget ResolveInsertionTarget(
         List<string> lines,
         WorkbenchGuiTestcase testcase,
-        WorkbenchGuiPhase phase,
-        WorkbenchCommandBlock? afterCommand)
+        WorkbenchCommandInsertionTarget target)
     {
-        if (afterCommand is not null)
+        if (target.Placement == WorkbenchCommandInsertPlacement.AfterCommand
+            && target.ReferenceCommand is not null)
         {
-            var commandLineIndex = ToLineIndex(afterCommand.SourceLineStart, lines.Count);
+            var commandLineIndex = ToLineIndex(target.ReferenceCommand.SourceLineStart, lines.Count);
             return new InsertionTarget(
-                ToInsertionIndex(afterCommand.SourceLineEnd, lines.Count),
+                ToInsertionIndex(target.ReferenceCommand.SourceLineEnd, lines.Count),
                 LeadingSpaceCount(lines[commandLineIndex]));
+        }
+
+        if (target.Placement == WorkbenchCommandInsertPlacement.InsideCommand
+            && target.ReferenceCommand is not null)
+        {
+            return ResolveInsideCommandTarget(lines, target.ReferenceCommand);
+        }
+
+        var phase = target.Phase;
+        if (target.Placement == WorkbenchCommandInsertPlacement.BeforeFirstInPhase
+            && phase.Blocks.Count > 0)
+        {
+            var firstBlock = phase.Blocks[0];
+            var commandLineIndex = ToLineIndex(firstBlock.SourceLineStart, lines.Count);
+            return new InsertionTarget(commandLineIndex, LeadingSpaceCount(lines[commandLineIndex]));
         }
 
         if (phase.Blocks.Count > 0)
@@ -76,6 +120,78 @@ public static class WorkbenchYamlCommandInserter
         }
 
         return InsertMissingPhase(lines, testcase, phase);
+    }
+
+    private static InsertionTarget ResolveInsideCommandTarget(
+        List<string> lines,
+        WorkbenchCommandBlock parentCommand)
+    {
+        if (parentCommand.Children.Count > 0)
+        {
+            var lastChild = parentCommand.Children[^1];
+            var childLineIndex = ToLineIndex(lastChild.SourceLineStart, lines.Count);
+            return new InsertionTarget(
+                ToInsertionIndex(lastChild.SourceLineEnd, lines.Count),
+                LeadingSpaceCount(lines[childLineIndex]));
+        }
+
+        var doLineIndex = FindChildCommandListLine(lines, parentCommand, "do");
+        if (doLineIndex >= 0)
+        {
+            NormalizeInlineEmptyChildList(lines, doLineIndex, "do");
+            return new InsertionTarget(
+                doLineIndex + 1,
+                LeadingSpaceCount(lines[doLineIndex]) + 2);
+        }
+
+        var commandLineIndex = ToLineIndex(parentCommand.SourceLineStart, lines.Count);
+        return new InsertionTarget(
+            ToInsertionIndex(parentCommand.SourceLineEnd, lines.Count),
+            LeadingSpaceCount(lines[commandLineIndex]));
+    }
+
+    private static int FindChildCommandListLine(
+        IReadOnlyList<string> lines,
+        WorkbenchCommandBlock parentCommand,
+        string childListName)
+    {
+        var parentLineIndex = ToLineIndex(parentCommand.SourceLineStart, lines.Count);
+        var parentIndent = LeadingSpaceCount(lines[parentLineIndex]);
+        var expectedChildListIndent = parentIndent + 4;
+        var endLineIndex = ToLineIndex(parentCommand.SourceLineEnd, lines.Count);
+        for (var index = parentLineIndex + 1; index <= endLineIndex; index++)
+        {
+            if (LeadingSpaceCount(lines[index]) != expectedChildListIndent)
+            {
+                continue;
+            }
+
+            var match = PhaseLineRegex.Match(lines[index]);
+            if (match.Success && match.Groups[2].Value == childListName)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static void NormalizeInlineEmptyChildList(
+        IList<string> lines,
+        int childListLineIndex,
+        string childListName)
+    {
+        var match = PhaseLineRegex.Match(lines[childListLineIndex]);
+        if (!match.Success || match.Groups[2].Value != childListName)
+        {
+            return;
+        }
+
+        var suffix = match.Groups[3].Value.Trim();
+        if (suffix is "[]" or "{}" or "null")
+        {
+            lines[childListLineIndex] = $"{match.Groups[1].Value}{childListName}:";
+        }
     }
 
     private static InsertionTarget InsertMissingPhase(

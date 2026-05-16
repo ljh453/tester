@@ -97,6 +97,37 @@
                                Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
                                FontSize="12" />
                 </Border>
+                <Border Margin="42,0,0,6"
+                        Padding="8,4"
+                        AllowDrop="True"
+                        Tag="{Binding InsideDropTarget}"
+                        DragOver="GuiPhase_DragOver"
+                        DragLeave="GuiPhase_DragLeave"
+                        Drop="GuiPhase_Drop">
+                    <Border.Style>
+                        <Style TargetType="{x:Type Border}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="1" />
+                            <Setter Property="CornerRadius" Value="3" />
+                            <Setter Property="MinHeight" Value="8" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CanInsertInside}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding InsideDropTarget.IsDragInsertionTarget}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                    <Setter Property="MinHeight" Value="26" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="{Binding InsideDropTarget.DragInsertionText}"
+                               Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
+                               FontSize="12" />
+                </Border>
             </StackPanel>
         </HierarchicalDataTemplate>
 
@@ -390,6 +421,33 @@
                                                                    Style="{StaticResource PaneSubtleTextStyle}" />
                                                     </Grid>
                                                 </Border>
+                                                <Border Margin="9,8,9,0"
+                                                        Padding="8,4"
+                                                        AllowDrop="True"
+                                                        DataContext="{Binding StartDropTarget}"
+                                                        DragOver="GuiPhase_DragOver"
+                                                        DragLeave="GuiPhase_DragLeave"
+                                                        Drop="GuiPhase_Drop">
+                                                    <Border.Style>
+                                                        <Style TargetType="{x:Type Border}">
+                                                            <Setter Property="Background" Value="Transparent" />
+                                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                                            <Setter Property="BorderThickness" Value="1" />
+                                                            <Setter Property="CornerRadius" Value="3" />
+                                                            <Setter Property="MinHeight" Value="8" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDragInsertionTarget}" Value="True">
+                                                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                                                    <Setter Property="MinHeight" Value="26" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding DragInsertionText}"
+                                                               Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
+                                                               FontSize="12" />
+                                                </Border>
                                                 <TreeView ItemsSource="{Binding Blocks}"
                                                           AllowDrop="True"
                                                           BorderThickness="0"
@@ -404,6 +462,33 @@
                                                         </Style>
                                                     </TreeView.ItemContainerStyle>
                                                 </TreeView>
+                                                <Border Margin="9,0,9,9"
+                                                        Padding="8,4"
+                                                        AllowDrop="True"
+                                                        DataContext="{Binding EndDropTarget}"
+                                                        DragOver="GuiPhase_DragOver"
+                                                        DragLeave="GuiPhase_DragLeave"
+                                                        Drop="GuiPhase_Drop">
+                                                    <Border.Style>
+                                                        <Style TargetType="{x:Type Border}">
+                                                            <Setter Property="Background" Value="Transparent" />
+                                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                                            <Setter Property="BorderThickness" Value="1" />
+                                                            <Setter Property="CornerRadius" Value="3" />
+                                                            <Setter Property="MinHeight" Value="8" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDragInsertionTarget}" Value="True">
+                                                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                                                    <Setter Property="MinHeight" Value="26" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding DragInsertionText}"
+                                                               Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
+                                                               FontSize="12" />
+                                                </Border>
                                                 <Border Margin="9,0,9,9"
                                                         Padding="8,5"
                                                         Background="{DynamicResource Workbench.Brush.ControlBackgroundPressed}"
