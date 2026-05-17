@@ -39,6 +39,7 @@ await RunWorkbenchYamlCommandMoverTest();
 await RunWorkbenchYamlCommandDeleterTest();
 await RunMainWorkbenchViewModelInsertsGuiCommandTest();
 await RunMainWorkbenchViewModelUpdatesSelectedGuiCommandArgumentTest();
+await RunMainWorkbenchViewModelClearsGuiBulkSelectionAfterPropertyEditTest();
 await RunMainWorkbenchViewModelUpdatesSelectedGuiCommandComplexArgumentTest();
 await RunMainWorkbenchViewModelMovesGuiCommandTest();
 await RunMainWorkbenchViewModelDeletesGuiCommandTest();
@@ -1880,6 +1881,34 @@ static Task RunMainWorkbenchViewModelUpdatesSelectedGuiCommandArgumentTest()
         "view model updates selected command argument in editor text");
     AssertEqual("after", viewModel.SelectedGuiCommand?.Arguments.Single(argument => argument.Name == "text").Value, "view model refreshes selected argument value");
     AssertTrue(viewModel.IsDirty, "argument edit marks document dirty");
+
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelClearsGuiBulkSelectionAfterPropertyEditTest()
+{
+    var runner = new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>());
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", Directory.GetCurrentDirectory(), runner));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: property_selection_case
+            steps:
+              - log.text:
+                  text: "before"
+        """);
+    var command = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps").Blocks[0];
+    viewModel.SelectGuiCommandForBulkAction(command, replaceSelection: true);
+    AssertEqual(1, viewModel.SelectedGuiCommandCount, "property edit starts with selected GUI command");
+    AssertTrue(command.IsSelectedForBulkAction, "property edit starts with selected command marker");
+
+    viewModel.UpdateSelectedGuiCommandArgument("text", "after");
+
+    AssertEqual(0, viewModel.SelectedGuiCommandCount, "property edit clears GUI bulk selection");
+    AssertFalse(viewModel.SelectedGuiCommand!.IsSelectedForBulkAction, "property edit clears selected command marker");
+    AssertEqual("after", viewModel.SelectedGuiCommand.Arguments.Single(argument => argument.Name == "text").Value, "property edit keeps selected command context");
 
     return Task.CompletedTask;
 }

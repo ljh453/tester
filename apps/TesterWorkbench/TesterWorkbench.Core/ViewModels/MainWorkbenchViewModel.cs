@@ -583,6 +583,8 @@ public sealed class MainWorkbenchViewModel
             argument,
             value);
         UpdateEditorText(result.Text);
+        _selectedGuiCommandLineNumbers.Clear();
+        _guiBulkSelectionAnchorLineNumber = null;
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
             testcase.Name == testcaseName)
             ?? GuiModel.Testcases.FirstOrDefault();
@@ -601,6 +603,7 @@ public sealed class MainWorkbenchViewModel
         }
 
         UpdateGuiCurrentExecutionBlock();
+        UpdateGuiSelectionMarkers();
     }
 
     public void MoveGuiCommand(
