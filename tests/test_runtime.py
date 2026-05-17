@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from embsw_tester.adapters import AdapterContext, AdapterRegistry, AdapterResult
@@ -6,7 +7,7 @@ from embsw_tester.adapters.inca import IncaAdapter
 from embsw_tester.adapters.serial import FakeSerialPort, SerialAdapter
 from embsw_tester.adapters.trace32 import FakeTrace32Transport, Trace32Adapter
 from embsw_tester.dsl.compiler import compile_file
-from embsw_tester.runtime import RuntimeControl, run_package
+from embsw_tester.runtime import RuntimeControl, run_package, run_package_async
 
 
 class RecordingAdapter:
@@ -25,6 +26,107 @@ class RecordingAdapter:
             raw_evidence_ref="raw-logs/serial.log",
             duration_ms=7,
         )
+
+
+class AsyncRecordingAdapter:
+    name = "serial"
+
+    def __init__(self):
+        self.calls = []
+
+    async def execute_async(self, command_type: str, args: dict, context: AdapterContext) -> AdapterResult:
+        await asyncio.sleep(0)
+        self.calls.append((command_type, args, context.testcase, context.phase))
+        return AdapterResult(
+            success=True,
+            status="passed",
+            message="async recorded",
+            values={"echo": args},
+            raw_evidence_ref="raw-logs/serial-async.log",
+            duration_ms=11,
+        )
+
+
+def test_runtime_async_delay_awaits_sleep_and_event_callbacks(tmp_path: Path):
+    test_file = tmp_path / "async-delay.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: async_delay_case
+    steps:
+      - delay:
+          ms: 120
+      - set:
+          var: done
+          value: true
+""".strip(),
+        encoding="utf-8",
+    )
+    observed = []
+    sleep_calls = []
+
+    async def sleep_fn(seconds: float) -> None:
+        observed.append("sleep:start")
+        sleep_calls.append(seconds)
+        await asyncio.sleep(0)
+        observed.append("sleep:end")
+
+    async def event_callback(event):
+        await asyncio.sleep(0)
+        observed.append(f"{event.command_type}:{event.status}")
+
+    result = asyncio.run(
+        run_package_async(
+            compile_file(test_file),
+            run_id="async-delay-run",
+            sleep_fn=sleep_fn,
+            event_callback=event_callback,
+        )
+    )
+
+    assert result.status == "passed"
+    assert sleep_calls == [0.12]
+    assert observed[:4] == [
+        "delay:running",
+        "sleep:start",
+        "sleep:end",
+        "delay:passed",
+    ]
+    assert observed[-2:] == ["set:running", "set:passed"]
+
+
+def test_runtime_async_dispatches_adapter_execute_async(tmp_path: Path):
+    test_file = tmp_path / "async-adapter.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: async_adapter_case
+    steps:
+      - serial.write:
+          port: psu
+          text: "OUT 1 ON"
+""".strip(),
+        encoding="utf-8",
+    )
+    registry = AdapterRegistry()
+    adapter = AsyncRecordingAdapter()
+    registry.register("serial", adapter)
+
+    result = asyncio.run(
+        run_package_async(
+            compile_file(test_file),
+            run_id="async-adapter-run",
+            adapter_registry=registry,
+        )
+    )
+
+    event = result.testcase_results[0].events[-1]
+    assert result.status == "passed"
+    assert adapter.calls == [
+        ("serial.write", {"port": "psu", "text": "OUT 1 ON"}, "async_adapter_case", "steps")
+    ]
+    assert event.outputs["message"] == "async recorded"
+    assert event.outputs["raw_evidence_ref"] == "raw-logs/serial-async.log"
 
 
 def test_runtime_runs_function_call_and_maps_returns(tmp_path: Path):

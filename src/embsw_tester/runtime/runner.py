@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
 import time
 import uuid
 from copy import deepcopy
@@ -29,9 +31,9 @@ class Frame:
 class RuntimeContext:
     run_id: str
     package: ResolvedPackage
-    sleep_fn: Callable[[float], None]
+    sleep_fn: Callable[[float], Any]
     adapter_registry: AdapterRegistry
-    event_callback: Optional[Callable[[CommandEvent], None]] = None
+    event_callback: Optional[Callable[[CommandEvent], Any]] = None
     run_control: Optional["RuntimeControl"] = None
 
 
@@ -57,6 +59,12 @@ class RuntimeControl:
             return
         while self.read_state() == "paused":
             sleep_fn(self.poll_interval_s)
+
+    async def wait_until_resumed_async(self, sleep_fn: Callable[[float], Any]) -> None:
+        if self.control_file is None:
+            return
+        while self.read_state() == "paused":
+            await _maybe_await(sleep_fn(self.poll_interval_s))
 
     def read_payload(self) -> Mapping[str, Any]:
         if self.control_file is None or not self.control_file.exists():
@@ -111,6 +119,30 @@ def run_package(
     event_callback: Optional[Callable[[CommandEvent], None]] = None,
     run_control: Optional[RuntimeControl] = None,
 ) -> RunResult:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(
+            run_package_async(
+                package,
+                run_id=run_id,
+                sleep_fn=sleep_fn,
+                adapter_registry=adapter_registry,
+                event_callback=event_callback,
+                run_control=run_control,
+            )
+        )
+    raise RuntimeError("run_package cannot be called from a running event loop; use run_package_async.")
+
+
+async def run_package_async(
+    package: ResolvedPackage,
+    run_id: Optional[str] = None,
+    sleep_fn: Callable[[float], Any] = asyncio.sleep,
+    adapter_registry: Optional[AdapterRegistry] = None,
+    event_callback: Optional[Callable[[CommandEvent], Any]] = None,
+    run_control: Optional[RuntimeControl] = None,
+) -> RunResult:
     resolved_run_id = run_id or str(uuid.uuid4())
     diagnostics = [diagnostic.to_dict() for diagnostic in package.diagnostics]
     if diagnostics:
@@ -130,7 +162,7 @@ def run_package(
         run_control=run_control,
     )
     testcase_results = [
-        _run_testcase(context, testcase)
+        await _run_testcase_async(context, testcase)
         for testcase in package.testcases
     ]
     run_status = "failed" if any(result.status == "failed" for result in testcase_results) else "passed"
@@ -141,7 +173,7 @@ def run_package(
     )
 
 
-def _run_testcase(context: RuntimeContext, testcase: TestcaseDef) -> TestcaseResult:
+async def _run_testcase_async(context: RuntimeContext, testcase: TestcaseDef) -> TestcaseResult:
     frame = Frame()
     events: List[CommandEvent] = []
     status = "passed"
@@ -152,14 +184,21 @@ def _run_testcase(context: RuntimeContext, testcase: TestcaseDef) -> TestcaseRes
         ("steps", testcase.steps),
         ("postconditions", testcase.postconditions),
     ):
-        phase_status, phase_error = _run_commands(context, testcase.name, phase, commands, frame, events)
+        phase_status, phase_error = await _run_commands_async(
+            context,
+            testcase.name,
+            phase,
+            commands,
+            frame,
+            events,
+        )
         if phase_status == "failed":
             status = "failed"
             error = phase_error
             break
 
     if testcase.cleanup:
-        cleanup_status, cleanup_error = _run_commands(
+        cleanup_status, cleanup_error = await _run_commands_async(
             context,
             testcase.name,
             "cleanup",
@@ -180,7 +219,7 @@ def _run_testcase(context: RuntimeContext, testcase: TestcaseDef) -> TestcaseRes
     )
 
 
-def _run_commands(
+async def _run_commands_async(
     context: RuntimeContext,
     testcase_name: str,
     phase: str,
@@ -192,18 +231,28 @@ def _run_commands(
         pause_event = _pause_event_if_needed(context, testcase_name, phase, command, frame)
         if pause_event is not None:
             events.append(pause_event)
-            if context.event_callback is not None:
-                context.event_callback(pause_event)
-            context.run_control.wait_until_resumed(context.sleep_fn)
-        if context.event_callback is not None:
-            context.event_callback(_running_event(context, testcase_name, phase, command, frame))
-        event = _execute_command(context, testcase_name, phase, command, frame, events)
+            await _emit_event_async(context, pause_event)
+            if context.run_control is not None:
+                await context.run_control.wait_until_resumed_async(context.sleep_fn)
+        await _emit_event_async(context, _running_event(context, testcase_name, phase, command, frame))
+        event = await _execute_command_async(context, testcase_name, phase, command, frame, events)
         events.append(event)
-        if context.event_callback is not None:
-            context.event_callback(event)
+        await _emit_event_async(context, event)
         if event.status == "failed":
             return "failed", event.error
     return "passed", None
+
+
+async def _emit_event_async(context: RuntimeContext, event: CommandEvent) -> None:
+    if context.event_callback is None:
+        return
+    await _maybe_await(context.event_callback(event))
+
+
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 def _pause_event_if_needed(
@@ -249,7 +298,7 @@ def _running_event(
     )
 
 
-def _execute_command(
+async def _execute_command_async(
     context: RuntimeContext,
     testcase_name: str,
     phase: str,
@@ -258,7 +307,14 @@ def _execute_command(
     events: List[CommandEvent],
 ) -> CommandEvent:
     try:
-        resolved_inputs, outputs = _dispatch_command(context, testcase_name, phase, command, frame, events)
+        resolved_inputs, outputs = await _dispatch_command_async(
+            context,
+            testcase_name,
+            phase,
+            command,
+            frame,
+            events,
+        )
         return _event(
             context,
             testcase_name,
@@ -283,7 +339,7 @@ def _execute_command(
         )
 
 
-def _dispatch_command(
+async def _dispatch_command_async(
     context: RuntimeContext,
     testcase_name: str,
     phase: str,
@@ -326,25 +382,25 @@ def _dispatch_command(
 
     if command.type == "delay":
         ms = int(evaluate_value(command.args["ms"], frame.variables))
-        context.sleep_fn(ms / 1000)
+        await _maybe_await(context.sleep_fn(ms / 1000))
         return {"ms": ms}, {"slept_ms": ms}
 
     if command.type == "call":
-        return _execute_call(context, testcase_name, phase, command, frame, events)
+        return await _execute_call_async(context, testcase_name, phase, command, frame, events)
 
     if command.type == "for":
-        return _execute_for(context, testcase_name, phase, command, frame, events)
+        return await _execute_for_async(context, testcase_name, phase, command, frame, events)
 
     spec = COMMAND_SPECS.get(command.type)
     if spec is not None and spec.category == "adapter":
-        return _execute_adapter_command(context, testcase_name, phase, command, frame)
+        return await _execute_adapter_command_async(context, testcase_name, phase, command, frame)
     if spec is not None and spec.category == "device":
-        return _execute_device_command(context, testcase_name, phase, command, frame)
+        return await _execute_device_command_async(context, testcase_name, phase, command, frame)
 
     raise CommandFailed(f"Unsupported command '{command.type}'.")
 
 
-def _execute_adapter_command(
+async def _execute_adapter_command_async(
     context: RuntimeContext,
     testcase_name: str,
     phase: str,
@@ -357,20 +413,34 @@ def _execute_adapter_command(
 
     resolved_inputs = evaluate_value(command.args, frame.variables)
     adapter = context.adapter_registry.get(spec.adapter)
-    adapter_result = adapter.execute(
+    adapter_context = AdapterContext(
+        run_id=context.run_id,
+        testcase=testcase_name,
+        phase=phase,
+    )
+    adapter_result = await _execute_adapter_async(
+        adapter,
         command.type,
         resolved_inputs,
-        AdapterContext(
-            run_id=context.run_id,
-            testcase=testcase_name,
-            phase=phase,
-        ),
+        adapter_context,
     )
     if not adapter_result.success:
         raise CommandFailed(adapter_result.message or f"Adapter '{spec.adapter}' failed.")
     if "save_as" in command.args:
         frame.variables[str(command.args["save_as"])] = _adapter_save_value(adapter_result.values)
     return resolved_inputs, adapter_result.to_outputs()
+
+
+async def _execute_adapter_async(
+    adapter: Any,
+    command_type: str,
+    args: Dict[str, Any],
+    context: AdapterContext,
+) -> AdapterResult:
+    execute_async = getattr(adapter, "execute_async", None)
+    if callable(execute_async):
+        return await _maybe_await(execute_async(command_type, args, context))
+    return await asyncio.to_thread(adapter.execute, command_type, args, context)
 
 
 def _adapter_save_value(values: Dict[str, Any]) -> Any:
@@ -381,7 +451,7 @@ def _adapter_save_value(values: Dict[str, Any]) -> Any:
     return dict(values)
 
 
-def _execute_device_command(
+async def _execute_device_command_async(
     context: RuntimeContext,
     testcase_name: str,
     phase: str,
@@ -389,7 +459,8 @@ def _execute_device_command(
     frame: Frame,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     resolved_inputs = evaluate_value(command.args, frame.variables)
-    execution = execute_device_command(
+    execution = await asyncio.to_thread(
+        execute_device_command,
         command.type,
         resolved_inputs,
         context.package.tool_profile_snapshot,
@@ -405,7 +476,7 @@ def _execute_device_command(
     return execution.resolved_inputs, execution.outputs
 
 
-def _execute_call(
+async def _execute_call_async(
     context: RuntimeContext,
     testcase_name: str,
     phase: str,
@@ -426,7 +497,7 @@ def _execute_call(
             if param in call_args
         }
     )
-    function_status, function_error = _run_commands(
+    function_status, function_error = await _run_commands_async(
         context,
         testcase_name,
         f"function:{function_name}",
@@ -457,7 +528,7 @@ def _execute_call(
     }, {"returns": mapped_outputs}
 
 
-def _execute_for(
+async def _execute_for_async(
     context: RuntimeContext,
     testcase_name: str,
     phase: str,
@@ -481,7 +552,7 @@ def _execute_for(
     iteration_count = 0
     for item in loop_items:
         frame.variables[loop_variable] = item
-        iteration_status, iteration_error = _run_commands(
+        iteration_status, iteration_error = await _run_commands_async(
             context,
             testcase_name,
             phase,
