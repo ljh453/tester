@@ -187,7 +187,67 @@ public static class WorkbenchGuiModelBuilder
             tempBlock.Depth,
             BuildSourcePreview(lines, tempBlock.StartLineIndex, tempBlock.EndLineIndex),
             AccentColorFor(tempBlock.CommandType),
+            BuildArguments(lines, tempBlock),
             children);
+    }
+
+    private static IReadOnlyList<WorkbenchCommandArgument> BuildArguments(
+        IReadOnlyList<YamlLine> lines,
+        TempCommandBlock tempBlock)
+    {
+        var definition = WorkbenchCommandCatalog.Find(tempBlock.CommandType);
+        if (definition is null)
+        {
+            return BuildUnknownCommandArguments(lines, tempBlock);
+        }
+
+        return definition.Arguments
+            .Select(argumentDefinition =>
+            {
+                var argumentValue = ReadDirectArgument(lines, tempBlock, argumentDefinition.Name);
+                return new WorkbenchCommandArgument(
+                    argumentDefinition,
+                    argumentValue.Value,
+                    argumentValue.SourceLine);
+            })
+            .ToArray();
+    }
+
+    private static IReadOnlyList<WorkbenchCommandArgument> BuildUnknownCommandArguments(
+        IReadOnlyList<YamlLine> lines,
+        TempCommandBlock tempBlock)
+    {
+        var arguments = new List<WorkbenchCommandArgument>();
+        var expectedIndent = tempBlock.Indent + 4;
+        for (var index = tempBlock.StartLineIndex + 1; index <= tempBlock.EndLineIndex; index++)
+        {
+            var line = lines[index];
+            if (line.Indent != expectedIndent)
+            {
+                continue;
+            }
+
+            var match = KeyValueRegex.Match(line.Trimmed);
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            var definition = new WorkbenchCommandArgumentDefinition(
+                match.Groups[1].Value,
+                string.IsNullOrWhiteSpace(match.Groups[2].Value)
+                    ? WorkbenchCommandArgumentKind.Map
+                    : WorkbenchCommandArgumentKind.Value,
+                isRequired: false,
+                WorkbenchCommandAutocompleteKind.None,
+                Array.Empty<string>());
+            arguments.Add(new WorkbenchCommandArgument(
+                definition,
+                StripQuotes(match.Groups[2].Value.Trim()),
+                index + 1));
+        }
+
+        return arguments;
     }
 
     private static void AssignDisplayIndexes(
@@ -249,7 +309,7 @@ public static class WorkbenchGuiModelBuilder
         for (var index = tempBlock.StartLineIndex + 1; index <= tempBlock.EndLineIndex; index++)
         {
             var line = lines[index];
-            if (line.Indent <= tempBlock.Indent)
+            if (line.Indent != tempBlock.Indent + 4)
             {
                 continue;
             }
@@ -262,6 +322,29 @@ public static class WorkbenchGuiModelBuilder
         }
 
         return string.Empty;
+    }
+
+    private static (string Value, int SourceLine) ReadDirectArgument(
+        IReadOnlyList<YamlLine> lines,
+        TempCommandBlock tempBlock,
+        string key)
+    {
+        for (var index = tempBlock.StartLineIndex + 1; index <= tempBlock.EndLineIndex; index++)
+        {
+            var line = lines[index];
+            if (line.Indent != tempBlock.Indent + 4)
+            {
+                continue;
+            }
+
+            var match = KeyValueRegex.Match(line.Trimmed);
+            if (match.Success && match.Groups[1].Value == key)
+            {
+                return (StripQuotes(match.Groups[2].Value.Trim()), index + 1);
+            }
+        }
+
+        return (string.Empty, 0);
     }
 
     private static string BuildSourcePreview(

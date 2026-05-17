@@ -26,12 +26,15 @@ await RunMainWorkbenchViewModelSavesSelectedFileTest();
 await RunWorkbenchThemeResolverTest();
 await RunWorkbenchThemeStyleResourceTest();
 await RunWorkbenchGuiModelBuilderTest();
+await RunWorkbenchGuiModelBuilderCommandArgumentTest();
 await RunMainWorkbenchViewModelRefreshesGuiModelTest();
 await RunWorkbenchCommandCatalogTest();
+await RunWorkbenchYamlCommandArgumentUpdaterTest();
 await RunWorkbenchYamlCommandInserterTest();
 await RunWorkbenchYamlCommandMoverTest();
 await RunWorkbenchYamlCommandDeleterTest();
 await RunMainWorkbenchViewModelInsertsGuiCommandTest();
+await RunMainWorkbenchViewModelUpdatesSelectedGuiCommandArgumentTest();
 await RunMainWorkbenchViewModelMovesGuiCommandTest();
 await RunMainWorkbenchViewModelDeletesGuiCommandTest();
 await RunMainWorkbenchViewModelSelectsGuiCommandRangeTest();
@@ -1216,6 +1219,47 @@ static Task RunWorkbenchGuiModelBuilderTest()
     return Task.CompletedTask;
 }
 
+static Task RunWorkbenchGuiModelBuilderCommandArgumentTest()
+{
+    var model = WorkbenchGuiModelBuilder.Build(
+        """
+        testcases:
+          - name: argument_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - delay:
+                  ms: 1000
+              - for:
+                  each: "${channels}"
+                  as: channel
+                  do:
+                    - log.text:
+                        text: "inner"
+        """);
+    var steps = model.Testcases[0].Phases.Single(phase => phase.YamlName == "steps");
+    var setBlock = steps.Blocks[0];
+    var delayBlock = steps.Blocks[1];
+    var forBlock = steps.Blocks[2];
+
+    AssertEqual(2, setBlock.Arguments.Count, "set command argument count");
+    AssertEqual("var", setBlock.Arguments[0].Name, "set first argument name");
+    AssertEqual("rpm", setBlock.Arguments[0].Value, "set first argument value");
+    AssertEqual("value", setBlock.Arguments[1].Name, "set second argument name");
+    AssertEqual("700", setBlock.Arguments[1].Value, "set second argument value");
+    AssertEqual("ms", delayBlock.Arguments[0].Name, "delay argument name");
+    AssertEqual("1000", delayBlock.Arguments[0].Value, "delay argument value");
+    AssertTrue(
+        forBlock.Arguments.Any(argument => argument.Name == "each" && argument.IsScalarEditable),
+        "for each is scalar editable");
+    AssertTrue(
+        forBlock.Arguments.Any(argument => argument.Name == "do" && !argument.IsScalarEditable),
+        "for do is not scalar editable");
+
+    return Task.CompletedTask;
+}
+
 static Task RunMainWorkbenchViewModelRefreshesGuiModelTest()
 {
     var viewModel = new MainWorkbenchViewModel(
@@ -1270,6 +1314,47 @@ static Task RunWorkbenchCommandCatalogTest()
     AssertTrue(
         WorkbenchCommandCatalog.Groups.All(group => group.Commands.Count > 0),
         "GUI command catalog groups are populated");
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchYamlCommandArgumentUpdaterTest()
+{
+    var yaml =
+        """
+        testcases:
+          - name: update_case
+            steps:
+              - delay:
+                  ms: 1000
+              - trace32.command:
+                  command: "PRINT"
+        """;
+    var model = WorkbenchGuiModelBuilder.Build(yaml);
+    var steps = model.Testcases[0].Phases.Single(phase => phase.YamlName == "steps");
+    var delay = steps.Blocks[0];
+    var trace32 = steps.Blocks[1];
+
+    var delayUpdated = WorkbenchYamlCommandArgumentUpdater.Update(
+        yaml,
+        delay,
+        WorkbenchCommandCatalog.Find("delay")!.Arguments.Single(argument => argument.Name == "ms"),
+        "1500");
+    AssertTrue(
+        delayUpdated.Text.Contains("          ms: 1500", StringComparison.Ordinal),
+        "argument updater replaces existing numeric scalar");
+    AssertEqual(5, delayUpdated.UpdatedLineNumber, "argument updater reports existing line");
+
+    var traceUpdated = WorkbenchYamlCommandArgumentUpdater.Update(
+        delayUpdated.Text,
+        trace32,
+        WorkbenchCommandCatalog.Find("trace32.command")!.Arguments.Single(argument => argument.Name == "save_as"),
+        "trace_result");
+    AssertTrue(
+        traceUpdated.Text.Replace("\r\n", "\n", StringComparison.Ordinal).Contains(
+            "      - trace32.command:\n          command: \"PRINT\"\n          save_as: trace_result",
+            StringComparison.Ordinal),
+        "argument updater inserts missing scalar before next command boundary");
+
     return Task.CompletedTask;
 }
 
@@ -1568,6 +1653,34 @@ static Task RunWorkbenchYamlCommandDeleterTest()
     AssertTrue(normalized.Contains("      - set:", StringComparison.Ordinal), "YAML deleter keeps previous command");
     AssertTrue(normalized.Contains("      - log.text:", StringComparison.Ordinal), "YAML deleter keeps next command");
     AssertEqual(7, result.DeletedLineNumber, "YAML deleter reports deleted line");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelUpdatesSelectedGuiCommandArgumentTest()
+{
+    var runner = new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>());
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", Directory.GetCurrentDirectory(), runner));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: property_case
+            steps:
+              - log.text:
+                  text: "before"
+        """);
+    var command = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps").Blocks[0];
+    viewModel.SelectGuiCommand(command);
+
+    viewModel.UpdateSelectedGuiCommandArgument("text", "after");
+
+    AssertTrue(
+        viewModel.EditorText.Contains("          text: \"after\"", StringComparison.Ordinal),
+        "view model updates selected command argument in editor text");
+    AssertEqual("after", viewModel.SelectedGuiCommand?.Arguments.Single(argument => argument.Name == "text").Value, "view model refreshes selected argument value");
+    AssertTrue(viewModel.IsDirty, "argument edit marks document dirty");
+
     return Task.CompletedTask;
 }
 

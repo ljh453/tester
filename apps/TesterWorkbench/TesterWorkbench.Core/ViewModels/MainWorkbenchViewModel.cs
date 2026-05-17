@@ -488,6 +488,58 @@ public sealed class MainWorkbenchViewModel
         UpdateGuiCurrentExecutionBlock();
     }
 
+    public void UpdateSelectedGuiCommandArgument(string argumentName, string value)
+    {
+        if (SelectedGuiTestcase is null)
+        {
+            throw new InvalidOperationException("No testcase is selected.");
+        }
+
+        if (SelectedGuiCommand is null)
+        {
+            throw new InvalidOperationException("No command is selected.");
+        }
+
+        var argument = SelectedGuiCommand.Arguments
+            .FirstOrDefault(candidate => candidate.Name == argumentName)
+            ?.Definition
+            ?? WorkbenchCommandCatalog.Find(SelectedGuiCommand.CommandType)
+                ?.Arguments
+                .FirstOrDefault(candidate => candidate.Name == argumentName);
+        if (argument is null)
+        {
+            throw new InvalidOperationException($"Command '{SelectedGuiCommand.CommandType}' does not define argument '{argumentName}'.");
+        }
+
+        var testcaseName = SelectedGuiTestcase.Name;
+        var commandLineNumber = SelectedGuiCommand.SourceLineStart;
+        var commandType = SelectedGuiCommand.CommandType;
+        var result = WorkbenchYamlCommandArgumentUpdater.Update(
+            EditorText,
+            SelectedGuiCommand,
+            argument,
+            value);
+        UpdateEditorText(result.Text);
+        SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
+            testcase.Name == testcaseName)
+            ?? GuiModel.Testcases.FirstOrDefault();
+        SelectedGuiCommand = SelectedGuiTestcase?.Phases
+            .SelectMany(phaseModel => FlattenCommands(phaseModel.Blocks))
+            .FirstOrDefault(commandBlock =>
+                commandBlock.SourceLineStart == commandLineNumber
+                && commandBlock.CommandType == commandType)
+            ?? SelectedGuiTestcase?.Phases
+                .SelectMany(phaseModel => FlattenCommands(phaseModel.Blocks))
+                .FirstOrDefault(commandBlock => commandBlock.CommandType == commandType);
+        if (SelectedGuiCommand is not null)
+        {
+            CurrentLineNumber = SelectedGuiCommand.SourceLineStart;
+            CurrentLocationText = $"Line {CurrentLineNumber} - {SelectedGuiCommand.CommandType}";
+        }
+
+        UpdateGuiCurrentExecutionBlock();
+    }
+
     public void MoveGuiCommand(
         WorkbenchCommandBlock movingCommand,
         WorkbenchCommandInsertionTarget target)

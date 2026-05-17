@@ -160,6 +160,41 @@ public sealed class WorkbenchGuiPhase : WorkbenchDragInsertionPreviewTarget
         : $"{Blocks.Count} commands";
 }
 
+public sealed class WorkbenchCommandArgument
+{
+    public WorkbenchCommandArgument(
+        WorkbenchCommandArgumentDefinition definition,
+        string value,
+        int sourceLine)
+    {
+        Definition = definition;
+        Value = value;
+        SourceLine = sourceLine;
+    }
+
+    public WorkbenchCommandArgumentDefinition Definition { get; }
+
+    public string Name => Definition.Name;
+
+    public WorkbenchCommandArgumentKind Kind => Definition.Kind;
+
+    public bool IsRequired => Definition.IsRequired;
+
+    public bool IsScalarEditable => Definition.IsScalarEditable;
+
+    public WorkbenchCommandAutocompleteKind AutocompleteKind => Definition.AutocompleteKind;
+
+    public IReadOnlyList<string> Suggestions => Definition.Suggestions;
+
+    public bool HasSuggestions => Suggestions.Count > 0;
+
+    public string RequirementText => Definition.RequirementText;
+
+    public string Value { get; }
+
+    public int SourceLine { get; }
+}
+
 public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
 {
     private bool _isSelectedForBulkAction;
@@ -174,6 +209,7 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
         int depth,
         string sourcePreview,
         string accentColor,
+        IReadOnlyList<WorkbenchCommandArgument> arguments,
         IReadOnlyList<WorkbenchCommandBlock> children)
     {
         DisplayIndex = displayIndex;
@@ -185,6 +221,7 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
         Depth = depth;
         SourcePreview = sourcePreview;
         AccentColor = accentColor;
+        Arguments = arguments;
         Children = children;
         InsideDropTarget = new WorkbenchCommandInsideDropTarget(this);
     }
@@ -206,6 +243,8 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
     public string SourcePreview { get; }
 
     public string AccentColor { get; }
+
+    public IReadOnlyList<WorkbenchCommandArgument> Arguments { get; }
 
     public IReadOnlyList<WorkbenchCommandBlock> Children { get; }
 

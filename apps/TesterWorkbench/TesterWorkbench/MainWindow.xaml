@@ -200,6 +200,28 @@
                 </ItemsControl>
             </StackPanel>
         </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:WorkbenchCommandArgument}">
+            <StackPanel Margin="0,0,0,8">
+                <Grid Margin="0,0,0,3">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Name}"
+                               Foreground="{DynamicResource Workbench.Brush.TextSecondary}" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding RequirementText}"
+                               Foreground="{DynamicResource Workbench.Brush.TextMuted}"
+                               FontSize="11" />
+                </Grid>
+                <TextBox Text="{Binding Value, Mode=OneWay}"
+                         Tag="{Binding}"
+                         IsEnabled="{Binding IsScalarEditable}"
+                         LostFocus="GuiCommandArgumentTextBox_LostFocus"
+                         PreviewKeyDown="GuiCommandArgumentTextBox_PreviewKeyDown" />
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
 
     <DockPanel Background="{DynamicResource Workbench.Brush.AppBackground}">
@@ -666,7 +688,10 @@
                                             <TextBlock Text="Source Range" Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
                                             <TextBox x:Name="GuiCommandLineBox"
                                                      IsReadOnly="True"
-                                                     Margin="0,3,0,0" />
+                                                     Margin="0,3,0,8" />
+                                            <TextBlock Text="Arguments" Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                                            <ItemsControl x:Name="GuiCommandArgumentsControl"
+                                                          Margin="0,3,0,0" />
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>

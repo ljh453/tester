@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private GridLength _savedGuiPropertiesWidth = new(280);
     private bool _isGuiEditorVisible = true;
     private bool _isRefreshingGuiTestcaseSelection;
+    private bool _isApplyingGuiCommandArgumentEdit;
     private System.Windows.Point? _commandDragStartPoint;
     private WorkbenchCommandDefinition? _dragCommandDefinition;
     private System.Windows.Point? _commandBlockDragStartPoint;
@@ -215,6 +216,25 @@ public partial class MainWindow : Window
     {
         _viewModel.FoldGuiBlocksFromLevel(3);
         RefreshGuiEditor();
+    }
+
+    private void GuiCommandArgumentTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox textBox)
+        {
+            ApplyGuiCommandArgumentEdit(textBox);
+        }
+    }
+
+    private void GuiCommandArgumentTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not System.Windows.Controls.TextBox textBox)
+        {
+            return;
+        }
+
+        textBox.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+        e.Handled = true;
     }
 
     private void CommandCatalogItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -731,7 +751,35 @@ public partial class MainWindow : Window
         GuiCommandTypeBox.Text = command?.CommandType ?? "";
         GuiCommandSummaryBox.Text = command?.Summary ?? "";
         GuiCommandLineBox.Text = command?.LineRangeText ?? "";
+        GuiCommandArgumentsControl.ItemsSource = command?.Arguments
+            .Where(argument => argument.IsScalarEditable)
+            .ToArray() ?? Array.Empty<WorkbenchCommandArgument>();
         GuiCommandSourceBox.Text = command?.SourcePreview ?? "";
+    }
+
+    private void ApplyGuiCommandArgumentEdit(System.Windows.Controls.TextBox textBox)
+    {
+        if (_isApplyingGuiCommandArgumentEdit
+            || textBox.Tag is not WorkbenchCommandArgument argument
+            || textBox.Text == argument.Value)
+        {
+            return;
+        }
+
+        try
+        {
+            _isApplyingGuiCommandArgumentEdit = true;
+            _viewModel.UpdateSelectedGuiCommandArgument(argument.Name, textBox.Text);
+            RefreshEditorAfterGuiEdit();
+        }
+        catch (Exception ex)
+        {
+            ConsoleBox.Text = ex.Message;
+        }
+        finally
+        {
+            _isApplyingGuiCommandArgumentEdit = false;
+        }
     }
 
     private void RefreshConsole()
