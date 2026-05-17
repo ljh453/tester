@@ -310,8 +310,8 @@
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter Property="Panel.ZIndex" Value="1" />
-                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
-                            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.TabSelectedBackground}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TabSelectedText}" />
                             <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">

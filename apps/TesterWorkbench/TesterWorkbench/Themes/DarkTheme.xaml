@@ -3,6 +3,8 @@
     <SolidColorBrush x:Key="Workbench.Brush.AppBackground" Color="#111315" />
     <SolidColorBrush x:Key="Workbench.Brush.PanelBackground" Color="#1B1F24" />
     <SolidColorBrush x:Key="Workbench.Brush.PanelBackgroundAlt" Color="#22272E" />
+    <SolidColorBrush x:Key="Workbench.Brush.TabSelectedBackground" Color="#F3F4F6" />
+    <SolidColorBrush x:Key="Workbench.Brush.TabSelectedText" Color="#111827" />
     <SolidColorBrush x:Key="Workbench.Brush.ControlBackground" Color="#171A1F" />
     <SolidColorBrush x:Key="Workbench.Brush.ControlBackgroundHover" Color="#252B33" />
     <SolidColorBrush x:Key="Workbench.Brush.ControlBackgroundPressed" Color="#303741" />

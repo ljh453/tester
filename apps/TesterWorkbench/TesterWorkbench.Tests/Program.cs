@@ -1144,6 +1144,30 @@ static Task RunWorkbenchThemeStyleResourceTest()
     AssertTrue(
         HasTriggerSetter(baseStyles, presentation, "TabItem", "IsSelected", "Background"),
         "tab item template defines selected background");
+    AssertEqual(
+        "{DynamicResource Workbench.Brush.TabSelectedText}",
+        FindTriggerSetterValue(baseStyles, presentation, "TabItem", "IsSelected", "Foreground"),
+        "selected tab uses dedicated selected text brush");
+    AssertEqual(
+        "{DynamicResource Workbench.Brush.TabSelectedBackground}",
+        FindTriggerSetterValue(baseStyles, presentation, "TabItem", "IsSelected", "Background"),
+        "selected tab uses dedicated selected background brush");
+    var darkThemePath = Path.Combine(
+        repositoryRoot,
+        "apps",
+        "TesterWorkbench",
+        "TesterWorkbench",
+        "Themes",
+        "DarkTheme.xaml");
+    var darkTheme = XDocument.Load(darkThemePath);
+    AssertEqual(
+        "#F3F4F6",
+        FindSolidColorBrushColor(darkTheme, presentation, xaml, "Workbench.Brush.TabSelectedBackground"),
+        "dark theme selected tab background is bright");
+    AssertEqual(
+        "#111827",
+        FindSolidColorBrushColor(darkTheme, presentation, xaml, "Workbench.Brush.TabSelectedText"),
+        "dark theme selected tab text is dark");
     AssertStyleBasedOn(
         baseStyles,
         presentation,
@@ -2151,6 +2175,23 @@ static bool HasTriggerSetter(
         .Any(setter => setter.Attribute("Property")?.Value == setterProperty);
 }
 
+static string FindTriggerSetterValue(
+    XDocument document,
+    XNamespace presentation,
+    string targetType,
+    string triggerProperty,
+    string setterProperty)
+{
+    return document.Descendants(presentation + "Style")
+        .Where(style => style.Attribute("TargetType")?.Value == $"{{x:Type {targetType}}}")
+        .Descendants(presentation + "Trigger")
+        .Where(trigger => trigger.Attribute("Property")?.Value == triggerProperty)
+        .Descendants(presentation + "Setter")
+        .FirstOrDefault(setter => setter.Attribute("Property")?.Value == setterProperty)
+        ?.Attribute("Value")
+        ?.Value ?? "";
+}
+
 static void AssertStyleBasedOn(
     XDocument document,
     XNamespace presentation,
@@ -2162,6 +2203,18 @@ static void AssertStyleBasedOn(
         .SingleOrDefault(element => element.Attribute(xaml + "Key")?.Value == key);
     AssertTrue(style is not null, $"{key} style exists");
     AssertEqual(basedOn, style!.Attribute("BasedOn")?.Value ?? "", $"{key} based on themed style");
+}
+
+static string FindSolidColorBrushColor(
+    XDocument document,
+    XNamespace presentation,
+    XNamespace xaml,
+    string key)
+{
+    return document.Descendants(presentation + "SolidColorBrush")
+        .SingleOrDefault(element => element.Attribute(xaml + "Key")?.Value == key)
+        ?.Attribute("Color")
+        ?.Value ?? "";
 }
 
 static string FindNamedElementAttribute(
