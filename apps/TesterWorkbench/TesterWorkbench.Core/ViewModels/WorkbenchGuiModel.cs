@@ -184,6 +184,9 @@ public sealed class WorkbenchCommandArgument
 
     public bool IsScalarEditable => Definition.IsScalarEditable;
 
+    public bool IsComplexEditable =>
+        Kind is WorkbenchCommandArgumentKind.Map or WorkbenchCommandArgumentKind.List;
+
     public WorkbenchCommandAutocompleteKind AutocompleteKind => Definition.AutocompleteKind;
 
     public IReadOnlyList<string> Suggestions { get; }

@@ -217,7 +217,7 @@ public static class WorkbenchGuiModelBuilder
         return definition.Arguments
             .Select(argumentDefinition =>
             {
-                var argumentValue = ReadDirectArgument(lines, tempBlock, argumentDefinition.Name);
+                var argumentValue = ReadArgumentValue(lines, tempBlock, argumentDefinition);
                 return new WorkbenchCommandArgument(
                     argumentDefinition,
                     argumentValue.Value,
@@ -441,27 +441,68 @@ public static class WorkbenchGuiModelBuilder
         return string.Empty;
     }
 
-    private static (string Value, int SourceLine) ReadDirectArgument(
+    private static (string Value, int SourceLine) ReadArgumentValue(
         IReadOnlyList<YamlLine> lines,
         TempCommandBlock tempBlock,
-        string key)
+        WorkbenchCommandArgumentDefinition argumentDefinition)
     {
+        var argumentIndent = tempBlock.Indent + 4;
         for (var index = tempBlock.StartLineIndex + 1; index <= tempBlock.EndLineIndex; index++)
         {
             var line = lines[index];
-            if (line.Indent != tempBlock.Indent + 4)
+            if (line.Indent != argumentIndent)
             {
                 continue;
             }
 
             var match = KeyValueRegex.Match(line.Trimmed);
-            if (match.Success && match.Groups[1].Value == key)
+            if (!match.Success || match.Groups[1].Value != argumentDefinition.Name)
             {
-                return (StripQuotes(match.Groups[2].Value.Trim()), index + 1);
+                continue;
             }
+
+            var suffix = match.Groups[2].Value.Trim();
+            if (argumentDefinition.IsScalarEditable)
+            {
+                return (StripQuotes(suffix), index + 1);
+            }
+
+            if (!string.IsNullOrWhiteSpace(suffix) && suffix is not "{}" and not "[]" and not "null")
+            {
+                return (StripQuotes(suffix), index + 1);
+            }
+
+            return (ReadNestedArgumentBody(lines, index, tempBlock.EndLineIndex, argumentIndent + 2), index + 1);
         }
 
         return (string.Empty, 0);
+    }
+
+    private static string ReadNestedArgumentBody(
+        IReadOnlyList<YamlLine> lines,
+        int argumentLineIndex,
+        int commandEndLineIndex,
+        int bodyIndent)
+    {
+        var bodyLines = new List<string>();
+        for (var index = argumentLineIndex + 1; index <= commandEndLineIndex; index++)
+        {
+            var line = lines[index];
+            if (!string.IsNullOrWhiteSpace(line.Trimmed) && line.Indent < bodyIndent)
+            {
+                break;
+            }
+
+            bodyLines.Add(RemoveLeadingSpaces(line.Text, bodyIndent));
+        }
+
+        return string.Join(Environment.NewLine, bodyLines).TrimEnd();
+    }
+
+    private static string RemoveLeadingSpaces(string line, int count)
+    {
+        var removable = Math.Min(count, line.TakeWhile(character => character == ' ').Count());
+        return line[removable..];
     }
 
     private static string BuildSourcePreview(

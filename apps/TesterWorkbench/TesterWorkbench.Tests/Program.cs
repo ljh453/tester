@@ -28,15 +28,18 @@ await RunWorkbenchThemeStyleResourceTest();
 await RunWorkbenchGuiModelBuilderTest();
 await RunWorkbenchGuiModelBuilderCommandArgumentTest();
 await RunWorkbenchGuiModelBuilderAutocompleteSuggestionTest();
+await RunWorkbenchGuiModelBuilderComplexArgumentTest();
 await RunMainWorkbenchViewModelRefreshesGuiModelTest();
 await RunMainWorkbenchViewModelLoadsToolProfileArgumentSuggestionsTest();
 await RunWorkbenchCommandCatalogTest();
 await RunWorkbenchYamlCommandArgumentUpdaterTest();
+await RunWorkbenchYamlCommandComplexArgumentUpdaterTest();
 await RunWorkbenchYamlCommandInserterTest();
 await RunWorkbenchYamlCommandMoverTest();
 await RunWorkbenchYamlCommandDeleterTest();
 await RunMainWorkbenchViewModelInsertsGuiCommandTest();
 await RunMainWorkbenchViewModelUpdatesSelectedGuiCommandArgumentTest();
+await RunMainWorkbenchViewModelUpdatesSelectedGuiCommandComplexArgumentTest();
 await RunMainWorkbenchViewModelMovesGuiCommandTest();
 await RunMainWorkbenchViewModelDeletesGuiCommandTest();
 await RunMainWorkbenchViewModelSelectsGuiCommandRangeTest();
@@ -1311,6 +1314,45 @@ static Task RunWorkbenchGuiModelBuilderAutocompleteSuggestionTest()
     return Task.CompletedTask;
 }
 
+static Task RunWorkbenchGuiModelBuilderComplexArgumentTest()
+{
+    var model = WorkbenchGuiModelBuilder.Build(
+        """
+        testcases:
+          - name: complex_argument_case
+            steps:
+              - call:
+                  function: add_channel
+                  args:
+                    running_total: "${channel_sum}"
+                    channel: "${channel}"
+                  out:
+                    next_total: channel_sum
+              - for:
+                  each: "${channels}"
+                  as: channel
+                  do:
+                    - log.text:
+                        text: "inner"
+        """);
+    var steps = model.Testcases[0].Phases.Single(phase => phase.YamlName == "steps");
+    var call = steps.Blocks[0];
+    var loop = steps.Blocks[1];
+
+    var args = call.Arguments.Single(argument => argument.Name == "args");
+    var output = call.Arguments.Single(argument => argument.Name == "out");
+    var body = loop.Arguments.Single(argument => argument.Name == "do");
+
+    AssertFalse(args.IsScalarEditable, "call args is not scalar editable");
+    AssertTrue(args.IsComplexEditable, "call args is complex editable");
+    AssertTrue(args.Value.Contains("running_total: \"${channel_sum}\"", StringComparison.Ordinal), "call args captures nested map");
+    AssertTrue(output.Value.Contains("next_total: channel_sum", StringComparison.Ordinal), "call out captures nested map");
+    AssertFalse(body.IsComplexEditable, "for do is not complex editable");
+    AssertTrue(body.Value.Contains("- log.text:", StringComparison.Ordinal), "for do captures nested command list");
+
+    return Task.CompletedTask;
+}
+
 static Task RunMainWorkbenchViewModelRefreshesGuiModelTest()
 {
     var viewModel = new MainWorkbenchViewModel(
@@ -1439,6 +1481,55 @@ static Task RunWorkbenchYamlCommandArgumentUpdaterTest()
             "      - trace32.command:\n          command: \"PRINT\"\n          save_as: trace_result",
             StringComparison.Ordinal),
         "argument updater inserts missing scalar before next command boundary");
+
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchYamlCommandComplexArgumentUpdaterTest()
+{
+    var yaml =
+        """
+        testcases:
+          - name: complex_update_case
+            steps:
+              - call:
+                  function: add_channel
+                  args:
+                    running_total: "${channel_sum}"
+                  out: {}
+        """;
+    var model = WorkbenchGuiModelBuilder.Build(yaml);
+    var call = model.Testcases[0].Phases.Single(phase => phase.YamlName == "steps").Blocks[0];
+
+    var updated = WorkbenchYamlCommandArgumentUpdater.Update(
+        yaml,
+        call,
+        WorkbenchCommandCatalog.Find("call")!.Arguments.Single(argument => argument.Name == "args"),
+        """
+        running_total: "${next_total}"
+        channel: "${channel}"
+        """);
+    var normalized = updated.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+    AssertTrue(
+        normalized.Contains(
+            "          args:\n            running_total: \"${next_total}\"\n            channel: \"${channel}\"",
+            StringComparison.Ordinal),
+        "complex argument updater replaces nested map body");
+
+    var refreshedCall = WorkbenchGuiModelBuilder.Build(updated.Text)
+        .Testcases[0]
+        .Phases.Single(phase => phase.YamlName == "steps")
+        .Blocks[0];
+    var outUpdated = WorkbenchYamlCommandArgumentUpdater.Update(
+        updated.Text,
+        refreshedCall,
+        WorkbenchCommandCatalog.Find("call")!.Arguments.Single(argument => argument.Name == "out"),
+        "next_total: channel_sum");
+    AssertTrue(
+        outUpdated.Text.Replace("\r\n", "\n", StringComparison.Ordinal).Contains(
+            "          out:\n            next_total: channel_sum",
+            StringComparison.Ordinal),
+        "complex argument updater expands inline empty map");
 
     return Task.CompletedTask;
 }
@@ -1765,6 +1856,43 @@ static Task RunMainWorkbenchViewModelUpdatesSelectedGuiCommandArgumentTest()
         "view model updates selected command argument in editor text");
     AssertEqual("after", viewModel.SelectedGuiCommand?.Arguments.Single(argument => argument.Name == "text").Value, "view model refreshes selected argument value");
     AssertTrue(viewModel.IsDirty, "argument edit marks document dirty");
+
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelUpdatesSelectedGuiCommandComplexArgumentTest()
+{
+    var runner = new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>());
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", Directory.GetCurrentDirectory(), runner));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: property_complex_case
+            steps:
+              - call:
+                  function: add_channel
+                  args: {}
+        """);
+    var command = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps").Blocks[0];
+    viewModel.SelectGuiCommand(command);
+
+    viewModel.UpdateSelectedGuiCommandArgument(
+        "args",
+        """
+        running_total: "${channel_sum}"
+        channel: "${channel}"
+        """);
+
+    AssertTrue(
+        viewModel.EditorText.Replace("\r\n", "\n", StringComparison.Ordinal).Contains(
+            "          args:\n            running_total: \"${channel_sum}\"\n            channel: \"${channel}\"",
+            StringComparison.Ordinal),
+        "view model updates selected complex command argument in editor text");
+    AssertTrue(
+        viewModel.SelectedGuiCommand!.Arguments.Single(argument => argument.Name == "args").Value.Contains("channel:", StringComparison.Ordinal),
+        "view model refreshes selected complex argument value");
 
     return Task.CompletedTask;
 }

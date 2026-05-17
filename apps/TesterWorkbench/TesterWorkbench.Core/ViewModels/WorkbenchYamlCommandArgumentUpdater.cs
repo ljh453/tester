@@ -26,9 +26,11 @@ public static class WorkbenchYamlCommandArgumentUpdater
             throw new ArgumentNullException(nameof(argument));
         }
 
-        if (!argument.IsScalarEditable)
+        if (!argument.IsScalarEditable
+            && argument.Kind is not WorkbenchCommandArgumentKind.Map
+                and not WorkbenchCommandArgumentKind.List)
         {
-            throw new InvalidOperationException($"Argument '{argument.Name}' is not editable as a scalar value.");
+            throw new InvalidOperationException($"Argument '{argument.Name}' is not editable from Properties.");
         }
 
         var newline = yamlText.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
@@ -36,18 +38,38 @@ public static class WorkbenchYamlCommandArgumentUpdater
         var commandLineIndex = ToLineIndex(commandBlock.SourceLineStart, lines.Count);
         var commandIndent = LeadingSpaceCount(lines[commandLineIndex]);
         var argumentIndent = commandIndent + 4;
-        var formattedLine = $"{new string(' ', argumentIndent)}{argument.Name}: {FormatScalar(argument, value)}";
         var directArgument = FindDirectArgumentLine(lines, commandBlock, argument.Name, argumentIndent);
+        if (argument.IsScalarEditable)
+        {
+            var formattedLine = $"{new string(' ', argumentIndent)}{argument.Name}: {FormatScalar(argument, value)}";
+            if (directArgument >= 0)
+            {
+                lines[directArgument] = formattedLine;
+                return new WorkbenchYamlCommandArgumentUpdateResult(
+                    JoinLines(lines, newline),
+                    directArgument + 1);
+            }
+
+            var scalarInsertAtLineIndex = FindInsertionLine(lines, commandBlock, commandLineIndex, commandIndent, argumentIndent);
+            lines.Insert(scalarInsertAtLineIndex, formattedLine);
+            return new WorkbenchYamlCommandArgumentUpdateResult(
+                JoinLines(lines, newline),
+                scalarInsertAtLineIndex + 1);
+        }
+
+        var replacementLines = BuildComplexArgumentLines(argument, value, argumentIndent);
         if (directArgument >= 0)
         {
-            lines[directArgument] = formattedLine;
+            var replaceEndLineIndex = FindArgumentBlockEndLine(lines, commandBlock, directArgument, argumentIndent);
+            lines.RemoveRange(directArgument, replaceEndLineIndex - directArgument + 1);
+            lines.InsertRange(directArgument, replacementLines);
             return new WorkbenchYamlCommandArgumentUpdateResult(
                 JoinLines(lines, newline),
                 directArgument + 1);
         }
 
         var insertAtLineIndex = FindInsertionLine(lines, commandBlock, commandLineIndex, commandIndent, argumentIndent);
-        lines.Insert(insertAtLineIndex, formattedLine);
+        lines.InsertRange(insertAtLineIndex, replacementLines);
         return new WorkbenchYamlCommandArgumentUpdateResult(
             JoinLines(lines, newline),
             insertAtLineIndex + 1);
@@ -115,6 +137,80 @@ public static class WorkbenchYamlCommandArgumentUpdater
         }
 
         return insertAtLineIndex;
+    }
+
+    private static int FindArgumentBlockEndLine(
+        IReadOnlyList<string> lines,
+        WorkbenchCommandBlock commandBlock,
+        int argumentLineIndex,
+        int argumentIndent)
+    {
+        var endLineIndex = ToLineIndex(commandBlock.SourceLineEnd, lines.Count);
+        var replaceEndLineIndex = argumentLineIndex;
+        for (var index = argumentLineIndex + 1; index <= endLineIndex; index++)
+        {
+            var indent = LeadingSpaceCount(lines[index]);
+            if (!string.IsNullOrWhiteSpace(lines[index]) && indent <= argumentIndent)
+            {
+                break;
+            }
+
+            replaceEndLineIndex = index;
+        }
+
+        return replaceEndLineIndex;
+    }
+
+    private static IReadOnlyList<string> BuildComplexArgumentLines(
+        WorkbenchCommandArgumentDefinition argument,
+        string value,
+        int argumentIndent)
+    {
+        var indent = new string(' ', argumentIndent);
+        var trimmed = value.Trim();
+        if (argument.Kind == WorkbenchCommandArgumentKind.List
+            && trimmed.StartsWith("[", StringComparison.Ordinal)
+            && trimmed.EndsWith("]", StringComparison.Ordinal))
+        {
+            return new[] { $"{indent}{argument.Name}: {trimmed}" };
+        }
+
+        var bodyLines = NormalizeComplexValueLines(value);
+        if (bodyLines.Count == 0)
+        {
+            var emptyValue = argument.Kind == WorkbenchCommandArgumentKind.List ? "[]" : "{}";
+            return new[] { $"{indent}{argument.Name}: {emptyValue}" };
+        }
+
+        var result = new List<string> { $"{indent}{argument.Name}:" };
+        result.AddRange(bodyLines.Select(line => $"{indent}  {line}"));
+        return result;
+    }
+
+    private static IReadOnlyList<string> NormalizeComplexValueLines(string value)
+    {
+        var lines = value
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n')
+            .ToList();
+        while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[0]))
+        {
+            lines.RemoveAt(0);
+        }
+
+        while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines[^1]))
+        {
+            lines.RemoveAt(lines.Count - 1);
+        }
+
+        var commonIndent = lines
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(LeadingSpaceCount)
+            .DefaultIfEmpty(0)
+            .Min();
+        return lines
+            .Select(line => line.Length >= commonIndent ? line[commonIndent..] : line)
+            .ToArray();
     }
 
     private static string FormatScalar(WorkbenchCommandArgumentDefinition argument, string value)

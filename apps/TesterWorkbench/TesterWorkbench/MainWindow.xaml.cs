@@ -256,6 +256,14 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void GuiCommandComplexArgumentTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox textBox)
+        {
+            ApplyGuiCommandArgumentEdit(textBox, textBox.Text);
+        }
+    }
+
     private void CommandCatalogItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: WorkbenchCommandDefinition commandDefinition })
@@ -772,6 +780,9 @@ public partial class MainWindow : Window
         GuiCommandLineBox.Text = command?.LineRangeText ?? "";
         GuiCommandArgumentsControl.ItemsSource = command?.Arguments
             .Where(argument => argument.IsScalarEditable)
+            .ToArray() ?? Array.Empty<WorkbenchCommandArgument>();
+        GuiCommandComplexArgumentsControl.ItemsSource = command?.Arguments
+            .Where(argument => !argument.IsScalarEditable)
             .ToArray() ?? Array.Empty<WorkbenchCommandArgument>();
         GuiCommandSourceBox.Text = command?.SourcePreview ?? "";
     }
