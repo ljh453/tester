@@ -326,7 +326,7 @@ def _dispatch_command(
 
     if command.type == "delay":
         ms = int(evaluate_value(command.args["ms"], frame.variables))
-        _sleep_delay(context, testcase_name, phase, command, frame, events, ms)
+        context.sleep_fn(ms / 1000)
         return {"ms": ms}, {"slept_ms": ms}
 
     if command.type == "call":
@@ -342,84 +342,6 @@ def _dispatch_command(
         return _execute_device_command(context, testcase_name, phase, command, frame)
 
     raise CommandFailed(f"Unsupported command '{command.type}'.")
-
-
-def _sleep_delay(
-    context: RuntimeContext,
-    testcase_name: str,
-    phase: str,
-    command: NormalizedCommand,
-    frame: Frame,
-    events: List[CommandEvent],
-    ms: int,
-) -> None:
-    remaining_s = max(0.0, ms / 1000)
-    slice_s = _delay_poll_slice_s(context, remaining_s)
-    while remaining_s > 0:
-        _pause_during_delay_if_needed(context, testcase_name, phase, command, frame, events)
-        current_sleep_s = min(slice_s, remaining_s)
-        if current_sleep_s <= 0:
-            return
-        context.sleep_fn(current_sleep_s)
-        remaining_s = max(0.0, remaining_s - current_sleep_s)
-        if remaining_s > 0:
-            _stream_delay_progress(context, testcase_name, phase, command, frame, remaining_s)
-
-
-def _delay_poll_slice_s(context: RuntimeContext, remaining_s: float) -> float:
-    if context.run_control is None or context.run_control.poll_interval_s <= 0:
-        return remaining_s
-    return min(context.run_control.poll_interval_s, remaining_s)
-
-
-def _pause_during_delay_if_needed(
-    context: RuntimeContext,
-    testcase_name: str,
-    phase: str,
-    command: NormalizedCommand,
-    frame: Frame,
-    events: List[CommandEvent],
-) -> None:
-    if context.run_control is None or context.run_control.read_state() != "paused":
-        return
-    pause_event = _event(
-        context,
-        testcase_name,
-        phase,
-        command,
-        "paused",
-        {},
-        {"reason": "pause_requested"},
-        local_variables=deepcopy(frame.variables),
-    )
-    events.append(pause_event)
-    if context.event_callback is not None:
-        context.event_callback(pause_event)
-    context.run_control.wait_until_resumed(context.sleep_fn)
-
-
-def _stream_delay_progress(
-    context: RuntimeContext,
-    testcase_name: str,
-    phase: str,
-    command: NormalizedCommand,
-    frame: Frame,
-    remaining_s: float,
-) -> None:
-    if context.event_callback is None:
-        return
-    context.event_callback(
-        _event(
-            context,
-            testcase_name,
-            phase,
-            command,
-            "running",
-            {},
-            {"remaining_ms": int(round(remaining_s * 1000))},
-            local_variables=deepcopy(frame.variables),
-        )
-    )
 
 
 def _execute_adapter_command(

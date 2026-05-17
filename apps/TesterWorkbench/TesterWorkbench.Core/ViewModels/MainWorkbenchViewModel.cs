@@ -704,7 +704,7 @@ public sealed class MainWorkbenchViewModel
                 && candidate.Testcase == runEvent.Testcase
                 && candidate.Phase == runEvent.Phase
                 && candidate.CommandPath == runEvent.CommandPath);
-        if (runningEventIndex >= 0)
+        if (runEvent.Status != "running" && runningEventIndex >= 0)
         {
             events[runningEventIndex] = runEvent;
         }

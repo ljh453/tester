@@ -358,21 +358,6 @@ static async Task RunMainWorkbenchViewModelStreamingTest()
           "error": null
         }
         """;
-    var firstRunningProgressEventJson =
-        """
-        {
-          "testcase": "stream_case",
-          "phase": "steps",
-          "command_path": ["testcases", 0, "steps", 0],
-          "command_type": "set",
-          "status": "running",
-          "source_file": "/repo/tests/stream.yaml",
-          "source_line": 4,
-          "local_variables": {},
-          "outputs": {"remaining_ms": 50},
-          "error": null
-        }
-        """;
     var secondRunningEventJson =
         """
         {
@@ -436,7 +421,6 @@ static async Task RunMainWorkbenchViewModelStreamingTest()
             new[]
             {
                 firstRunningEventJson,
-                firstRunningProgressEventJson,
                 firstPassedEventJson,
                 secondRunningEventJson,
                 secondPassedEventJson
@@ -452,7 +436,7 @@ static async Task RunMainWorkbenchViewModelStreamingTest()
     await viewModel.CompileAsync();
     await viewModel.RunAsync("gui-run", () => callbackCount++);
 
-    AssertEqual(6, callbackCount, "streaming callback count");
+    AssertEqual(5, callbackCount, "streaming callback count");
     AssertEqual(2, viewModel.ExecutionTrace.Count, "streaming trace count");
     AssertEqual(7, viewModel.CurrentLineNumber, "streaming current line");
     AssertEqual(2, viewModel.Variables.Count, "streaming variables count");
