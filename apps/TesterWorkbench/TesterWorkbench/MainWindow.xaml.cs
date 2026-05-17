@@ -282,6 +282,20 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void GuiDeleteCommand_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: WorkbenchCommandBlock commandBlock })
+        {
+            return;
+        }
+
+        _viewModel.DeleteGuiCommand(commandBlock);
+        _dragCommandBlock = null;
+        _commandBlockDragStartPoint = null;
+        RefreshEditorAfterGuiEdit();
+        e.Handled = true;
+    }
+
     private void GuiPhase_DragOver(object sender, System.Windows.DragEventArgs e)
     {
         var commandDefinition = GetDraggedCommand(e.Data);

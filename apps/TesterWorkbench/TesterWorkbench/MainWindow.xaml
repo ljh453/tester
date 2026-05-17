@@ -78,6 +78,7 @@
                             <ColumnDefinition Width="82" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="72" />
+                            <ColumnDefinition Width="30" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
                                    Text="{Binding BreakpointMarker}"
@@ -96,7 +97,7 @@
                         <TextBlock Grid.Column="3"
                                    Text="{Binding Summary}"
                                    Foreground="{DynamicResource Workbench.Brush.TextSecondary}"
-                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="Wrap"
                                    VerticalAlignment="Center" />
                         <TextBlock Grid.Column="4"
                                    Text="{Binding LineRangeText}"
@@ -105,6 +106,11 @@
                                    Foreground="{DynamicResource Workbench.Brush.TextMuted}"
                                    TextAlignment="Right"
                                    VerticalAlignment="Center" />
+                        <Button Grid.Column="5"
+                                Content="×"
+                                Click="GuiDeleteCommand_Click"
+                                Style="{StaticResource IdeToolbarButtonStyle}"
+                                ToolTip="Delete command" />
                     </Grid>
                 </Border>
                 <Border Margin="42,0,0,6"
@@ -185,16 +191,16 @@
                                     PreviewMouseLeftButtonDown="CommandCatalogItem_MouseLeftButtonDown"
                                     PreviewMouseMove="CommandCatalogItem_PreviewMouseMove"
                                     ToolTip="{Binding Description}">
-                                <StackPanel MinWidth="96">
+                                <StackPanel Width="138">
                                     <TextBlock Text="{Binding CommandType}"
                                                FontFamily="Consolas"
                                                FontWeight="SemiBold"
                                                Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
-                                               TextTrimming="CharacterEllipsis" />
+                                               TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding RequiredArgsText}"
                                                FontSize="11"
                                                Foreground="{DynamicResource Workbench.Brush.TextMuted}"
-                                               TextTrimming="CharacterEllipsis" />
+                                               TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
                         </DataTemplate>

@@ -514,15 +514,15 @@
 
     .block-head {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
       gap: 8px;
-      align-items: center;
+      align-items: start;
       padding: 8px 10px;
     }
 
     .block-head:has(.fold-toggle),
     .block-head:has(.fold-spacer) {
-      grid-template-columns: auto auto minmax(0, 1fr) auto;
+      grid-template-columns: auto auto minmax(0, 1fr) auto auto;
     }
 
     .block-id {
@@ -576,6 +576,26 @@
     .summary {
       color: var(--text);
       font-size: 13px;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    .block-delete {
+      width: 24px;
+      height: 22px;
+      border: 1px solid #3a4657;
+      border-radius: 4px;
+      background: #1b222c;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 700;
+      line-height: 18px;
+      padding: 0;
+    }
+
+    .block-delete:hover {
+      border-color: rgba(241, 123, 123, 0.78);
+      color: #ffd2d2;
     }
 
     .summary .arg {
@@ -732,9 +752,11 @@
       color: var(--text);
       cursor: grab;
       font-size: 12px;
-      min-width: 88px;
+      width: 132px;
       padding: 6px 7px;
       text-align: left;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     .palette .cmd:active {
@@ -1001,6 +1023,7 @@
                     <span class="summary"><span class="var">channels</span> = [1, 2, 3]</span>
                   </div>
                   <span class="line-ref">L18-L20</span>
+                  <button class="block-delete" type="button" title="Delete command" aria-label="Delete command">×</button>
                 </div>
               </article>
 
@@ -1014,6 +1037,7 @@
                     <span class="summary">each <span class="arg">${channels}</span> as <span class="var">channel</span></span>
                   </div>
                   <span class="line-ref">L21-L28</span>
+                  <button class="block-delete" type="button" title="Delete command" aria-label="Delete command">×</button>
                 </div>
                 <div class="block-body">Container command with a nested do block. The whole YAML range is highlighted while this block runs.</div>
                 <div class="nested">
@@ -1023,9 +1047,10 @@
                       <span class="fold-spacer"></span>
                       <div class="block-main">
                         <span class="block-type">log</span>
-                        <span class="summary">"Turn on {{ channel }}"</span>
+                        <span class="summary">"Turn on {{ channel }} with a deliberately long message that wraps instead of being clipped"</span>
                       </div>
                       <span class="line-ref">L25-L26</span>
+                      <button class="block-delete" type="button" title="Delete command" aria-label="Delete command">×</button>
                     </div>
                   </article>
                   <article class="block condition foldable" data-depth="2" data-fold-children="1">
@@ -1037,6 +1062,7 @@
                         <span class="summary"><span class="arg">${channel == 2}</span></span>
                       </div>
                       <span class="line-ref">L27-L35</span>
+                      <button class="block-delete" type="button" title="Delete command" aria-label="Delete command">×</button>
                     </div>
                     <div class="block-body">Then branch contains retry behavior. Fold Level 2 hides this branch detail.</div>
                     <div class="nested level-3">

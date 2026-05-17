@@ -383,6 +383,39 @@ public sealed class MainWorkbenchViewModel
         UpdateGuiCurrentExecutionBlock();
     }
 
+    public void DeleteGuiCommand(WorkbenchCommandBlock commandBlock)
+    {
+        if (SelectedGuiTestcase is null)
+        {
+            throw new InvalidOperationException("No testcase is selected.");
+        }
+
+        if (commandBlock is null)
+        {
+            throw new ArgumentNullException(nameof(commandBlock));
+        }
+
+        var testcaseName = SelectedGuiTestcase.Name;
+        var deletedLineNumber = commandBlock.SourceLineStart;
+        var result = WorkbenchYamlCommandDeleter.Delete(EditorText, commandBlock);
+        UpdateEditorText(result.Text);
+        SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
+            testcase.Name == testcaseName)
+            ?? GuiModel.Testcases.FirstOrDefault();
+        SelectedGuiCommand = FindCommandNearDeletedLine(SelectedGuiTestcase, deletedLineNumber);
+        if (SelectedGuiCommand is not null)
+        {
+            CurrentLineNumber = SelectedGuiCommand.SourceLineStart;
+            CurrentLocationText = $"Line {CurrentLineNumber} - {SelectedGuiCommand.CommandType}";
+        }
+        else
+        {
+            ClearCurrentExecutionLocation();
+        }
+
+        UpdateGuiCurrentExecutionBlock();
+    }
+
     public void ShowGuiCommandInsertionPreview(
         WorkbenchCommandDefinition command,
         WorkbenchGuiPhase phase,
@@ -602,6 +635,19 @@ public sealed class MainWorkbenchViewModel
         return SelectedGuiTestcase is null
             ? Array.Empty<WorkbenchCommandBlock>()
             : SelectedGuiTestcase.Phases.SelectMany(phase => FlattenCommands(phase.Blocks));
+    }
+
+    private static WorkbenchCommandBlock? FindCommandNearDeletedLine(
+        WorkbenchGuiTestcase? testcase,
+        int deletedLineNumber)
+    {
+        var commandBlocks = testcase?.Phases
+            .SelectMany(phase => FlattenCommands(phase.Blocks))
+            .OrderBy(commandBlock => commandBlock.SourceLineStart)
+            .ToArray() ?? Array.Empty<WorkbenchCommandBlock>();
+        return commandBlocks.FirstOrDefault(commandBlock =>
+                commandBlock.SourceLineStart >= deletedLineNumber)
+            ?? commandBlocks.LastOrDefault();
     }
 
     private static IEnumerable<WorkbenchCommandBlock> FlattenCommands(

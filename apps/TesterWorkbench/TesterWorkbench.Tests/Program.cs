@@ -24,8 +24,10 @@ await RunMainWorkbenchViewModelRefreshesGuiModelTest();
 await RunWorkbenchCommandCatalogTest();
 await RunWorkbenchYamlCommandInserterTest();
 await RunWorkbenchYamlCommandMoverTest();
+await RunWorkbenchYamlCommandDeleterTest();
 await RunMainWorkbenchViewModelInsertsGuiCommandTest();
 await RunMainWorkbenchViewModelMovesGuiCommandTest();
+await RunMainWorkbenchViewModelDeletesGuiCommandTest();
 await RunMainWorkbenchViewModelShowsDragInsertionPreviewTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
@@ -1203,6 +1205,36 @@ static Task RunWorkbenchYamlCommandMoverTest()
     return Task.CompletedTask;
 }
 
+static Task RunWorkbenchYamlCommandDeleterTest()
+{
+    var yaml =
+        """
+        testcases:
+          - name: delete_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - delay:
+                  ms: 1000
+              - log.text:
+                  text: "done"
+        """;
+    var model = WorkbenchGuiModelBuilder.Build(yaml);
+    var testcase = model.Testcases[0];
+    var delayBlock = testcase.Phases.Single(phase => phase.YamlName == "steps").Blocks[1];
+
+    var result = WorkbenchYamlCommandDeleter.Delete(yaml, delayBlock);
+    var normalized = result.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    AssertFalse(normalized.Contains("      - delay:", StringComparison.Ordinal), "YAML deleter removes selected command");
+    AssertFalse(normalized.Contains("          ms: 1000", StringComparison.Ordinal), "YAML deleter removes command arguments");
+    AssertTrue(normalized.Contains("      - set:", StringComparison.Ordinal), "YAML deleter keeps previous command");
+    AssertTrue(normalized.Contains("      - log.text:", StringComparison.Ordinal), "YAML deleter keeps next command");
+    AssertEqual(7, result.DeletedLineNumber, "YAML deleter reports deleted line");
+    return Task.CompletedTask;
+}
+
 static Task RunMainWorkbenchViewModelMovesGuiCommandTest()
 {
     var viewModel = new MainWorkbenchViewModel(
@@ -1236,6 +1268,39 @@ static Task RunMainWorkbenchViewModelMovesGuiCommandTest()
         "view model moves command in editor text");
     AssertEqual("log.text", viewModel.SelectedGuiCommand?.CommandType, "view model selects moved command");
     AssertEqual(4, viewModel.CurrentLineNumber, "view model focuses moved command line");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelDeletesGuiCommandTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: gui_delete_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - delay:
+                  ms: 1000
+              - log.text:
+                  text: "done"
+        """);
+    var steps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+    var delayBlock = steps.Blocks[1];
+
+    viewModel.DeleteGuiCommand(delayBlock);
+
+    AssertFalse(viewModel.EditorText.Contains("  - delay:", StringComparison.Ordinal), "view model deletes command text");
+    AssertEqual(2, viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps").Blocks.Count, "view model command count after delete");
+    AssertEqual("log.text", viewModel.SelectedGuiCommand?.CommandType, "view model selects next command after delete");
+    AssertEqual(7, viewModel.CurrentLineNumber, "view model focuses next command line after delete");
     return Task.CompletedTask;
 }
 
