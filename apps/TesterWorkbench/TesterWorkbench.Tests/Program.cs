@@ -29,6 +29,7 @@ await RunWorkbenchYamlCommandDeleterTest();
 await RunMainWorkbenchViewModelInsertsGuiCommandTest();
 await RunMainWorkbenchViewModelMovesGuiCommandTest();
 await RunMainWorkbenchViewModelDeletesGuiCommandTest();
+await RunMainWorkbenchViewModelSelectsGuiCommandRangeTest();
 await RunMainWorkbenchViewModelDeletesSelectedGuiCommandsTest();
 await RunMainWorkbenchViewModelShowsDragInsertionPreviewTest();
 
@@ -1407,6 +1408,44 @@ static Task RunMainWorkbenchViewModelDeletesGuiCommandTest()
     AssertEqual(2, viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps").Blocks.Count, "view model command count after delete");
     AssertEqual("log.text", viewModel.SelectedGuiCommand?.CommandType, "view model selects next command after delete");
     AssertEqual(7, viewModel.CurrentLineNumber, "view model focuses next command line after delete");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelSelectsGuiCommandRangeTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: gui_range_select_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - delay:
+                  ms: 1000
+              - log.text:
+                  text: "done"
+              - assert.eq:
+                  left: "${rpm}"
+                  right: 700
+        """);
+    var steps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+
+    viewModel.SelectGuiCommandForBulkAction(steps.Blocks[1], replaceSelection: true);
+    viewModel.SelectGuiCommandRangeForBulkAction(steps.Blocks[3]);
+
+    AssertEqual(3, viewModel.SelectedGuiCommandCount, "range selection includes dragged-over commands");
+    AssertFalse(steps.Blocks[0].IsSelectedForBulkAction, "range selection excludes command before anchor");
+    AssertTrue(steps.Blocks[1].IsSelectedForBulkAction, "range selection includes anchor command");
+    AssertTrue(steps.Blocks[2].IsSelectedForBulkAction, "range selection includes middle command");
+    AssertTrue(steps.Blocks[3].IsSelectedForBulkAction, "range selection includes target command");
+    AssertEqual("assert.eq", viewModel.SelectedGuiCommand?.CommandType, "range selection focuses target command");
     return Task.CompletedTask;
 }
 

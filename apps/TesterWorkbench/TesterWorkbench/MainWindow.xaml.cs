@@ -259,6 +259,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (IsCommandDragHandle(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
         if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
         {
             _viewModel.ToggleGuiCommandForBulkAction(commandBlock);
@@ -282,14 +287,13 @@ public partial class MainWindow : Window
         _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
         RefreshGuiCommandProperties();
         CurrentLineText.Text = _viewModel.CurrentLocationText;
-        _isGuiBulkSelectingWithLeftButton = true;
-        _dragCommandBlock = null;
-        _commandBlockDragStartPoint = null;
+        BeginGuiBulkSelection();
+        e.Handled = true;
     }
 
     private void GuiCommandBlock_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        _isGuiBulkSelectingWithLeftButton = false;
+        EndGuiBulkSelection();
     }
 
     private void GuiCommandDragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -360,12 +364,35 @@ public partial class MainWindow : Window
         }
 
         _viewModel.ClearGuiCommandBulkSelection();
-        _isGuiBulkSelectingWithLeftButton = true;
+        BeginGuiBulkSelection();
+        e.Handled = true;
     }
 
     private void GuiSelectionSurface_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        _isGuiBulkSelectingWithLeftButton = false;
+        EndGuiBulkSelection();
+    }
+
+    private void GuiSelectionSurface_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (!_isGuiBulkSelectingWithLeftButton || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var commandBlock =
+            FindDataContext<WorkbenchCommandBlock>(Mouse.DirectlyOver as DependencyObject)
+            ?? FindDataContext<WorkbenchCommandBlock>(e.OriginalSource as DependencyObject);
+        if (commandBlock is null)
+        {
+            return;
+        }
+
+        _viewModel.SelectGuiCommandRangeForBulkAction(commandBlock);
+        RefreshGuiCommandProperties();
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
+        UpdateCurrentExecutionLineMarker();
+        e.Handled = true;
     }
 
     private void GuiCommandBlock_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
@@ -394,12 +421,29 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void BeginGuiBulkSelection()
+    {
+        _isGuiBulkSelectingWithLeftButton = true;
+        _dragCommandBlock = null;
+        _commandBlockDragStartPoint = null;
+        Mouse.Capture(GuiPhaseItems, CaptureMode.SubTree);
+    }
+
+    private void EndGuiBulkSelection()
+    {
+        _isGuiBulkSelectingWithLeftButton = false;
+        if (Mouse.Captured == GuiPhaseItems)
+        {
+            Mouse.Capture(null);
+        }
+    }
+
     private void GuiDeleteSelectedCommands_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.DeleteSelectedGuiCommands();
         _dragCommandBlock = null;
         _commandBlockDragStartPoint = null;
-        _isGuiBulkSelectingWithLeftButton = false;
+        EndGuiBulkSelection();
         _isGuiBulkSelectingWithRightButton = false;
         RefreshEditorAfterGuiEdit();
         e.Handled = true;
@@ -1160,6 +1204,22 @@ public partial class MainWindow : Window
             && position.Y >= 0
             && position.X <= element.ActualWidth
             && position.Y <= element.ActualHeight;
+    }
+
+    private static bool IsCommandDragHandle(DependencyObject? source)
+    {
+        var current = source;
+        while (current is not null)
+        {
+            if (current is FrameworkElement { Tag: "CommandDragHandle" })
+            {
+                return true;
+            }
+
+            current = GetParent(current);
+        }
+
+        return false;
     }
 
     private static IEnumerable<WorkbenchCommandBlock> FlattenCommands(
