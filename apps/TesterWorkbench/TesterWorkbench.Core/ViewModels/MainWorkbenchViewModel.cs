@@ -295,7 +295,9 @@ public sealed class MainWorkbenchViewModel
         }
 
         var previousTestcaseName = SelectedGuiTestcase?.Name;
-        GuiModel = WorkbenchGuiModelBuilder.Build(editorText);
+        GuiModel = WorkbenchGuiModelBuilder.Build(
+            editorText,
+            BuildExternalGuiSuggestionContext(editorText));
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase => testcase.Name == previousTestcaseName)
             ?? GuiModel.Testcases.FirstOrDefault();
         SelectedGuiCommand = SelectedGuiTestcase?.Phases
@@ -321,6 +323,67 @@ public sealed class MainWorkbenchViewModel
     public void SetThemeMode(WorkbenchThemeMode themeMode)
     {
         ThemeMode = themeMode;
+    }
+
+    private WorkbenchGuiSuggestionContext BuildExternalGuiSuggestionContext(string editorText)
+    {
+        var toolProfilePath = FindToolProfilePath(editorText);
+        if (string.IsNullOrWhiteSpace(toolProfilePath))
+        {
+            return WorkbenchGuiSuggestionContext.Empty;
+        }
+
+        var resolvedPath = ResolveWorkspacePath(toolProfilePath);
+        if (string.IsNullOrWhiteSpace(resolvedPath) || !File.Exists(resolvedPath))
+        {
+            return WorkbenchGuiSuggestionContext.Empty;
+        }
+
+        try
+        {
+            return WorkbenchGuiModelBuilder.BuildSuggestionContext(File.ReadAllText(resolvedPath));
+        }
+        catch
+        {
+            return WorkbenchGuiSuggestionContext.Empty;
+        }
+    }
+
+    private string? ResolveWorkspacePath(string path)
+    {
+        var normalizedPath = path.Trim().Trim('"', '\'');
+        if (Path.IsPathRooted(normalizedPath))
+        {
+            return normalizedPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(WorkspacePath))
+        {
+            return Path.GetFullPath(Path.Combine(WorkspacePath, normalizedPath));
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedFilePath))
+        {
+            return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(SelectedFilePath)!, normalizedPath));
+        }
+
+        return null;
+    }
+
+    private static string FindToolProfilePath(string editorText)
+    {
+        foreach (var line in editorText.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+        {
+            var trimmed = line.Trim();
+            if (!trimmed.StartsWith("tool_profile:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return trimmed["tool_profile:".Length..].Trim().Trim('"', '\'');
+        }
+
+        return string.Empty;
     }
 
     public void ZoomEditorIn()

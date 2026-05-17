@@ -7,9 +7,13 @@ public static class WorkbenchGuiModelBuilder
     private static readonly Regex CommandRegex = new(@"^-\s+([A-Za-z0-9_.-]+)\s*:", RegexOptions.Compiled);
     private static readonly Regex KeyValueRegex = new(@"^([A-Za-z0-9_.-]+)\s*:\s*(.*)$", RegexOptions.Compiled);
 
-    public static WorkbenchGuiModel Build(string yamlText)
+    public static WorkbenchGuiModel Build(
+        string yamlText,
+        WorkbenchGuiSuggestionContext? externalSuggestionContext = null)
     {
         var lines = SplitLines(yamlText);
+        var suggestionContext = BuildSuggestionContext(lines)
+            .Merge(externalSuggestionContext);
         var testcases = new List<WorkbenchGuiTestcase>();
         var testcasesLineIndex = FindRootSection(lines, "testcases");
         if (testcasesLineIndex < 0)
@@ -24,16 +28,22 @@ public static class WorkbenchGuiModelBuilder
             var endLineIndex = index + 1 < testcaseStarts.Count
                 ? testcaseStarts[index + 1] - 1
                 : FindSectionEnd(lines, startLineIndex, 2);
-            testcases.Add(BuildTestcase(lines, startLineIndex, endLineIndex));
+            testcases.Add(BuildTestcase(lines, startLineIndex, endLineIndex, suggestionContext));
         }
 
         return new WorkbenchGuiModel(testcases);
     }
 
+    public static WorkbenchGuiSuggestionContext BuildSuggestionContext(string yamlText)
+    {
+        return BuildSuggestionContext(SplitLines(yamlText));
+    }
+
     private static WorkbenchGuiTestcase BuildTestcase(
         IReadOnlyList<YamlLine> lines,
         int startLineIndex,
-        int endLineIndex)
+        int endLineIndex,
+        WorkbenchGuiSuggestionContext suggestionContext)
     {
         var name = ValueAfterPrefix(lines[startLineIndex].Trimmed, "- name:");
         var description = FindScalar(lines, startLineIndex + 1, endLineIndex, 4, "description");
@@ -41,9 +51,9 @@ public static class WorkbenchGuiModelBuilder
         var failurePolicy = FindScalar(lines, startLineIndex + 1, endLineIndex, 4, "on_step_failure");
         var phases = new[]
         {
-            BuildPhase("Preconditions", "preconditions", lines, startLineIndex, endLineIndex),
-            BuildPhase("Steps", "steps", lines, startLineIndex, endLineIndex),
-            BuildPhase("Postconditions", "postconditions", lines, startLineIndex, endLineIndex)
+            BuildPhase("Preconditions", "preconditions", lines, startLineIndex, endLineIndex, suggestionContext),
+            BuildPhase("Steps", "steps", lines, startLineIndex, endLineIndex, suggestionContext),
+            BuildPhase("Postconditions", "postconditions", lines, startLineIndex, endLineIndex, suggestionContext)
         };
 
         return new WorkbenchGuiTestcase(
@@ -62,7 +72,8 @@ public static class WorkbenchGuiModelBuilder
         string yamlName,
         IReadOnlyList<YamlLine> lines,
         int testcaseStartLineIndex,
-        int testcaseEndLineIndex)
+        int testcaseEndLineIndex,
+        WorkbenchGuiSuggestionContext suggestionContext)
     {
         var phaseLineIndex = FindPhaseLine(lines, testcaseStartLineIndex, testcaseEndLineIndex, yamlName);
         if (phaseLineIndex < 0)
@@ -82,7 +93,7 @@ public static class WorkbenchGuiModelBuilder
         var rootTempBlocks = BuildCommandTree(tempBlocks);
         AssignDisplayIndexes(rootTempBlocks, string.Empty);
         var rootBlocks = rootTempBlocks
-            .Select(block => ToCommandBlock(lines, block))
+            .Select(block => ToCommandBlock(lines, block, suggestionContext))
             .ToArray();
 
         return new WorkbenchGuiPhase(
@@ -171,10 +182,11 @@ public static class WorkbenchGuiModelBuilder
 
     private static WorkbenchCommandBlock ToCommandBlock(
         IReadOnlyList<YamlLine> lines,
-        TempCommandBlock tempBlock)
+        TempCommandBlock tempBlock,
+        WorkbenchGuiSuggestionContext suggestionContext)
     {
         var children = tempBlock.Children
-            .Select(child => ToCommandBlock(lines, child))
+            .Select(child => ToCommandBlock(lines, child, suggestionContext))
             .ToArray();
 
         return new WorkbenchCommandBlock(
@@ -187,13 +199,14 @@ public static class WorkbenchGuiModelBuilder
             tempBlock.Depth,
             BuildSourcePreview(lines, tempBlock.StartLineIndex, tempBlock.EndLineIndex),
             AccentColorFor(tempBlock.CommandType),
-            BuildArguments(lines, tempBlock),
+            BuildArguments(lines, tempBlock, suggestionContext),
             children);
     }
 
     private static IReadOnlyList<WorkbenchCommandArgument> BuildArguments(
         IReadOnlyList<YamlLine> lines,
-        TempCommandBlock tempBlock)
+        TempCommandBlock tempBlock,
+        WorkbenchGuiSuggestionContext suggestionContext)
     {
         var definition = WorkbenchCommandCatalog.Find(tempBlock.CommandType);
         if (definition is null)
@@ -208,7 +221,8 @@ public static class WorkbenchGuiModelBuilder
                 return new WorkbenchCommandArgument(
                     argumentDefinition,
                     argumentValue.Value,
-                    argumentValue.SourceLine);
+                    argumentValue.SourceLine,
+                    suggestionContext.SuggestionsFor(argumentDefinition));
             })
             .ToArray();
     }
@@ -299,6 +313,109 @@ public static class WorkbenchGuiModelBuilder
             "assert.fail" => ReadArgument(lines, tempBlock, "message"),
             _ => commandType
         };
+    }
+
+    private static WorkbenchGuiSuggestionContext BuildSuggestionContext(IReadOnlyList<YamlLine> lines)
+    {
+        return new WorkbenchGuiSuggestionContext(
+            ExtractVariableNames(lines),
+            ExtractFunctionNames(lines),
+            ExtractToolReferenceNames(lines));
+    }
+
+    private static IReadOnlyList<string> ExtractFunctionNames(IReadOnlyList<YamlLine> lines)
+    {
+        var functionsLineIndex = FindRootSection(lines, "functions");
+        if (functionsLineIndex < 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var functionNames = new List<string>();
+        var endLineIndex = FindRootSectionEnd(lines, functionsLineIndex);
+        for (var index = functionsLineIndex + 1; index <= endLineIndex; index++)
+        {
+            var line = lines[index];
+            var match = KeyValueRegex.Match(line.Trimmed);
+            if (line.Indent == 2 && match.Success)
+            {
+                functionNames.Add(match.Groups[1].Value);
+            }
+        }
+
+        return functionNames;
+    }
+
+    private static IReadOnlyList<string> ExtractVariableNames(IReadOnlyList<YamlLine> lines)
+    {
+        var variableNames = new List<string>();
+        foreach (var line in lines)
+        {
+            var match = KeyValueRegex.Match(line.Trimmed);
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            var key = match.Groups[1].Value;
+            var value = StripQuotes(match.Groups[2].Value.Trim());
+            if (key is "var" or "as" or "save_as")
+            {
+                variableNames.Add(value);
+            }
+            else if (key is "params" or "returns")
+            {
+                variableNames.AddRange(ParseInlineList(value));
+            }
+        }
+
+        return variableNames;
+    }
+
+    private static IReadOnlyList<string> ExtractToolReferenceNames(IReadOnlyList<YamlLine> lines)
+    {
+        var toolNames = new List<string>();
+        for (var index = 0; index < lines.Count; index++)
+        {
+            var line = lines[index];
+            if (line.Trimmed is not "devices:" and not "ports:")
+            {
+                continue;
+            }
+
+            var parentIndent = line.Indent;
+            for (var childIndex = index + 1; childIndex < lines.Count; childIndex++)
+            {
+                var child = lines[childIndex];
+                if (!string.IsNullOrWhiteSpace(child.Trimmed) && child.Indent <= parentIndent)
+                {
+                    break;
+                }
+
+                var match = KeyValueRegex.Match(child.Trimmed);
+                if (child.Indent == parentIndent + 2 && match.Success)
+                {
+                    toolNames.Add(match.Groups[1].Value);
+                }
+            }
+        }
+
+        return toolNames;
+    }
+
+    private static IReadOnlyList<string> ParseInlineList(string value)
+    {
+        var trimmed = value.Trim();
+        if (!trimmed.StartsWith("[", StringComparison.Ordinal)
+            || !trimmed.EndsWith("]", StringComparison.Ordinal))
+        {
+            return Array.Empty<string>();
+        }
+
+        return trimmed[1..^1]
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(StripQuotes)
+            .ToArray();
     }
 
     private static string ReadArgument(
@@ -492,6 +609,22 @@ public static class WorkbenchGuiModelBuilder
         {
             var line = lines[index];
             if (line.Indent < sectionIndent && !string.IsNullOrWhiteSpace(line.Trimmed))
+            {
+                return index - 1;
+            }
+        }
+
+        return lines.Count - 1;
+    }
+
+    private static int FindRootSectionEnd(
+        IReadOnlyList<YamlLine> lines,
+        int startLineIndex)
+    {
+        for (var index = startLineIndex + 1; index < lines.Count; index++)
+        {
+            var line = lines[index];
+            if (line.Indent == 0 && !string.IsNullOrWhiteSpace(line.Trimmed))
             {
                 return index - 1;
             }

@@ -219,7 +219,37 @@
                          Tag="{Binding}"
                          IsEnabled="{Binding IsScalarEditable}"
                          LostFocus="GuiCommandArgumentTextBox_LostFocus"
-                         PreviewKeyDown="GuiCommandArgumentTextBox_PreviewKeyDown" />
+                         PreviewKeyDown="GuiCommandArgumentTextBox_PreviewKeyDown">
+                    <TextBox.Style>
+                        <Style TargetType="{x:Type TextBox}">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasSuggestions}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBox.Style>
+                </TextBox>
+                <ComboBox ItemsSource="{Binding Suggestions}"
+                          Text="{Binding Value, Mode=OneWay}"
+                          Tag="{Binding}"
+                          IsEditable="True"
+                          IsTextSearchEnabled="True"
+                          IsEnabled="{Binding IsScalarEditable}"
+                          LostFocus="GuiCommandArgumentComboBox_LostFocus"
+                          PreviewKeyDown="GuiCommandArgumentComboBox_PreviewKeyDown">
+                    <ComboBox.Style>
+                        <Style TargetType="{x:Type ComboBox}" BasedOn="{StaticResource {x:Type ComboBox}}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasSuggestions}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ComboBox.Style>
+                </ComboBox>
             </StackPanel>
         </DataTemplate>
     </Window.Resources>

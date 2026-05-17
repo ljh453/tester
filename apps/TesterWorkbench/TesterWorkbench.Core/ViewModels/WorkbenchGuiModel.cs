@@ -165,11 +165,13 @@ public sealed class WorkbenchCommandArgument
     public WorkbenchCommandArgument(
         WorkbenchCommandArgumentDefinition definition,
         string value,
-        int sourceLine)
+        int sourceLine,
+        IReadOnlyList<string>? suggestions = null)
     {
         Definition = definition;
         Value = value;
         SourceLine = sourceLine;
+        Suggestions = suggestions ?? definition.Suggestions;
     }
 
     public WorkbenchCommandArgumentDefinition Definition { get; }
@@ -184,7 +186,7 @@ public sealed class WorkbenchCommandArgument
 
     public WorkbenchCommandAutocompleteKind AutocompleteKind => Definition.AutocompleteKind;
 
-    public IReadOnlyList<string> Suggestions => Definition.Suggestions;
+    public IReadOnlyList<string> Suggestions { get; }
 
     public bool HasSuggestions => Suggestions.Count > 0;
 

@@ -222,7 +222,7 @@ public partial class MainWindow : Window
     {
         if (sender is System.Windows.Controls.TextBox textBox)
         {
-            ApplyGuiCommandArgumentEdit(textBox);
+            ApplyGuiCommandArgumentEdit(textBox, textBox.Text);
         }
     }
 
@@ -234,6 +234,25 @@ public partial class MainWindow : Window
         }
 
         textBox.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+        e.Handled = true;
+    }
+
+    private void GuiCommandArgumentComboBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox comboBox)
+        {
+            ApplyGuiCommandArgumentEdit(comboBox, comboBox.Text);
+        }
+    }
+
+    private void GuiCommandArgumentComboBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not System.Windows.Controls.ComboBox comboBox)
+        {
+            return;
+        }
+
+        comboBox.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
         e.Handled = true;
     }
 
@@ -757,11 +776,11 @@ public partial class MainWindow : Window
         GuiCommandSourceBox.Text = command?.SourcePreview ?? "";
     }
 
-    private void ApplyGuiCommandArgumentEdit(System.Windows.Controls.TextBox textBox)
+    private void ApplyGuiCommandArgumentEdit(FrameworkElement editor, string value)
     {
         if (_isApplyingGuiCommandArgumentEdit
-            || textBox.Tag is not WorkbenchCommandArgument argument
-            || textBox.Text == argument.Value)
+            || editor.Tag is not WorkbenchCommandArgument argument
+            || value == argument.Value)
         {
             return;
         }
@@ -769,7 +788,7 @@ public partial class MainWindow : Window
         try
         {
             _isApplyingGuiCommandArgumentEdit = true;
-            _viewModel.UpdateSelectedGuiCommandArgument(argument.Name, textBox.Text);
+            _viewModel.UpdateSelectedGuiCommandArgument(argument.Name, value);
             RefreshEditorAfterGuiEdit();
         }
         catch (Exception ex)

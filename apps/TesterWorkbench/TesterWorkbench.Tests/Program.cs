@@ -27,7 +27,9 @@ await RunWorkbenchThemeResolverTest();
 await RunWorkbenchThemeStyleResourceTest();
 await RunWorkbenchGuiModelBuilderTest();
 await RunWorkbenchGuiModelBuilderCommandArgumentTest();
+await RunWorkbenchGuiModelBuilderAutocompleteSuggestionTest();
 await RunMainWorkbenchViewModelRefreshesGuiModelTest();
+await RunMainWorkbenchViewModelLoadsToolProfileArgumentSuggestionsTest();
 await RunWorkbenchCommandCatalogTest();
 await RunWorkbenchYamlCommandArgumentUpdaterTest();
 await RunWorkbenchYamlCommandInserterTest();
@@ -1260,6 +1262,55 @@ static Task RunWorkbenchGuiModelBuilderCommandArgumentTest()
     return Task.CompletedTask;
 }
 
+static Task RunWorkbenchGuiModelBuilderAutocompleteSuggestionTest()
+{
+    var model = WorkbenchGuiModelBuilder.Build(
+        """
+        functions:
+          add_channel:
+            params: [running_total, channel]
+            returns: [next_total]
+            steps:
+              - set:
+                  var: next_total
+                  value: "${running_total + channel}"
+        serial:
+          devices:
+            psu:
+              port: COM3
+        testcases:
+          - name: suggestion_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - call:
+                  function: add_channel
+              - assert.eq:
+                  left: "${rpm}"
+                  right: true
+              - serial.write:
+                  port: psu
+                  text: "OUT ON"
+        """);
+    var steps = model.Testcases[0].Phases.Single(phase => phase.YamlName == "steps");
+    var call = steps.Blocks[1];
+    var assert = steps.Blocks[2];
+    var serial = steps.Blocks[3];
+
+    AssertTrue(
+        call.Arguments.Single(argument => argument.Name == "function").Suggestions.Contains("add_channel"),
+        "function argument suggests YAML functions");
+    AssertTrue(
+        assert.Arguments.Single(argument => argument.Name == "left").Suggestions.Contains("${rpm}"),
+        "value argument suggests local variables as expressions");
+    AssertTrue(
+        serial.Arguments.Single(argument => argument.Name == "port").Suggestions.Contains("psu"),
+        "tool argument suggests inline serial devices");
+
+    return Task.CompletedTask;
+}
+
 static Task RunMainWorkbenchViewModelRefreshesGuiModelTest()
 {
     var viewModel = new MainWorkbenchViewModel(
@@ -1315,6 +1366,40 @@ static Task RunWorkbenchCommandCatalogTest()
         WorkbenchCommandCatalog.Groups.All(group => group.Commands.Count > 0),
         "GUI command catalog groups are populated");
     return Task.CompletedTask;
+}
+
+static async Task RunMainWorkbenchViewModelLoadsToolProfileArgumentSuggestionsTest()
+{
+    var workspace = TestPaths.CreateWorkspace(
+        ("tool-profiles/lab.tools.yaml",
+            """
+            serial:
+              devices:
+                psu:
+                  port: COM3
+                sent_usb:
+                  port: COM4
+            """),
+        ("tests/profile-suggestions.yaml",
+            """
+            tool_profile: tool-profiles/lab.tools.yaml
+            testcases:
+              - name: profile_suggestion_case
+                steps:
+                  - serial.write:
+                      port: psu
+                      text: "OUT ON"
+            """));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", workspace, new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    await viewModel.OpenWorkspaceAsync(workspace);
+    await viewModel.OpenFileAsync(Path.Combine(workspace, "tests", "profile-suggestions.yaml"));
+
+    var port = viewModel.SelectedGuiCommand!.Arguments.Single(argument => argument.Name == "port");
+    AssertTrue(port.Suggestions.Contains("psu"), "tool profile suggestions include psu");
+    AssertTrue(port.Suggestions.Contains("sent_usb"), "tool profile suggestions include sent_usb");
 }
 
 static Task RunWorkbenchYamlCommandArgumentUpdaterTest()
