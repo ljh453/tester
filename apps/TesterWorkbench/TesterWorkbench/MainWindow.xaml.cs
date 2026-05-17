@@ -282,8 +282,30 @@ public partial class MainWindow : Window
         _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
         RefreshGuiCommandProperties();
         CurrentLineText.Text = _viewModel.CurrentLocationText;
+        _isGuiBulkSelectingWithLeftButton = true;
+        _dragCommandBlock = null;
+        _commandBlockDragStartPoint = null;
+    }
+
+    private void GuiCommandBlock_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _isGuiBulkSelectingWithLeftButton = false;
+    }
+
+    private void GuiCommandDragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: WorkbenchCommandBlock commandBlock })
+        {
+            return;
+        }
+
+        _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
+        RefreshGuiCommandProperties();
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
+        _isGuiBulkSelectingWithLeftButton = false;
         _dragCommandBlock = commandBlock;
         _commandBlockDragStartPoint = e.GetPosition(null);
+        e.Handled = true;
     }
 
     private void GuiCommandBlock_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
@@ -1012,19 +1034,31 @@ public partial class MainWindow : Window
                     insideTarget.CommandBlock);
         }
 
+        var commandTarget = FindCommandBlockFromDropTarget(originalSource as DependencyObject);
+        if (commandTarget is { CanInsertInside: true })
+        {
+            var commandPhase = FindPhaseContainingCommand(commandTarget)
+                ?? FindPhaseFromDropTarget(sender, originalSource);
+            return commandPhase is null
+                ? null
+                : new WorkbenchCommandInsertionTarget(
+                    commandPhase,
+                    WorkbenchCommandInsertPlacement.InsideCommand,
+                    commandTarget);
+        }
+
         var phaseTarget = FindPhaseFromDropTarget(sender, originalSource);
         if (phaseTarget is null)
         {
             return null;
         }
 
-        var afterCommand = FindCommandBlockFromDropTarget(originalSource as DependencyObject);
-        return afterCommand is null
+        return commandTarget is null
             ? new WorkbenchCommandInsertionTarget(phaseTarget, WorkbenchCommandInsertPlacement.AtPhaseEnd)
             : new WorkbenchCommandInsertionTarget(
                 phaseTarget,
                 WorkbenchCommandInsertPlacement.AfterCommand,
-                afterCommand);
+                commandTarget);
     }
 
     private WorkbenchGuiPhase? FindPhaseContainingCommand(WorkbenchCommandBlock commandBlock)

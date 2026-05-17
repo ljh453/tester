@@ -145,6 +145,14 @@ public static class WorkbenchYamlCommandInserter
         }
 
         var commandLineIndex = ToLineIndex(parentCommand.SourceLineStart, lines.Count);
+        var childListIndent = LeadingSpaceCount(lines[commandLineIndex]) + 4;
+        if (parentCommand.CommandType == "for")
+        {
+            var childListLineIndex = ToInsertionIndex(parentCommand.SourceLineEnd, lines.Count);
+            lines.Insert(childListLineIndex, $"{new string(' ', childListIndent)}do:");
+            return new InsertionTarget(childListLineIndex + 1, childListIndent + 2);
+        }
+
         return new InsertionTarget(
             ToInsertionIndex(parentCommand.SourceLineEnd, lines.Count),
             LeadingSpaceCount(lines[commandLineIndex]));

@@ -623,8 +623,8 @@ public sealed class MainWorkbenchViewModel
                     $"{action} {commandType} to top of {target.Phase.Name}";
                 break;
             case WorkbenchCommandInsertPlacement.InsideCommand when target.ReferenceCommand is not null:
-                target.ReferenceCommand.InsideDropTarget.IsDragInsertionTarget = true;
-                target.ReferenceCommand.InsideDropTarget.DragInsertionText =
+                target.ReferenceCommand.IsDragInsertionTarget = true;
+                target.ReferenceCommand.DragInsertionText =
                     $"{action} {commandType} inside {target.ReferenceCommand.DisplayIndex}";
                 break;
             case WorkbenchCommandInsertPlacement.AfterCommand when target.ReferenceCommand is not null:

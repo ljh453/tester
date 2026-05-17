@@ -30,9 +30,19 @@ public static class WorkbenchYamlCommandMover
 
         var newline = yamlText.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var lines = WorkbenchYamlCommandInserter.SplitLines(yamlText, newline);
-        var resolvedTarget = WorkbenchYamlCommandInserter.ResolveInsertionTarget(lines, testcase, target);
         var sourceStartIndex = WorkbenchYamlCommandInserter.ToLineIndex(movingCommand.SourceLineStart, lines.Count);
         var sourceEndIndex = WorkbenchYamlCommandInserter.ToLineIndex(movingCommand.SourceLineEnd, lines.Count);
+        var originalLineCount = lines.Count;
+        var resolvedTarget = WorkbenchYamlCommandInserter.ResolveInsertionTarget(lines, testcase, target);
+        var insertedStructuralLineCount = lines.Count - originalLineCount;
+        if (insertedStructuralLineCount > 0
+            && target.ReferenceCommand is not null
+            && target.ReferenceCommand.SourceLineEnd < movingCommand.SourceLineStart)
+        {
+            sourceStartIndex += insertedStructuralLineCount;
+            sourceEndIndex += insertedStructuralLineCount;
+        }
+
         var sourceLineCount = sourceEndIndex - sourceStartIndex + 1;
         if (sourceLineCount <= 0)
         {

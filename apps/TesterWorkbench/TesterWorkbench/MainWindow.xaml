@@ -56,7 +56,7 @@
                         Cursor="Hand"
                         MouseEnter="GuiCommandBlock_MouseEnter"
                         PreviewMouseLeftButtonDown="GuiCommandBlock_MouseLeftButtonDown"
-                        PreviewMouseMove="GuiCommandBlock_PreviewMouseMove"
+                        PreviewMouseLeftButtonUp="GuiCommandBlock_PreviewMouseLeftButtonUp"
                         PreviewMouseRightButtonDown="GuiCommandBlock_PreviewMouseRightButtonDown"
                         PreviewMouseRightButtonUp="GuiCommandBlock_PreviewMouseRightButtonUp">
                     <Border.ContextMenu>
@@ -87,31 +87,42 @@
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="22" />
+                            <ColumnDefinition Width="22" />
                             <ColumnDefinition Width="42" />
                             <ColumnDefinition Width="82" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="72" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
+                                   Text="☰"
+                                   Cursor="SizeAll"
+                                   Foreground="{DynamicResource Workbench.Brush.TextMuted}"
+                                   FontSize="13"
+                                   FontWeight="Bold"
+                                   ToolTip="Drag to move command"
+                                   PreviewMouseLeftButtonDown="GuiCommandDragHandle_MouseLeftButtonDown"
+                                   PreviewMouseMove="GuiCommandBlock_PreviewMouseMove"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
                                    Text="{Binding BreakpointMarker}"
                                    Foreground="{DynamicResource Workbench.Brush.Accent}"
                                    FontSize="13"
                                    FontWeight="Bold"
                                    VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1"
+                        <TextBlock Grid.Column="2"
                                    Text="{Binding DisplayIndex}"
                                    Foreground="{DynamicResource Workbench.Brush.TextMuted}"
                                    VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="2"
+                        <TextBlock Grid.Column="3"
                                    Text="{Binding DisplayType}"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="3"
+                        <TextBlock Grid.Column="4"
                                    Text="{Binding Summary}"
                                    Foreground="{DynamicResource Workbench.Brush.TextSecondary}"
                                    TextWrapping="Wrap"
                                    VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="4"
+                        <TextBlock Grid.Column="5"
                                    Text="{Binding LineRangeText}"
                                    FontFamily="Consolas"
                                    FontSize="11"
@@ -137,37 +148,6 @@
                         </Style>
                     </Border.Style>
                     <TextBlock Text="{Binding DragInsertionText}"
-                               Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
-                               FontSize="12" />
-                </Border>
-                <Border Margin="42,0,0,6"
-                        Padding="8,4"
-                        AllowDrop="True"
-                        Tag="{Binding InsideDropTarget}"
-                        DragOver="GuiPhase_DragOver"
-                        DragLeave="GuiPhase_DragLeave"
-                        Drop="GuiPhase_Drop">
-                    <Border.Style>
-                        <Style TargetType="{x:Type Border}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
-                            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
-                            <Setter Property="BorderThickness" Value="1" />
-                            <Setter Property="CornerRadius" Value="3" />
-                            <Setter Property="MinHeight" Value="20" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding CanInsertInside}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding InsideDropTarget.IsDragInsertionTarget}" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
-                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
-                                    <Setter Property="MinHeight" Value="26" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <TextBlock Text="{Binding InsideDropTarget.DragInsertionText}"
                                Foreground="{DynamicResource Workbench.Brush.TextPrimary}"
                                FontSize="12" />
                 </Border>

@@ -1138,6 +1138,37 @@ static Task RunWorkbenchYamlCommandInserterTest()
             "            - log.text:\n                text: \"inner\"\n            - for:\n                each: \"${items}\"",
             StringComparison.Ordinal),
         "YAML command insertion supports nested for loop body");
+
+    var emptyLoopYaml =
+        """
+        testcases:
+          - name: empty_loop_case
+            steps:
+              - for:
+                  each: "${channels}"
+                  as: channel
+              - log.text:
+                  text: "outer"
+        """;
+    var emptyLoopModel = WorkbenchGuiModelBuilder.Build(emptyLoopYaml);
+    var emptyLoopTestcase = emptyLoopModel.Testcases[0];
+    var emptyLoopSteps = emptyLoopTestcase.Phases.Single(phase => phase.YamlName == "steps");
+    var emptyLoop = emptyLoopSteps.Blocks[0];
+
+    var insertedIntoEmptyLoop = WorkbenchYamlCommandInserter.Insert(
+        emptyLoopYaml,
+        emptyLoopTestcase,
+        WorkbenchCommandCatalog.Find("log.text")!,
+        new WorkbenchCommandInsertionTarget(
+            emptyLoopSteps,
+            WorkbenchCommandInsertPlacement.InsideCommand,
+            emptyLoop));
+    var normalizedEmptyLoop = insertedIntoEmptyLoop.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+    AssertTrue(
+        normalizedEmptyLoop.Contains(
+            "          as: channel\n          do:\n            - log.text:\n                text: \"message\"\n      - log.text:",
+            StringComparison.Ordinal),
+        "YAML command insertion creates a missing do block before inserting into an empty for loop");
     return Task.CompletedTask;
 }
 
@@ -1241,6 +1272,42 @@ static Task RunWorkbenchYamlCommandMoverTest()
             "            - delay:\n                ms: 100\n            - log.text:\n                text: \"outer\"",
             StringComparison.Ordinal),
         "YAML command mover supports moving block inside for loop");
+
+    var emptyLoopYaml =
+        """
+        testcases:
+          - name: empty_loop_move_case
+            steps:
+              - for:
+                  each: "${channels}"
+                  as: channel
+              - call:
+                  function: power_on
+        """;
+    var emptyLoopModel = WorkbenchGuiModelBuilder.Build(emptyLoopYaml);
+    var emptyLoopTestcase = emptyLoopModel.Testcases[0];
+    var emptyLoopSteps = emptyLoopTestcase.Phases.Single(phase => phase.YamlName == "steps");
+    var emptyLoopFor = emptyLoopSteps.Blocks[0];
+    var outerCall = emptyLoopSteps.Blocks[1];
+
+    var movedInsideEmptyFor = WorkbenchYamlCommandMover.Move(
+        emptyLoopYaml,
+        emptyLoopTestcase,
+        outerCall,
+        new WorkbenchCommandInsertionTarget(
+            emptyLoopSteps,
+            WorkbenchCommandInsertPlacement.InsideCommand,
+            emptyLoopFor));
+    var normalizedEmptyLoopMove = movedInsideEmptyFor.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    AssertTrue(
+        normalizedEmptyLoopMove.Contains(
+            "          as: channel\n          do:\n            - call:\n                function: power_on",
+            StringComparison.Ordinal),
+        "YAML command mover creates missing do block when moving into an empty for loop");
+    AssertFalse(
+        normalizedEmptyLoopMove.Contains("      - call:\n          function: power_on", StringComparison.Ordinal),
+        "YAML command mover removes the outer command after moving into an empty for loop");
     return Task.CompletedTask;
 }
 
