@@ -37,12 +37,14 @@ await RunWorkbenchYamlCommandArgumentUpdaterTest();
 await RunWorkbenchYamlCommandComplexArgumentUpdaterTest();
 await RunWorkbenchYamlCommandInserterTest();
 await RunWorkbenchYamlCommandMoverTest();
+await RunWorkbenchYamlCommandMoverMovesMultipleCommandsTest();
 await RunWorkbenchYamlCommandDeleterTest();
 await RunMainWorkbenchViewModelInsertsGuiCommandTest();
 await RunMainWorkbenchViewModelUpdatesSelectedGuiCommandArgumentTest();
 await RunMainWorkbenchViewModelClearsGuiBulkSelectionAfterPropertyEditTest();
 await RunMainWorkbenchViewModelUpdatesSelectedGuiCommandComplexArgumentTest();
 await RunMainWorkbenchViewModelMovesGuiCommandTest();
+await RunMainWorkbenchViewModelMovesSelectedGuiCommandsTest();
 await RunMainWorkbenchViewModelDeletesGuiCommandTest();
 await RunMainWorkbenchViewModelSelectsGuiCommandRangeTest();
 await RunMainWorkbenchViewModelDeletesSelectedGuiCommandsTest();
@@ -1874,6 +1876,69 @@ static Task RunWorkbenchYamlCommandMoverTest()
     return Task.CompletedTask;
 }
 
+static Task RunWorkbenchYamlCommandMoverMovesMultipleCommandsTest()
+{
+    var yaml =
+        """
+        testcases:
+          - name: multi_move_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - delay:
+                  ms: 1000
+              - log.text:
+                  text: "done"
+              - assert.eq:
+                  left: "${rpm}"
+                  right: 700
+        """;
+    var model = WorkbenchGuiModelBuilder.Build(yaml);
+    var testcase = model.Testcases[0];
+    var steps = testcase.Phases.Single(phase => phase.YamlName == "steps");
+    var delayBlock = steps.Blocks[1];
+    var logBlock = steps.Blocks[2];
+
+    var movedToTop = WorkbenchYamlCommandMover.MoveMany(
+        yaml,
+        testcase,
+        new[] { delayBlock, logBlock },
+        new WorkbenchCommandInsertionTarget(
+            steps,
+            WorkbenchCommandInsertPlacement.BeforeFirstInPhase));
+    var normalizedTopMove = movedToTop.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    AssertTrue(
+        normalizedTopMove.Contains(
+            "    steps:\n      - delay:\n          ms: 1000\n      - log.text:\n          text: \"done\"\n      - set:",
+            StringComparison.Ordinal),
+        "YAML multi mover moves selected commands to the top while preserving order");
+    AssertTrue(
+        normalizedTopMove.Contains(
+            "      - set:\n          var: rpm\n          value: 700\n      - assert.eq:",
+            StringComparison.Ordinal),
+        "YAML multi mover keeps unselected commands after moved group");
+    AssertEqual(4, movedToTop.InsertedLineNumber, "YAML multi mover reports inserted line");
+
+    var movedAfterAssert = WorkbenchYamlCommandMover.MoveMany(
+        yaml,
+        testcase,
+        new[] { delayBlock, logBlock },
+        new WorkbenchCommandInsertionTarget(
+            steps,
+            WorkbenchCommandInsertPlacement.AfterCommand,
+            steps.Blocks[3]));
+    var normalizedAfterMove = movedAfterAssert.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    AssertTrue(
+        normalizedAfterMove.Contains(
+            "      - set:\n          var: rpm\n          value: 700\n      - assert.eq:\n          left: \"${rpm}\"\n          right: 700\n      - delay:\n          ms: 1000\n      - log.text:",
+            StringComparison.Ordinal),
+        "YAML multi mover moves selected commands after target command");
+    return Task.CompletedTask;
+}
+
 static Task RunWorkbenchYamlCommandDeleterTest()
 {
     var yaml =
@@ -2030,6 +2095,59 @@ static Task RunMainWorkbenchViewModelMovesGuiCommandTest()
         "view model moves command in editor text");
     AssertEqual("log.text", viewModel.SelectedGuiCommand?.CommandType, "view model selects moved command");
     AssertEqual(4, viewModel.CurrentLineNumber, "view model focuses moved command line");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelMovesSelectedGuiCommandsTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: gui_multi_move_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - delay:
+                  ms: 1000
+              - log.text:
+                  text: "done"
+              - assert.eq:
+                  left: "${rpm}"
+                  right: 700
+        """);
+    var steps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+    var delayBlock = steps.Blocks[1];
+    var logBlock = steps.Blocks[2];
+    var assertBlock = steps.Blocks[3];
+
+    viewModel.SelectGuiCommandForBulkAction(delayBlock, replaceSelection: true);
+    viewModel.SelectGuiCommandForBulkAction(logBlock, replaceSelection: false);
+    viewModel.MoveSelectedGuiCommands(
+        delayBlock,
+        new WorkbenchCommandInsertionTarget(
+            steps,
+            WorkbenchCommandInsertPlacement.AfterCommand,
+            assertBlock));
+
+    var normalized = viewModel.EditorText.Replace("\r\n", "\n", StringComparison.Ordinal);
+    AssertTrue(
+        normalized.Contains(
+            "      - set:\n          var: rpm\n          value: 700\n      - assert.eq:\n          left: \"${rpm}\"\n          right: 700\n      - delay:\n          ms: 1000\n      - log.text:",
+            StringComparison.Ordinal),
+        "view model moves selected command group after target command");
+    AssertEqual(2, viewModel.SelectedGuiCommandCount, "multi move keeps moved commands selected");
+    var movedSteps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+    AssertTrue(movedSteps.Blocks[2].IsSelectedForBulkAction, "multi move selects first moved command");
+    AssertTrue(movedSteps.Blocks[3].IsSelectedForBulkAction, "multi move selects second moved command");
+    AssertEqual("delay", viewModel.SelectedGuiCommand?.CommandType, "multi move focuses first moved command");
+    AssertEqual(10, viewModel.CurrentLineNumber, "multi move focuses first moved command line");
     return Task.CompletedTask;
 }
 

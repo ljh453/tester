@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private const double GuiEditorCollapseThreshold = 150.0;
     private const string CommandDragDataFormat = "TesterWorkbench.CommandType";
     private const string CommandBlockDragDataFormat = "TesterWorkbench.CommandBlock";
+    private const string CommandBlockGroupDragDataFormat = "TesterWorkbench.CommandBlocks";
 
     private readonly MainWorkbenchViewModel _viewModel;
     private double _editorVerticalOffset;
@@ -353,7 +354,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
+        if (commandBlock.IsSelectedForBulkAction && _viewModel.SelectedGuiCommandCount > 1)
+        {
+            _viewModel.SelectGuiCommand(commandBlock);
+        }
+        else
+        {
+            _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
+        }
+
         RefreshGuiCommandProperties();
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         _isGuiBulkSelectingWithLeftButton = false;
@@ -464,7 +473,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        var dragData = new System.Windows.DataObject(CommandBlockDragDataFormat, _dragCommandBlock);
+        var movingCommands = _viewModel.GetGuiCommandsForDrag(_dragCommandBlock);
+        var dragData = new System.Windows.DataObject();
+        if (movingCommands.Count > 1)
+        {
+            dragData.SetData(CommandBlockGroupDragDataFormat, movingCommands.ToArray());
+        }
+        else
+        {
+            dragData.SetData(CommandBlockDragDataFormat, movingCommands[0]);
+        }
+
         DragDrop.DoDragDrop(dragSource, dragData, System.Windows.DragDropEffects.Move);
         _viewModel.ClearGuiCommandInsertionPreview();
         _dragCommandBlock = null;
@@ -526,24 +545,24 @@ public partial class MainWindow : Window
     private void GuiPhase_DragOver(object sender, System.Windows.DragEventArgs e)
     {
         var commandDefinition = GetDraggedCommand(e.Data);
-        var movingCommand = GetDraggedCommandBlock(e.Data);
+        var movingCommands = GetDraggedCommandBlocks(e.Data);
         var target = ResolveCommandInsertionTarget(sender, e.OriginalSource);
         if (commandDefinition is not null && target is not null)
         {
             _viewModel.ShowGuiCommandInsertionPreview(commandDefinition, target);
         }
-        else if (movingCommand is not null
+        else if (movingCommands.Count > 0
             && target is not null
-            && IsMoveTargetAllowed(movingCommand, target))
+            && IsMoveTargetAllowed(movingCommands, target))
         {
-            _viewModel.ShowGuiCommandMovePreview(movingCommand, target);
+            _viewModel.ShowGuiCommandMovePreview(movingCommands, target);
         }
 
         e.Effects = commandDefinition is not null && target is not null
             ? System.Windows.DragDropEffects.Copy
-            : movingCommand is not null
+            : movingCommands.Count > 0
                 && target is not null
-                && IsMoveTargetAllowed(movingCommand, target)
+                && IsMoveTargetAllowed(movingCommands, target)
                     ? System.Windows.DragDropEffects.Move
                     : System.Windows.DragDropEffects.None;
         e.Handled = true;
@@ -562,11 +581,11 @@ public partial class MainWindow : Window
     private void GuiPhase_Drop(object sender, System.Windows.DragEventArgs e)
     {
         var commandDefinition = GetDraggedCommand(e.Data);
-        var movingCommand = GetDraggedCommandBlock(e.Data);
+        var movingCommands = GetDraggedCommandBlocks(e.Data);
         var target = ResolveCommandInsertionTarget(sender, e.OriginalSource);
         if (target is null
             || commandDefinition is null
-            && movingCommand is null)
+            && movingCommands.Count == 0)
         {
             e.Effects = System.Windows.DragDropEffects.None;
             e.Handled = true;
@@ -579,9 +598,9 @@ public partial class MainWindow : Window
             _viewModel.InsertGuiCommand(commandDefinition, target);
             e.Effects = System.Windows.DragDropEffects.Copy;
         }
-        else if (movingCommand is not null && IsMoveTargetAllowed(movingCommand, target))
+        else if (movingCommands.Count > 0 && IsMoveTargetAllowed(movingCommands, target))
         {
-            _viewModel.MoveGuiCommand(movingCommand, target);
+            _viewModel.MoveGuiCommands(movingCommands, target);
             e.Effects = System.Windows.DragDropEffects.Move;
         }
         else
@@ -1164,6 +1183,20 @@ public partial class MainWindow : Window
             : null;
     }
 
+    private static IReadOnlyList<WorkbenchCommandBlock> GetDraggedCommandBlocks(System.Windows.IDataObject data)
+    {
+        if (data.GetDataPresent(CommandBlockGroupDragDataFormat)
+            && data.GetData(CommandBlockGroupDragDataFormat) is WorkbenchCommandBlock[] commandBlocks)
+        {
+            return commandBlocks;
+        }
+
+        var commandBlock = GetDraggedCommandBlock(data);
+        return commandBlock is null
+            ? Array.Empty<WorkbenchCommandBlock>()
+            : new[] { commandBlock };
+    }
+
     private WorkbenchCommandInsertionTarget? ResolveCommandInsertionTarget(
         object sender,
         object originalSource)
@@ -1242,6 +1275,18 @@ public partial class MainWindow : Window
         return target.ReferenceCommand != movingCommand
             && (target.ReferenceCommand.SourceLineStart < movingCommand.SourceLineStart
                 || target.ReferenceCommand.SourceLineStart > movingCommand.SourceLineEnd);
+    }
+
+    private static bool IsMoveTargetAllowed(
+        IReadOnlyList<WorkbenchCommandBlock> movingCommands,
+        WorkbenchCommandInsertionTarget target)
+    {
+        if (movingCommands.Count == 0)
+        {
+            return false;
+        }
+
+        return movingCommands.All(movingCommand => IsMoveTargetAllowed(movingCommand, target));
     }
 
     private static WorkbenchGuiPhase? FindPhaseFromDropTarget(object sender, object originalSource)

@@ -655,6 +655,102 @@ public sealed class MainWorkbenchViewModel
         UpdateGuiCurrentExecutionBlock();
     }
 
+    public IReadOnlyList<WorkbenchCommandBlock> GetGuiCommandsForDrag(
+        WorkbenchCommandBlock dragAnchor)
+    {
+        if (dragAnchor is null)
+        {
+            throw new ArgumentNullException(nameof(dragAnchor));
+        }
+
+        if (!dragAnchor.IsSelectedForBulkAction || _selectedGuiCommandLineNumbers.Count <= 1)
+        {
+            return new[] { dragAnchor };
+        }
+
+        return TopLevelSelectedCommandBlocks(
+            AllGuiCommandBlocks()
+                .Where(commandBlock => _selectedGuiCommandLineNumbers.Contains(commandBlock.SourceLineStart))
+                .OrderBy(commandBlock => commandBlock.SourceLineStart)
+                .ToArray());
+    }
+
+    public void MoveSelectedGuiCommands(
+        WorkbenchCommandBlock dragAnchor,
+        WorkbenchCommandInsertionTarget target)
+    {
+        MoveGuiCommands(GetGuiCommandsForDrag(dragAnchor), target);
+    }
+
+    public void MoveGuiCommands(
+        IReadOnlyList<WorkbenchCommandBlock> movingCommands,
+        WorkbenchCommandInsertionTarget target)
+    {
+        if (SelectedGuiTestcase is null)
+        {
+            throw new InvalidOperationException("No testcase is selected.");
+        }
+
+        if (movingCommands is null)
+        {
+            throw new ArgumentNullException(nameof(movingCommands));
+        }
+
+        var selectedBlocks = TopLevelSelectedCommandBlocks(
+            movingCommands
+                .Where(commandBlock => commandBlock is not null)
+                .OrderBy(commandBlock => commandBlock.SourceLineStart)
+                .ToArray());
+        if (selectedBlocks.Count == 0)
+        {
+            return;
+        }
+
+        if (selectedBlocks.Count == 1)
+        {
+            MoveGuiCommand(selectedBlocks[0], target);
+            return;
+        }
+
+        var testcaseName = SelectedGuiTestcase.Name;
+        var movedLineCount = selectedBlocks.Sum(commandBlock =>
+            commandBlock.SourceLineEnd - commandBlock.SourceLineStart + 1);
+        var result = WorkbenchYamlCommandMover.MoveMany(
+            EditorText,
+            SelectedGuiTestcase,
+            selectedBlocks,
+            target);
+        _selectedGuiCommandLineNumbers.Clear();
+        _guiBulkSelectionAnchorLineNumber = null;
+        UpdateEditorText(result.Text);
+        SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
+            testcase.Name == testcaseName)
+            ?? GuiModel.Testcases.FirstOrDefault();
+
+        var movedBlocks = FindMovedCommandBlocks(
+            SelectedGuiTestcase,
+            selectedBlocks,
+            result.InsertedLineNumber,
+            movedLineCount);
+        foreach (var movedBlock in movedBlocks)
+        {
+            _selectedGuiCommandLineNumbers.Add(movedBlock.SourceLineStart);
+        }
+
+        SelectedGuiCommand = movedBlocks.FirstOrDefault()
+            ?? SelectedGuiTestcase?.Phases
+                .SelectMany(phaseModel => FlattenCommands(phaseModel.Blocks))
+                .FirstOrDefault(commandBlock => commandBlock.SourceLineStart >= result.InsertedLineNumber);
+        if (SelectedGuiCommand is not null)
+        {
+            CurrentLineNumber = SelectedGuiCommand.SourceLineStart;
+            CurrentLocationText = $"Line {CurrentLineNumber} - {SelectedGuiCommand.CommandType}";
+        }
+
+        UpdateGuiCurrentExecutionBlock();
+        UpdateGuiSelectionMarkers();
+    }
+
     public void DeleteGuiCommand(WorkbenchCommandBlock commandBlock)
     {
         if (SelectedGuiTestcase is null)
@@ -767,6 +863,16 @@ public sealed class MainWorkbenchViewModel
         WorkbenchCommandInsertionTarget target)
     {
         ShowGuiDropPreview(movingCommand.CommandType, target, "Move");
+    }
+
+    public void ShowGuiCommandMovePreview(
+        IReadOnlyList<WorkbenchCommandBlock> movingCommands,
+        WorkbenchCommandInsertionTarget target)
+    {
+        var commandText = movingCommands.Count == 1
+            ? movingCommands[0].CommandType
+            : $"{movingCommands.Count} commands";
+        ShowGuiDropPreview(commandText, target, "Move");
     }
 
     private void ShowGuiDropPreview(
@@ -1022,6 +1128,45 @@ public sealed class MainWorkbenchViewModel
         return commandBlocks.FirstOrDefault(commandBlock =>
                 commandBlock.SourceLineStart >= deletedLineNumber)
             ?? commandBlocks.LastOrDefault();
+    }
+
+    private static IReadOnlyList<WorkbenchCommandBlock> FindMovedCommandBlocks(
+        WorkbenchGuiTestcase? testcase,
+        IReadOnlyList<WorkbenchCommandBlock> sourceBlocks,
+        int insertedLineNumber,
+        int movedLineCount)
+    {
+        var candidates = testcase?.Phases
+            .SelectMany(phase => FlattenCommands(phase.Blocks))
+            .OrderBy(commandBlock => commandBlock.SourceLineStart)
+            .ToArray() ?? Array.Empty<WorkbenchCommandBlock>();
+        var movedBlocks = new List<WorkbenchCommandBlock>();
+        var expectedLine = insertedLineNumber;
+        foreach (var sourceBlock in sourceBlocks)
+        {
+            var movedBlock = candidates.FirstOrDefault(commandBlock =>
+                commandBlock.SourceLineStart == expectedLine
+                && commandBlock.CommandType == sourceBlock.CommandType);
+            if (movedBlock is not null)
+            {
+                movedBlocks.Add(movedBlock);
+            }
+
+            expectedLine += sourceBlock.SourceLineEnd - sourceBlock.SourceLineStart + 1;
+        }
+
+        if (movedBlocks.Count == sourceBlocks.Count)
+        {
+            return movedBlocks;
+        }
+
+        var movedEndLineNumber = insertedLineNumber + movedLineCount - 1;
+        return candidates
+            .Where(commandBlock =>
+                commandBlock.SourceLineStart >= insertedLineNumber
+                && commandBlock.SourceLineStart <= movedEndLineNumber)
+            .Take(sourceBlocks.Count)
+            .ToArray();
     }
 
     private static IEnumerable<WorkbenchCommandBlock> FlattenCommands(
