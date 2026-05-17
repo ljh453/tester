@@ -7,6 +7,7 @@ await RunEngineBridgeTest();
 await RunEngineBridgePassesDebugControlArgumentsTest();
 await RunEngineBridgeDoesNotRequirePumpedSynchronizationContextTest();
 await RunMainWorkbenchViewModelTest();
+await RunMainWorkbenchViewModelIgnoresRunWhileActiveTest();
 await RunMainWorkbenchViewModelStreamingTest();
 await RunMainWorkbenchViewModelDispatchesStreamingEventUpdatesTest();
 await RunMainWorkbenchViewModelDebugControlTest();
@@ -324,6 +325,35 @@ static async Task RunMainWorkbenchViewModelTest()
     AssertEqual(1, viewModel.Variables.Count, "selected trace variable count");
     AssertEqual("rpm", viewModel.Variables[0].Name, "selected trace variable name");
     AssertEqual("900", viewModel.Variables[0].Value, "selected trace variable value");
+}
+
+static async Task RunMainWorkbenchViewModelIgnoresRunWhileActiveTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/active-run.yaml", "testcases:\n  - name: active_run_case\n    steps: []"));
+    var yamlPath = Path.Combine(root, "tests", "active-run.yaml");
+    var runner = new BlockingRunEngineProcessRunner();
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+
+    await viewModel.OpenWorkspaceAsync(root);
+    await viewModel.OpenFileAsync(yamlPath);
+    await viewModel.CompileAsync();
+
+    var firstRun = viewModel.RunAsync("first-run");
+    await runner.WaitForRunStartedAsync();
+    await viewModel.RunAsync("second-run");
+
+    AssertEqual(2, runner.Calls.Count, "active run prevents second engine process");
+    AssertTrue(
+        viewModel.ConsoleText.Contains("already running", StringComparison.OrdinalIgnoreCase),
+        "active run warning is shown");
+
+    runner.CompleteRun();
+    await firstRun;
+
+    AssertEqual("passed", viewModel.RunStatus, "active run first execution completes");
 }
 
 static async Task RunMainWorkbenchViewModelStreamingTest()
@@ -1751,6 +1781,71 @@ sealed class FakeEngineProcessRunner : IEngineProcessRunner
 
         return Task.FromResult(result.Result);
     }
+}
+
+sealed class BlockingRunEngineProcessRunner : IEngineProcessRunner
+{
+    private readonly TaskCompletionSource<bool> _runStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<EngineProcessResult> _runResult = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _callCount;
+
+    public List<EngineProcessCall> Calls { get; } = new();
+
+    public Task WaitForRunStartedAsync() => _runStarted.Task;
+
+    public void CompleteRun() => _runResult.TrySetResult(PassedRunResult("first-run"));
+
+    public Task<EngineProcessResult> RunAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken cancellationToken = default,
+        Action<string>? onEventJsonLine = null)
+    {
+        Calls.Add(new EngineProcessCall(fileName, arguments, workingDirectory));
+        _callCount++;
+        if (_callCount == 1)
+        {
+            return Task.FromResult(
+                new EngineProcessResult(
+                    0,
+                    """
+                    {
+                      "diagnostics": [],
+                      "testcases": []
+                    }
+                    """,
+                    ""));
+        }
+
+        if (_callCount == 2)
+        {
+            _runStarted.TrySetResult(true);
+            return _runResult.Task;
+        }
+
+        return Task.FromResult(PassedRunResult("duplicate-run"));
+    }
+
+    private static EngineProcessResult PassedRunResult(string runId) =>
+        new(
+            0,
+            $$"""
+            {
+              "run_id": "{{runId}}",
+              "status": "passed",
+              "testcase_results": [
+                {
+                  "name": "active_run_case",
+                  "status": "passed",
+                  "variables": {},
+                  "events": []
+                }
+              ],
+              "report": {"report_dir": "reports/{{runId}}"}
+            }
+            """,
+            "");
 }
 
 sealed class DelayedEngineProcessRunner : IEngineProcessRunner

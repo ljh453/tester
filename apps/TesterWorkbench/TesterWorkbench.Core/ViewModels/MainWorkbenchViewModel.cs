@@ -19,6 +19,7 @@ public sealed class MainWorkbenchViewModel
     private readonly SortedSet<int> _selectedGuiCommandLineNumbers = new();
     private IReadOnlyList<EngineVariableValue> _runVariables = Array.Empty<EngineVariableValue>();
     private string? _activeRunControlFile;
+    private bool _isRunInProgress;
     private string _lastSavedEditorText = string.Empty;
     private int? _guiBulkSelectionAnchorLineNumber;
 
@@ -57,6 +58,8 @@ public sealed class MainWorkbenchViewModel
     public IReadOnlyList<EngineDiagnostic> Problems { get; private set; } = Array.Empty<EngineDiagnostic>();
 
     public string RunStatus { get; private set; } = "Idle";
+
+    public bool IsRunInProgress => _isRunInProgress;
 
     public string? ReportDirectory { get; private set; }
 
@@ -141,6 +144,16 @@ public sealed class MainWorkbenchViewModel
         Action<Action>? dispatchExecutionUpdate = null)
     {
         EnsureFileSelected();
+        if (_isRunInProgress)
+        {
+            AppendConsoleLine("Run is already running. Ignored duplicate run request.");
+            NotifyExecutionChanged(onExecutionChanged);
+            return;
+        }
+
+        _isRunInProgress = true;
+        try
+        {
         var effectiveRunId = string.IsNullOrWhiteSpace(runId)
             ? $"gui-run-{DateTimeOffset.Now:yyyyMMdd-HHmmss}"
             : runId;
@@ -202,6 +215,11 @@ public sealed class MainWorkbenchViewModel
             string.IsNullOrWhiteSpace(result.StandardError)
                 ? $"Run '{effectiveRunId}' exited with status {result.Status}."
                 : result.StandardError);
+        }
+        finally
+        {
+            _isRunInProgress = false;
+        }
     }
 
     public async Task PauseRunAsync(CancellationToken cancellationToken = default)
