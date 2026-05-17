@@ -282,6 +282,42 @@
         <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
         <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextSecondary}" />
+        <Setter Property="Padding" Value="10,5" />
+        <Setter Property="Margin" Value="0,0,2,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type TabItem}">
+                    <Border x:Name="TabChrome"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="3,3,0,0"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter ContentSource="Header"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.BorderStrong}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Panel.ZIndex" Value="1" />
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextMuted}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="{x:Type DataGrid}">

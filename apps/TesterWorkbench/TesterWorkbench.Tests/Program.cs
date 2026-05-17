@@ -1119,6 +1119,15 @@ static Task RunWorkbenchThemeStyleResourceTest()
     AssertTrue(
         HasTemplateSetter(baseStyles, presentation, "ComboBox"),
         "base styles define a themed combo box template");
+    AssertTrue(
+        HasTemplateSetter(baseStyles, presentation, "TabItem"),
+        "base styles define a themed tab item template");
+    AssertTrue(
+        HasTriggerSetter(baseStyles, presentation, "TabItem", "IsSelected", "Foreground"),
+        "tab item template defines selected foreground");
+    AssertTrue(
+        HasTriggerSetter(baseStyles, presentation, "TabItem", "IsSelected", "Background"),
+        "tab item template defines selected background");
     AssertStyleBasedOn(
         baseStyles,
         presentation,
@@ -1791,6 +1800,21 @@ static bool HasTemplateSetter(XDocument document, XNamespace presentation, strin
         .Where(style => style.Attribute("TargetType")?.Value == $"{{x:Type {targetType}}}")
         .Descendants(presentation + "Setter")
         .Any(setter => setter.Attribute("Property")?.Value == "Template");
+}
+
+static bool HasTriggerSetter(
+    XDocument document,
+    XNamespace presentation,
+    string targetType,
+    string triggerProperty,
+    string setterProperty)
+{
+    return document.Descendants(presentation + "Style")
+        .Where(style => style.Attribute("TargetType")?.Value == $"{{x:Type {targetType}}}")
+        .Descendants(presentation + "Trigger")
+        .Where(trigger => trigger.Attribute("Property")?.Value == triggerProperty)
+        .Descendants(presentation + "Setter")
+        .Any(setter => setter.Attribute("Property")?.Value == setterProperty);
 }
 
 static void AssertStyleBasedOn(
