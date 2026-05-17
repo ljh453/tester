@@ -43,12 +43,12 @@ public sealed class ProcessEngineRunner : IEngineProcessRunner
             ?? throw new InvalidOperationException($"Failed to start engine process '{fileName}'.");
         var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var stderr = ReadStandardErrorAsync(process, onEventJsonLine, cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
         return new EngineProcessResult(
             process.ExitCode,
-            await stdout,
-            await stderr);
+            await stdout.ConfigureAwait(false),
+            await stderr.ConfigureAwait(false));
     }
 
     private static async Task<string> ReadStandardErrorAsync(
@@ -57,7 +57,7 @@ public sealed class ProcessEngineRunner : IEngineProcessRunner
         CancellationToken cancellationToken)
     {
         var standardError = new StringBuilder();
-        while (await process.StandardError.ReadLineAsync(cancellationToken) is { } line)
+        while (await process.StandardError.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
         {
             if (line.StartsWith(EventJsonLinePrefix, StringComparison.Ordinal))
             {

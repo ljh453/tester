@@ -30,7 +30,7 @@ public sealed class TesterEngineBridge
             _pythonExecutable,
             new[] { "-m", "embsw_tester.cli", "compile", yamlFile, "--json" },
             _repositoryRoot,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         return new EngineCompileResult(
             result.ExitCode,
@@ -83,7 +83,8 @@ public sealed class TesterEngineBridge
             arguments,
             _repositoryRoot,
             cancellationToken,
-            onEvent is null ? null : eventJsonLine => onEvent(ParseRunEventJson(eventJsonLine)));
+            onEvent is null ? null : eventJsonLine => onEvent(ParseRunEventJson(eventJsonLine)))
+            .ConfigureAwait(false);
 
         using var document = JsonDocument.Parse(result.StandardOutput);
         var root = document.RootElement;

@@ -5,6 +5,7 @@ using TesterWorkbench.Core.Workspace;
 await RunWorkspaceScannerTest();
 await RunEngineBridgeTest();
 await RunEngineBridgePassesDebugControlArgumentsTest();
+await RunEngineBridgeDoesNotRequirePumpedSynchronizationContextTest();
 await RunMainWorkbenchViewModelTest();
 await RunMainWorkbenchViewModelStreamingTest();
 await RunMainWorkbenchViewModelDebugControlTest();
@@ -198,6 +199,41 @@ static async Task RunEngineBridgePassesDebugControlArgumentsTest()
         },
         runner.Calls[0].Arguments,
         "debug run args");
+}
+
+static async Task RunEngineBridgeDoesNotRequirePumpedSynchronizationContextTest()
+{
+    var previousContext = SynchronizationContext.Current;
+    try
+    {
+        SynchronizationContext.SetSynchronizationContext(new NonPumpingSynchronizationContext());
+        var runner = new DelayedEngineProcessRunner(
+            new EngineProcessResult(
+                0,
+                """
+                {
+                  "run_id": "gui-run",
+                  "status": "passed",
+                  "testcase_results": [],
+                  "report": {"report_dir": "reports/gui-run"}
+                }
+                """,
+                ""),
+            delay: TimeSpan.FromMilliseconds(20));
+        var bridge = new TesterEngineBridge("python", "/repo", runner);
+
+        var runTask = bridge.RunAsync("/repo/tests/slow.yaml", "gui-run", "/repo/reports");
+        var completedTask = await Task.WhenAny(runTask, Task.Delay(TimeSpan.FromMilliseconds(500)))
+            .ConfigureAwait(false);
+
+        AssertTrue(completedTask == runTask, "engine bridge run completes without a pumped UI synchronization context");
+        var result = await runTask.ConfigureAwait(false);
+        AssertEqual("passed", result.Status, "engine bridge non-pumped run status");
+    }
+    finally
+    {
+        SynchronizationContext.SetSynchronizationContext(previousContext);
+    }
 }
 
 static async Task RunMainWorkbenchViewModelTest()
@@ -1621,6 +1657,36 @@ sealed class FakeEngineProcessRunner : IEngineProcessRunner
         }
 
         return Task.FromResult(result.Result);
+    }
+}
+
+sealed class DelayedEngineProcessRunner : IEngineProcessRunner
+{
+    private readonly EngineProcessResult _result;
+    private readonly TimeSpan _delay;
+
+    public DelayedEngineProcessRunner(EngineProcessResult result, TimeSpan delay)
+    {
+        _result = result;
+        _delay = delay;
+    }
+
+    public async Task<EngineProcessResult> RunAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        CancellationToken cancellationToken = default,
+        Action<string>? onEventJsonLine = null)
+    {
+        await Task.Delay(_delay, cancellationToken).ConfigureAwait(false);
+        return _result;
+    }
+}
+
+sealed class NonPumpingSynchronizationContext : SynchronizationContext
+{
+    public override void Post(SendOrPostCallback d, object? state)
+    {
     }
 }
 

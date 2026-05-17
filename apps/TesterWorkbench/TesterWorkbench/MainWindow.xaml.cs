@@ -96,8 +96,8 @@ public partial class MainWindow : Window
 
     private async void Run_Click(object sender, RoutedEventArgs e)
     {
-        await RunUiAction(() => _viewModel.RunAsync(
-            onExecutionChanged: QueueRuntimeRefresh));
+        await RunUiAction(() => Task.Run(() => _viewModel.RunAsync(
+            onExecutionChanged: QueueRuntimeRefresh)));
     }
 
     private async void Pause_Click(object sender, RoutedEventArgs e)
