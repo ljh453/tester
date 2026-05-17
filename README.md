@@ -364,7 +364,7 @@ result = run_package(package, adapter_registry=registry)
 
 ## INCA Adapter
 
-`IncaAdapter`는 Windows 32bit Python COM helper를 붙이기 전에 DSL과 runtime 계약을 고정하기 위한 in-memory adapter입니다. 현재 지원 명령은 measurement read, calibration set, recording start/stop입니다.
+`IncaAdapter`는 Windows 32bit Python COM helper를 붙일 수 있는 adapter입니다. 장비 없는 개발/테스트에서는 in-memory adapter로 동작하고, 실제 INCA 실행에서는 helper 프로세스가 `Inca.Inca` COM ProgID를 통해 INCA Tool-API를 호출합니다. 현재 지원 명령은 measurement read, calibration set, recording start/stop입니다.
 
 YAML 예시:
 
@@ -372,12 +372,17 @@ YAML 예시:
 steps:
   - inca.recording.start:
       name: boot
+      output_dir: C:/reports
+      file_format: MDF
   - inca.measure.read:
       variable: EngineSpeed
+      device: ETKC
+      acquisition_rate: 10ms
       save_as: rpm
   - inca.calibration.set:
       parameter: IdleSpeedTarget
       value: 850
+      value_kind: phys
   - inca.recording.stop: {}
 ```
 
@@ -395,7 +400,7 @@ package = compile_file("tests/inca.yaml")
 result = run_package(package, adapter_registry=registry)
 ```
 
-`IncaBridgeRequest`와 `IncaBridgeResponse`는 64bit 실행 엔진과 32bit Python INCA helper 프로세스 사이의 RPC payload schema입니다. 실제 INCA COM API 호출은 이 schema와 같은 `execute(command_type, args, context)` 의미를 유지하면서 Windows 32bit helper 뒤에 붙입니다.
+`IncaBridgeRequest`와 `IncaBridgeResponse`는 64bit 실행 엔진과 32bit Python INCA helper 프로세스 사이의 RPC payload schema입니다. `embsw_tester.adapters.inca_com_helper`는 INCA 7.2 Tool-API wrapper/registration 정보(`Inca.Inca`, `GetOpenedExperiment`, `GetMeasureValue*`, `GetCalibrationValue*`, `StartRecording`, `StopRecording`)를 기준으로 구현된 helper입니다.
 
 Windows 실제 실행 경로에서는 JSON line stdio transport를 `IncaAdapter`에 주입합니다.
 
@@ -411,7 +416,8 @@ from embsw_tester.runtime import run_package
 transport = create_inca_bridge_process_transport(
     [
         r"C:\Python32\python.exe",
-        r"C:\tools\inca_helper.py",
+        "-m",
+        "embsw_tester.adapters.inca_com_helper",
     ]
 )
 
@@ -432,10 +438,13 @@ inca:
     enabled: true
     command:
       - C:/Python32/python.exe
-      - C:/tools/inca_helper.py
+      - -m
+      - embsw_tester.adapters.inca_com_helper
 ```
 
 profile snapshot 기반 registry factory는 `inca.helper.command`가 있으면 `IncaAdapter`를 helper-backed adapter로 등록합니다.
+
+실제 helper 실행 PC에는 INCA COM registration과 32bit Python용 `pywin32`가 필요합니다. helper는 stdin에서 `IncaBridgeRequest` JSON 한 줄을 읽고 stdout으로 `IncaBridgeResponse` JSON 한 줄을 반환하므로, 실행 엔진의 64bit/32bit 차이는 이 프로세스 경계 밖으로 새지 않습니다.
 
 ```python
 from pathlib import Path

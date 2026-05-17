@@ -416,25 +416,32 @@ public static class WorkbenchCommandCatalog
                 """)),
         Group(
             "INCA",
-            Command("inca.measure.read", "adapter", "Read an INCA measurement variable.", new[] { "variable" }, new[] { "save_as", "timeout_ms" },
+            Command("inca.measure.read", "adapter", "Read an INCA measurement variable.", new[] { "variable" }, new[] { "acquisition_rate", "device", "save_as", "timeout_ms" },
                 """
                 variable: EngineSpeed
+                device: ETKC
+                acquisition_rate: 10ms
                 save_as: inca_value
                 timeout_ms: 1000
                 """),
-            Command("inca.calibration.set", "adapter", "Set an INCA calibration parameter.", new[] { "parameter", "value" }, new[] { "timeout_ms" },
+            Command("inca.calibration.set", "adapter", "Set an INCA calibration parameter.", new[] { "parameter", "value" }, new[] { "device", "timeout_ms", "value_kind" },
                 """
                 parameter: ParameterName
                 value: null
+                value_kind: phys
                 timeout_ms: 1000
                 """),
-            Command("inca.recording.start", "adapter", "Start INCA recording.", Array.Empty<string>(), new[] { "name", "output_dir", "timeout_ms" },
+            Command("inca.recording.start", "adapter", "Start INCA recording.", Array.Empty<string>(), new[] { "file_format", "format", "name", "output_dir", "timeout_ms" },
                 """
                 name: recording_name
+                output_dir: C:/reports
+                file_format: MDF
                 timeout_ms: 1000
                 """),
-            Command("inca.recording.stop", "adapter", "Stop INCA recording.", Array.Empty<string>(), new[] { "timeout_ms" },
+            Command("inca.recording.stop", "adapter", "Stop INCA recording.", Array.Empty<string>(), new[] { "discard", "file_format", "file_name", "format", "name", "timeout_ms" },
                 """
+                file_name: recording_name
+                file_format: MDF4
                 timeout_ms: 1000
                 """)),
         Group(
