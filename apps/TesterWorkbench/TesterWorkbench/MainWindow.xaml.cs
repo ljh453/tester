@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private WorkbenchCommandDefinition? _dragCommandDefinition;
     private System.Windows.Point? _commandBlockDragStartPoint;
     private WorkbenchCommandBlock? _dragCommandBlock;
+    private System.Windows.Point? _guiSelectionDragStartPoint;
     private bool _isGuiBulkSelectingWithLeftButton;
     private bool _isGuiBulkSelectingWithRightButton;
 
@@ -287,7 +288,7 @@ public partial class MainWindow : Window
         _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
         RefreshGuiCommandProperties();
         CurrentLineText.Text = _viewModel.CurrentLocationText;
-        BeginGuiBulkSelection();
+        BeginGuiBulkSelection(e.GetPosition(GuiSelectionHost));
         e.Handled = true;
     }
 
@@ -364,7 +365,7 @@ public partial class MainWindow : Window
         }
 
         _viewModel.ClearGuiCommandBulkSelection();
-        BeginGuiBulkSelection();
+        BeginGuiBulkSelection(e.GetPosition(GuiSelectionHost));
         e.Handled = true;
     }
 
@@ -380,6 +381,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        UpdateGuiDragSelectionRectangle(e.GetPosition(GuiSelectionHost));
         var commandBlock =
             FindDataContext<WorkbenchCommandBlock>(Mouse.DirectlyOver as DependencyObject)
             ?? FindDataContext<WorkbenchCommandBlock>(e.OriginalSource as DependencyObject);
@@ -421,21 +423,44 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void BeginGuiBulkSelection()
+    private void BeginGuiBulkSelection(System.Windows.Point startPoint)
     {
         _isGuiBulkSelectingWithLeftButton = true;
+        _guiSelectionDragStartPoint = startPoint;
         _dragCommandBlock = null;
         _commandBlockDragStartPoint = null;
-        Mouse.Capture(GuiPhaseItems, CaptureMode.SubTree);
+        UpdateGuiDragSelectionRectangle(startPoint);
+        Mouse.Capture(GuiSelectionHost, CaptureMode.SubTree);
     }
 
     private void EndGuiBulkSelection()
     {
         _isGuiBulkSelectingWithLeftButton = false;
-        if (Mouse.Captured == GuiPhaseItems)
+        _guiSelectionDragStartPoint = null;
+        GuiDragSelectionRectangle.Visibility = Visibility.Collapsed;
+        if (Mouse.Captured == GuiSelectionHost)
         {
             Mouse.Capture(null);
         }
+    }
+
+    private void UpdateGuiDragSelectionRectangle(System.Windows.Point currentPoint)
+    {
+        if (_guiSelectionDragStartPoint is null)
+        {
+            return;
+        }
+
+        var startPoint = _guiSelectionDragStartPoint.Value;
+        var left = Math.Min(startPoint.X, currentPoint.X);
+        var top = Math.Min(startPoint.Y, currentPoint.Y);
+        var width = Math.Abs(currentPoint.X - startPoint.X);
+        var height = Math.Abs(currentPoint.Y - startPoint.Y);
+        Canvas.SetLeft(GuiDragSelectionRectangle, left);
+        Canvas.SetTop(GuiDragSelectionRectangle, top);
+        GuiDragSelectionRectangle.Width = width;
+        GuiDragSelectionRectangle.Height = height;
+        GuiDragSelectionRectangle.Visibility = Visibility.Visible;
     }
 
     private void GuiDeleteSelectedCommands_Click(object sender, RoutedEventArgs e)

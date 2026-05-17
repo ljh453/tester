@@ -49,9 +49,6 @@
             <StackPanel>
                 <Border Margin="0,3,0,5"
                         Padding="8,7"
-                        Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}"
-                        BorderBrush="{Binding AccentColor}"
-                        BorderThickness="4,1,1,1"
                         CornerRadius="4"
                         Cursor="Hand"
                         MouseEnter="GuiCommandBlock_MouseEnter"
@@ -68,10 +65,13 @@
                     <Border.Style>
                         <Style TargetType="{x:Type Border}">
                             <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
+                            <Setter Property="BorderBrush" Value="{Binding AccentColor}" />
+                            <Setter Property="BorderThickness" Value="4,1,1,1" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsSelectedForBulkAction}" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
+                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
                                     <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                    <Setter Property="BorderThickness" Value="4,2,2,2" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsCurrentExecution}" Value="True">
                                     <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
@@ -464,12 +464,14 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="GuiPhaseItems"
-                                          Margin="10,0,10,10"
-                                          PreviewMouseLeftButtonDown="GuiSelectionSurface_PreviewMouseLeftButtonDown"
-                                          PreviewMouseLeftButtonUp="GuiSelectionSurface_PreviewMouseLeftButtonUp"
-                                          PreviewMouseMove="GuiSelectionSurface_PreviewMouseMove">
+                        <Grid x:Name="GuiSelectionHost"
+                              ClipToBounds="True"
+                              PreviewMouseLeftButtonDown="GuiSelectionSurface_PreviewMouseLeftButtonDown"
+                              PreviewMouseLeftButtonUp="GuiSelectionSurface_PreviewMouseLeftButtonUp"
+                              PreviewMouseMove="GuiSelectionSurface_PreviewMouseMove">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="GuiPhaseItems"
+                                              Margin="10,0,10,10">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:WorkbenchGuiPhase}">
                                         <Border Margin="0,0,0,10"
@@ -587,8 +589,17 @@
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <Canvas IsHitTestVisible="False">
+                                <Border x:Name="GuiDragSelectionRectangle"
+                                        Background="#3338BDF8"
+                                        BorderBrush="{DynamicResource Workbench.Brush.Accent}"
+                                        BorderThickness="1"
+                                        CornerRadius="2"
+                                        Visibility="Collapsed" />
+                            </Canvas>
+                        </Grid>
                     </DockPanel>
                 </Border>
 
