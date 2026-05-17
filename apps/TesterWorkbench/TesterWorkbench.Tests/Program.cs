@@ -18,6 +18,7 @@ await RunMainWorkbenchViewModelShowsLogEventsInConsoleTest();
 await RunMainWorkbenchViewModelStreamsLogEventsInConsoleTest();
 await RunMainWorkbenchLineNumbersTest();
 await RunMainWorkbenchBreakpointEligibilityTest();
+await RunWorkbenchCommandBlockNotifiesRuntimeStateChangesTest();
 await RunYamlExecutionBlockRangeTest();
 await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
@@ -948,6 +949,52 @@ static async Task RunMainWorkbenchBreakpointEligibilityTest()
     AssertTrue(
         viewModel.EditorLineNumbersText.Contains($"{MainWorkbenchViewModel.ActiveBreakpointMarker} 4"),
         "active command line shows active breakpoint marker");
+}
+
+static Task RunWorkbenchCommandBlockNotifiesRuntimeStateChangesTest()
+{
+    var commandBlock = new WorkbenchCommandBlock(
+        "1",
+        "delay",
+        "delay",
+        "delay ms=1000",
+        4,
+        5,
+        0,
+        "- delay:\n    ms: 1000",
+        "#9ca3af",
+        Array.Empty<WorkbenchCommandArgument>(),
+        Array.Empty<WorkbenchCommandBlock>());
+    var changedProperties = new List<string>();
+    commandBlock.PropertyChanged += (_, args) =>
+    {
+        if (!string.IsNullOrWhiteSpace(args.PropertyName))
+        {
+            changedProperties.Add(args.PropertyName);
+        }
+    };
+
+    commandBlock.IsCurrentExecution = true;
+    commandBlock.IsBreakpoint = true;
+    commandBlock.IsExpanded = false;
+
+    AssertTrue(
+        changedProperties.Contains(nameof(WorkbenchCommandBlock.IsCurrentExecution)),
+        "current execution marker notifies UI");
+    AssertTrue(
+        changedProperties.Contains(nameof(WorkbenchCommandBlock.IsBreakpoint)),
+        "breakpoint marker state notifies UI");
+    AssertTrue(
+        changedProperties.Contains(nameof(WorkbenchCommandBlock.BreakpointMarker)),
+        "breakpoint marker text notifies UI");
+    AssertTrue(
+        changedProperties.Contains(nameof(WorkbenchCommandBlock.IsExpanded)),
+        "fold state notifies UI");
+    AssertEqual(
+        MainWorkbenchViewModel.ActiveBreakpointMarker,
+        commandBlock.BreakpointMarker,
+        "breakpoint marker text");
+    return Task.CompletedTask;
 }
 
 static Task RunYamlExecutionBlockRangeTest()

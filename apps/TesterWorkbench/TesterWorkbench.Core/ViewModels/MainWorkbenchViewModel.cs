@@ -22,6 +22,9 @@ public sealed class MainWorkbenchViewModel
     private bool _isRunInProgress;
     private string _lastSavedEditorText = string.Empty;
     private int? _guiBulkSelectionAnchorLineNumber;
+    private string? _cachedSuggestionContextPath;
+    private DateTime _cachedSuggestionContextWriteTimeUtc;
+    private WorkbenchGuiSuggestionContext _cachedSuggestionContext = WorkbenchGuiSuggestionContext.Empty;
 
     public MainWorkbenchViewModel(
         WorkspaceScanner workspaceScanner,
@@ -91,14 +94,17 @@ public sealed class MainWorkbenchViewModel
 
     public WorkbenchThemeMode ThemeMode { get; private set; } = WorkbenchThemeMode.System;
 
-    public Task OpenWorkspaceAsync(string workspacePath, CancellationToken cancellationToken = default)
+    public async Task OpenWorkspaceAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        WorkspacePath = Path.GetFullPath(workspacePath);
-        WorkspaceRoot = _workspaceScanner.Scan(WorkspacePath);
+        var resolvedWorkspacePath = Path.GetFullPath(workspacePath);
+        var workspaceRoot = await Task.Run(
+            () => _workspaceScanner.Scan(resolvedWorkspacePath),
+            cancellationToken);
+        WorkspacePath = resolvedWorkspacePath;
+        WorkspaceRoot = workspaceRoot;
         ClearCurrentExecutionLocation();
         ConsoleText = $"Opened workspace: {WorkspacePath}";
-        return Task.CompletedTask;
     }
 
     public async Task OpenFileAsync(string yamlFilePath, CancellationToken cancellationToken = default)
@@ -341,7 +347,19 @@ public sealed class MainWorkbenchViewModel
 
         try
         {
-            return WorkbenchGuiModelBuilder.BuildSuggestionContext(File.ReadAllText(resolvedPath));
+            var writeTimeUtc = File.GetLastWriteTimeUtc(resolvedPath);
+            if (string.Equals(_cachedSuggestionContextPath, resolvedPath, StringComparison.OrdinalIgnoreCase)
+                && _cachedSuggestionContextWriteTimeUtc == writeTimeUtc)
+            {
+                return _cachedSuggestionContext;
+            }
+
+            var suggestionContext = WorkbenchGuiModelBuilder.BuildSuggestionContext(
+                File.ReadAllText(resolvedPath));
+            _cachedSuggestionContextPath = resolvedPath;
+            _cachedSuggestionContextWriteTimeUtc = writeTimeUtc;
+            _cachedSuggestionContext = suggestionContext;
+            return suggestionContext;
         }
         catch
         {

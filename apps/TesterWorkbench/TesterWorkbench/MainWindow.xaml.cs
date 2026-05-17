@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Forms = System.Windows.Forms;
 using TesterWorkbench.Core.Engine;
 using TesterWorkbench.Core.ViewModels;
@@ -32,6 +33,7 @@ public partial class MainWindow : Window
     private System.Windows.Point? _guiSelectionDragStartPoint;
     private bool _isGuiBulkSelectingWithLeftButton;
     private bool _isGuiBulkSelectingWithRightButton;
+    private bool _isRuntimeRefreshQueued;
 
     public MainWindow()
     {
@@ -166,7 +168,6 @@ public partial class MainWindow : Window
         VariablesGrid.ItemsSource = _viewModel.Variables;
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         HighlightCurrentExecutionLine();
-        RefreshGuiEditor();
     }
 
     private void GuiTestcaseComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -711,7 +712,6 @@ public partial class MainWindow : Window
     {
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         ProblemsGrid.ItemsSource = _viewModel.Problems;
-        ExecutionTraceGrid.ItemsSource = null;
         ExecutionTraceGrid.ItemsSource = _viewModel.ExecutionTrace;
         if (selectLatestTrace && _viewModel.ExecutionTrace.Count > 0)
         {
@@ -728,7 +728,6 @@ public partial class MainWindow : Window
             ? "No report generated yet."
             : $"Report directory: {_viewModel.ReportDirectory}";
         RefreshConsole();
-        RefreshGuiEditor();
         HighlightCurrentExecutionLine();
     }
 
@@ -827,7 +826,6 @@ public partial class MainWindow : Window
     {
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
-        RefreshGuiEditor();
         UpdateCurrentExecutionLineMarker();
     }
 
@@ -895,13 +893,19 @@ public partial class MainWindow : Window
 
     private void QueueRuntimeRefresh()
     {
-        if (Dispatcher.CheckAccess())
+        if (_isRuntimeRefreshQueued)
         {
-            SafeRefreshRuntimeViews();
             return;
         }
 
-        Dispatcher.BeginInvoke(SafeRefreshRuntimeViews);
+        _isRuntimeRefreshQueued = true;
+        Dispatcher.BeginInvoke(
+            () =>
+            {
+                _isRuntimeRefreshQueued = false;
+                SafeRefreshRuntimeViews();
+            },
+            DispatcherPriority.Background);
     }
 
     private void DispatchRuntimeViewModelUpdate(Action update)

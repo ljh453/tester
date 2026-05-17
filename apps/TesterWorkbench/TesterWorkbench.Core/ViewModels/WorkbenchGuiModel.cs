@@ -22,17 +22,23 @@ public abstract class WorkbenchDragInsertionPreviewTarget : INotifyPropertyChang
         set => SetField(ref _dragInsertionText, value);
     }
 
-    protected void SetField<T>(
+    protected bool SetField<T>(
         ref T field,
         T value,
         [CallerMemberName] string propertyName = "")
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {
-            return;
+            return false;
         }
 
         field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    protected void OnPropertyChanged([CallerMemberName] string propertyName = "")
+    {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
@@ -202,6 +208,9 @@ public sealed class WorkbenchCommandArgument
 
 public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
 {
+    private bool _isExpanded = true;
+    private bool _isCurrentExecution;
+    private bool _isBreakpoint;
     private bool _isSelectedForBulkAction;
 
     public WorkbenchCommandBlock(
@@ -255,11 +264,29 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
 
     public WorkbenchCommandInsideDropTarget InsideDropTarget { get; }
 
-    public bool IsExpanded { get; set; } = true;
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set => SetField(ref _isExpanded, value);
+    }
 
-    public bool IsCurrentExecution { get; set; }
+    public bool IsCurrentExecution
+    {
+        get => _isCurrentExecution;
+        set => SetField(ref _isCurrentExecution, value);
+    }
 
-    public bool IsBreakpoint { get; set; }
+    public bool IsBreakpoint
+    {
+        get => _isBreakpoint;
+        set
+        {
+            if (SetField(ref _isBreakpoint, value))
+            {
+                OnPropertyChanged(nameof(BreakpointMarker));
+            }
+        }
+    }
 
     public bool IsSelectedForBulkAction
     {
