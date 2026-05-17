@@ -28,6 +28,8 @@ public partial class MainWindow : Window
     private WorkbenchCommandDefinition? _dragCommandDefinition;
     private System.Windows.Point? _commandBlockDragStartPoint;
     private WorkbenchCommandBlock? _dragCommandBlock;
+    private bool _isGuiBulkSelectingWithLeftButton;
+    private bool _isGuiBulkSelectingWithRightButton;
 
     public MainWindow()
     {
@@ -84,6 +86,11 @@ public partial class MainWindow : Window
     private async void Compile_Click(object sender, RoutedEventArgs e)
     {
         await RunUiAction(() => _viewModel.CompileAsync());
+    }
+
+    private async void Save_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiAction(() => _viewModel.SaveAsync());
     }
 
     private async void Run_Click(object sender, RoutedEventArgs e)
@@ -252,8 +259,91 @@ public partial class MainWindow : Window
             return;
         }
 
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            _viewModel.ToggleGuiCommandForBulkAction(commandBlock);
+            RefreshGuiCommandProperties();
+            CurrentLineText.Text = _viewModel.CurrentLocationText;
+            UpdateCurrentExecutionLineMarker();
+            e.Handled = true;
+            return;
+        }
+
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
+        {
+            _viewModel.SelectGuiCommandRangeForBulkAction(commandBlock);
+            RefreshGuiCommandProperties();
+            CurrentLineText.Text = _viewModel.CurrentLocationText;
+            UpdateCurrentExecutionLineMarker();
+            e.Handled = true;
+            return;
+        }
+
+        _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
+        RefreshGuiCommandProperties();
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
         _dragCommandBlock = commandBlock;
         _commandBlockDragStartPoint = e.GetPosition(null);
+    }
+
+    private void GuiCommandBlock_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        var isRangeSelecting =
+            _isGuiBulkSelectingWithRightButton && e.RightButton == MouseButtonState.Pressed
+            || _isGuiBulkSelectingWithLeftButton && e.LeftButton == MouseButtonState.Pressed;
+        if (!isRangeSelecting
+            || sender is not FrameworkElement { DataContext: WorkbenchCommandBlock commandBlock })
+        {
+            return;
+        }
+
+        _viewModel.SelectGuiCommandRangeForBulkAction(commandBlock);
+        RefreshGuiCommandProperties();
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
+        UpdateCurrentExecutionLineMarker();
+    }
+
+    private void GuiCommandBlock_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: WorkbenchCommandBlock commandBlock })
+        {
+            return;
+        }
+
+        if (!commandBlock.IsSelectedForBulkAction)
+        {
+            _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
+        }
+        else
+        {
+            _viewModel.SelectGuiCommand(commandBlock);
+        }
+
+        _isGuiBulkSelectingWithRightButton = true;
+        RefreshGuiCommandProperties();
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
+        UpdateCurrentExecutionLineMarker();
+    }
+
+    private void GuiCommandBlock_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _isGuiBulkSelectingWithRightButton = false;
+    }
+
+    private void GuiSelectionSurface_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (FindDataContext<WorkbenchCommandBlock>(e.OriginalSource as DependencyObject) is not null)
+        {
+            return;
+        }
+
+        _viewModel.ClearGuiCommandBulkSelection();
+        _isGuiBulkSelectingWithLeftButton = true;
+    }
+
+    private void GuiSelectionSurface_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _isGuiBulkSelectingWithLeftButton = false;
     }
 
     private void GuiCommandBlock_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
@@ -282,16 +372,13 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void GuiDeleteCommand_Click(object sender, RoutedEventArgs e)
+    private void GuiDeleteSelectedCommands_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: WorkbenchCommandBlock commandBlock })
-        {
-            return;
-        }
-
-        _viewModel.DeleteGuiCommand(commandBlock);
+        _viewModel.DeleteSelectedGuiCommands();
         _dragCommandBlock = null;
         _commandBlockDragStartPoint = null;
+        _isGuiBulkSelectingWithLeftButton = false;
+        _isGuiBulkSelectingWithRightButton = false;
         RefreshEditorAfterGuiEdit();
         e.Handled = true;
     }
@@ -376,6 +463,9 @@ public partial class MainWindow : Window
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
         SyncLineNumberScroll();
+        SelectedFileText.Text = _viewModel.SelectedFileDisplayText;
+        SaveStatusTextBlock.Text = _viewModel.SaveStatusText;
+        RefreshGuiEditor();
         UpdateCurrentExecutionLineMarker();
     }
 
@@ -391,10 +481,17 @@ public partial class MainWindow : Window
         UpdateCurrentExecutionLineMarker();
     }
 
-    private void EditorBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private async void EditorBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
         {
+            return;
+        }
+
+        if (e.Key == Key.S)
+        {
+            await RunUiAction(() => _viewModel.SaveAsync());
+            e.Handled = true;
             return;
         }
 
@@ -464,7 +561,8 @@ public partial class MainWindow : Window
         AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
         ThemeModeComboBox.SelectedItem = _viewModel.ThemeMode;
         ApplyEditorFontSize();
-        SelectedFileText.Text = _viewModel.SelectedFilePath ?? "";
+        SelectedFileText.Text = _viewModel.SelectedFileDisplayText;
+        SaveStatusTextBlock.Text = _viewModel.SaveStatusText;
         BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
         RefreshRuntimeViews();
         SyncLineNumberScroll();
@@ -505,6 +603,8 @@ public partial class MainWindow : Window
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
+        SelectedFileText.Text = _viewModel.SelectedFileDisplayText;
+        SaveStatusTextBlock.Text = _viewModel.SaveStatusText;
         RefreshGuiEditor();
         FocusYamlLine(_viewModel.CurrentLineNumber);
         UpdateCurrentExecutionLineMarker();

@@ -16,8 +16,11 @@ public sealed class MainWorkbenchViewModel
     private readonly WorkspaceScanner _workspaceScanner;
     private readonly TesterEngineBridge _engineBridge;
     private readonly SortedSet<int> _breakpointLineNumbers = new();
+    private readonly SortedSet<int> _selectedGuiCommandLineNumbers = new();
     private IReadOnlyList<EngineVariableValue> _runVariables = Array.Empty<EngineVariableValue>();
     private string? _activeRunControlFile;
+    private string _lastSavedEditorText = string.Empty;
+    private int? _guiBulkSelectionAnchorLineNumber;
 
     public MainWorkbenchViewModel(
         WorkspaceScanner workspaceScanner,
@@ -34,6 +37,16 @@ public sealed class MainWorkbenchViewModel
     public string? SelectedFilePath { get; private set; }
 
     public string EditorText { get; private set; } = string.Empty;
+
+    public bool IsDirty { get; private set; }
+
+    public string SaveStatusText { get; private set; } = "No file selected.";
+
+    public string SelectedFileDisplayText => SelectedFilePath is null
+        ? string.Empty
+        : IsDirty
+            ? $"{SelectedFilePath} *"
+            : SelectedFilePath;
 
     public string EditorLineNumbersText { get; private set; } = "1";
 
@@ -58,6 +71,8 @@ public sealed class MainWorkbenchViewModel
     public WorkbenchGuiTestcase? SelectedGuiTestcase { get; private set; }
 
     public WorkbenchCommandBlock? SelectedGuiCommand { get; private set; }
+
+    public int SelectedGuiCommandCount => _selectedGuiCommandLineNumbers.Count;
 
     public string CurrentSourceFile { get; private set; } = string.Empty;
 
@@ -87,10 +102,26 @@ public sealed class MainWorkbenchViewModel
     {
         SelectedFilePath = Path.GetFullPath(yamlFilePath);
         _breakpointLineNumbers.Clear();
+        _selectedGuiCommandLineNumbers.Clear();
+        _guiBulkSelectionAnchorLineNumber = null;
         UpdateBreakpointsText();
-        UpdateEditorText(await File.ReadAllTextAsync(SelectedFilePath, cancellationToken));
+        var editorText = await File.ReadAllTextAsync(SelectedFilePath, cancellationToken);
+        _lastSavedEditorText = editorText;
+        UpdateEditorText(editorText, markDirty: false);
+        IsDirty = false;
+        SaveStatusText = "Saved.";
         ClearCurrentExecutionLocation();
         ConsoleText = $"Opened file: {SelectedFilePath}";
+    }
+
+    public async Task SaveAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureFileSelected();
+        await File.WriteAllTextAsync(SelectedFilePath!, EditorText, cancellationToken);
+        _lastSavedEditorText = EditorText;
+        IsDirty = false;
+        SaveStatusText = $"Saved {Path.GetFileName(SelectedFilePath)} at {DateTime.Now:HH:mm:ss}.";
+        AppendConsoleLine(SaveStatusText);
     }
 
     public async Task CompileAsync(CancellationToken cancellationToken = default)
@@ -230,9 +261,15 @@ public sealed class MainWorkbenchViewModel
         SyncActiveRunBreakpoints();
     }
 
-    public void UpdateEditorText(string editorText)
+    public void UpdateEditorText(string editorText, bool markDirty = true)
     {
         EditorText = editorText;
+        if (markDirty)
+        {
+            IsDirty = !string.Equals(EditorText, _lastSavedEditorText, StringComparison.Ordinal);
+            SaveStatusText = IsDirty ? "Unsaved changes." : "Saved.";
+        }
+
         var previousTestcaseName = SelectedGuiTestcase?.Name;
         GuiModel = WorkbenchGuiModelBuilder.Build(editorText);
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase => testcase.Name == previousTestcaseName)
@@ -249,6 +286,7 @@ public sealed class MainWorkbenchViewModel
         UpdateBreakpointsText();
         UpdateGuiCurrentExecutionBlock();
         UpdateGuiBreakpointMarkers();
+        UpdateGuiSelectionMarkers();
     }
 
     public void SetAutoFocusExecutionLine(bool enabled)
@@ -303,9 +341,79 @@ public sealed class MainWorkbenchViewModel
         CurrentLocationText = $"Line {commandBlock.SourceLineStart} - {commandBlock.CommandType}";
     }
 
+    public void SelectGuiCommandForBulkAction(
+        WorkbenchCommandBlock commandBlock,
+        bool replaceSelection)
+    {
+        if (replaceSelection)
+        {
+            _selectedGuiCommandLineNumbers.Clear();
+        }
+
+        _selectedGuiCommandLineNumbers.Add(commandBlock.SourceLineStart);
+        _guiBulkSelectionAnchorLineNumber = commandBlock.SourceLineStart;
+        SelectGuiCommand(commandBlock);
+        UpdateGuiSelectionMarkers();
+    }
+
+    public void ToggleGuiCommandForBulkAction(WorkbenchCommandBlock commandBlock)
+    {
+        if (!_selectedGuiCommandLineNumbers.Add(commandBlock.SourceLineStart))
+        {
+            _selectedGuiCommandLineNumbers.Remove(commandBlock.SourceLineStart);
+        }
+
+        _guiBulkSelectionAnchorLineNumber = commandBlock.SourceLineStart;
+        SelectGuiCommand(commandBlock);
+        UpdateGuiSelectionMarkers();
+    }
+
+    public void SelectGuiCommandRangeForBulkAction(WorkbenchCommandBlock commandBlock)
+    {
+        if (_guiBulkSelectionAnchorLineNumber is null)
+        {
+            SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
+            return;
+        }
+
+        var commandBlocks = AllGuiCommandBlocks()
+            .OrderBy(candidate => candidate.SourceLineStart)
+            .ToArray();
+        var anchorIndex = Array.FindIndex(
+            commandBlocks,
+            candidate => candidate.SourceLineStart == _guiBulkSelectionAnchorLineNumber.Value);
+        var targetIndex = Array.FindIndex(
+            commandBlocks,
+            candidate => candidate.SourceLineStart == commandBlock.SourceLineStart);
+        if (anchorIndex < 0 || targetIndex < 0)
+        {
+            SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
+            return;
+        }
+
+        var firstIndex = Math.Min(anchorIndex, targetIndex);
+        var lastIndex = Math.Max(anchorIndex, targetIndex);
+        _selectedGuiCommandLineNumbers.Clear();
+        for (var index = firstIndex; index <= lastIndex; index++)
+        {
+            _selectedGuiCommandLineNumbers.Add(commandBlocks[index].SourceLineStart);
+        }
+
+        SelectGuiCommand(commandBlock);
+        UpdateGuiSelectionMarkers();
+    }
+
+    public void ClearGuiCommandBulkSelection()
+    {
+        _selectedGuiCommandLineNumbers.Clear();
+        _guiBulkSelectionAnchorLineNumber = null;
+        UpdateGuiSelectionMarkers();
+    }
+
     public void SelectGuiTestcase(WorkbenchGuiTestcase? testcase)
     {
         SelectedGuiTestcase = testcase;
+        ClearGuiCommandBulkSelection();
         SelectedGuiCommand = SelectedGuiTestcase?.Phases
             .SelectMany(phase => FlattenCommands(phase.Blocks))
             .FirstOrDefault();
@@ -340,6 +448,8 @@ public sealed class MainWorkbenchViewModel
             SelectedGuiTestcase,
             command,
             target);
+        _selectedGuiCommandLineNumbers.Clear();
+        _guiBulkSelectionAnchorLineNumber = null;
         UpdateEditorText(result.Text);
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
             testcase.Name == testcaseName)
@@ -369,6 +479,8 @@ public sealed class MainWorkbenchViewModel
             SelectedGuiTestcase,
             movingCommand,
             target);
+        _selectedGuiCommandLineNumbers.Clear();
+        _guiBulkSelectionAnchorLineNumber = null;
         UpdateEditorText(result.Text);
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
             testcase.Name == testcaseName)
@@ -398,6 +510,8 @@ public sealed class MainWorkbenchViewModel
         var testcaseName = SelectedGuiTestcase.Name;
         var deletedLineNumber = commandBlock.SourceLineStart;
         var result = WorkbenchYamlCommandDeleter.Delete(EditorText, commandBlock);
+        _selectedGuiCommandLineNumbers.Clear();
+        _guiBulkSelectionAnchorLineNumber = null;
         UpdateEditorText(result.Text);
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
             testcase.Name == testcaseName)
@@ -414,6 +528,53 @@ public sealed class MainWorkbenchViewModel
         }
 
         UpdateGuiCurrentExecutionBlock();
+        UpdateGuiSelectionMarkers();
+    }
+
+    public void DeleteSelectedGuiCommands()
+    {
+        if (SelectedGuiTestcase is null)
+        {
+            throw new InvalidOperationException("No testcase is selected.");
+        }
+
+        var selectedBlocks = TopLevelSelectedCommandBlocks(
+            AllGuiCommandBlocks()
+                .Where(commandBlock => _selectedGuiCommandLineNumbers.Contains(commandBlock.SourceLineStart))
+                .OrderBy(commandBlock => commandBlock.SourceLineStart)
+                .ToArray());
+        if (selectedBlocks.Count == 0)
+        {
+            return;
+        }
+
+        var testcaseName = SelectedGuiTestcase.Name;
+        var deletedLineNumber = selectedBlocks.Min(commandBlock => commandBlock.SourceLineStart);
+        var editorText = EditorText;
+        foreach (var commandBlock in selectedBlocks.OrderByDescending(commandBlock => commandBlock.SourceLineStart))
+        {
+            editorText = WorkbenchYamlCommandDeleter.Delete(editorText, commandBlock).Text;
+        }
+
+        _selectedGuiCommandLineNumbers.Clear();
+        _guiBulkSelectionAnchorLineNumber = null;
+        UpdateEditorText(editorText);
+        SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase =>
+            testcase.Name == testcaseName)
+            ?? GuiModel.Testcases.FirstOrDefault();
+        SelectedGuiCommand = FindCommandNearDeletedLine(SelectedGuiTestcase, deletedLineNumber);
+        if (SelectedGuiCommand is not null)
+        {
+            CurrentLineNumber = SelectedGuiCommand.SourceLineStart;
+            CurrentLocationText = $"Line {CurrentLineNumber} - {SelectedGuiCommand.CommandType}";
+        }
+        else
+        {
+            ClearCurrentExecutionLocation();
+        }
+
+        UpdateGuiCurrentExecutionBlock();
+        UpdateGuiSelectionMarkers();
     }
 
     public void ShowGuiCommandInsertionPreview(
@@ -630,11 +791,43 @@ public sealed class MainWorkbenchViewModel
         }
     }
 
+    private void UpdateGuiSelectionMarkers()
+    {
+        var validLineNumbers = AllGuiCommandBlocks()
+            .Select(commandBlock => commandBlock.SourceLineStart)
+            .ToHashSet();
+        _selectedGuiCommandLineNumbers.RemoveWhere(lineNumber => !validLineNumbers.Contains(lineNumber));
+        foreach (var commandBlock in AllGuiCommandBlocks())
+        {
+            commandBlock.IsSelectedForBulkAction =
+                _selectedGuiCommandLineNumbers.Contains(commandBlock.SourceLineStart);
+        }
+    }
+
     private IEnumerable<WorkbenchCommandBlock> AllGuiCommandBlocks()
     {
         return SelectedGuiTestcase is null
             ? Array.Empty<WorkbenchCommandBlock>()
             : SelectedGuiTestcase.Phases.SelectMany(phase => FlattenCommands(phase.Blocks));
+    }
+
+    private static IReadOnlyList<WorkbenchCommandBlock> TopLevelSelectedCommandBlocks(
+        IReadOnlyList<WorkbenchCommandBlock> selectedBlocks)
+    {
+        var result = new List<WorkbenchCommandBlock>();
+        foreach (var commandBlock in selectedBlocks)
+        {
+            if (result.Any(parent =>
+                    commandBlock.SourceLineStart > parent.SourceLineStart
+                    && commandBlock.SourceLineEnd <= parent.SourceLineEnd))
+            {
+                continue;
+            }
+
+            result.Add(commandBlock);
+        }
+
+        return result;
     }
 
     private static WorkbenchCommandBlock? FindCommandNearDeletedLine(

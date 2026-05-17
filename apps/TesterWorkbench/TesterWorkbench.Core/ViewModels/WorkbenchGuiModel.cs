@@ -162,6 +162,8 @@ public sealed class WorkbenchGuiPhase : WorkbenchDragInsertionPreviewTarget
 
 public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
 {
+    private bool _isSelectedForBulkAction;
+
     public WorkbenchCommandBlock(
         string displayIndex,
         string commandType,
@@ -214,6 +216,12 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
     public bool IsCurrentExecution { get; set; }
 
     public bool IsBreakpoint { get; set; }
+
+    public bool IsSelectedForBulkAction
+    {
+        get => _isSelectedForBulkAction;
+        set => SetField(ref _isSelectedForBulkAction, value);
+    }
 
     public string BreakpointMarker => IsBreakpoint ? MainWorkbenchViewModel.ActiveBreakpointMarker : string.Empty;
 

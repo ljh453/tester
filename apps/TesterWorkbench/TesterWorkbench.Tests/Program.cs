@@ -18,6 +18,7 @@ await RunYamlExecutionBlockRangeTest();
 await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
 await RunMainWorkbenchThemeModeSettingTest();
+await RunMainWorkbenchViewModelSavesSelectedFileTest();
 await RunWorkbenchThemeResolverTest();
 await RunWorkbenchGuiModelBuilderTest();
 await RunMainWorkbenchViewModelRefreshesGuiModelTest();
@@ -28,6 +29,7 @@ await RunWorkbenchYamlCommandDeleterTest();
 await RunMainWorkbenchViewModelInsertsGuiCommandTest();
 await RunMainWorkbenchViewModelMovesGuiCommandTest();
 await RunMainWorkbenchViewModelDeletesGuiCommandTest();
+await RunMainWorkbenchViewModelDeletesSelectedGuiCommandsTest();
 await RunMainWorkbenchViewModelShowsDragInsertionPreviewTest();
 
 Console.WriteLine("TesterWorkbench core tests passed.");
@@ -867,6 +869,43 @@ static Task RunMainWorkbenchThemeModeSettingTest()
     return Task.CompletedTask;
 }
 
+static async Task RunMainWorkbenchViewModelSavesSelectedFileTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/save-demo.yaml", "testcases: []"));
+    var yamlPath = Path.Combine(root, "tests", "save-demo.yaml");
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            root,
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    await viewModel.OpenFileAsync(yamlPath);
+
+    AssertFalse(viewModel.IsDirty, "opened file starts clean");
+    AssertEqual("Saved.", viewModel.SaveStatusText, "opened file save status");
+
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: saved_case
+            steps:
+              - log.text:
+                  text: "saved"
+        """);
+
+    AssertTrue(viewModel.IsDirty, "editor changes mark file dirty");
+    AssertTrue(viewModel.SelectedFileDisplayText.EndsWith(" *", StringComparison.Ordinal), "dirty file display has marker");
+
+    await viewModel.SaveAsync();
+
+    AssertFalse(viewModel.IsDirty, "saved file is clean");
+    AssertEqual(viewModel.EditorText, await File.ReadAllTextAsync(yamlPath), "save writes editor text to disk");
+    AssertTrue(viewModel.SaveStatusText.StartsWith("Saved ", StringComparison.Ordinal), "save status reports saved file");
+    AssertFalse(viewModel.SelectedFileDisplayText.EndsWith(" *", StringComparison.Ordinal), "clean file display removes marker");
+}
+
 static Task RunWorkbenchThemeResolverTest()
 {
     AssertEqual(
@@ -1301,6 +1340,49 @@ static Task RunMainWorkbenchViewModelDeletesGuiCommandTest()
     AssertEqual(2, viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps").Blocks.Count, "view model command count after delete");
     AssertEqual("log.text", viewModel.SelectedGuiCommand?.CommandType, "view model selects next command after delete");
     AssertEqual(7, viewModel.CurrentLineNumber, "view model focuses next command line after delete");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelDeletesSelectedGuiCommandsTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: gui_multi_delete_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - delay:
+                  ms: 1000
+              - log.text:
+                  text: "done"
+              - assert.eq:
+                  left: "${rpm}"
+                  right: 700
+        """);
+    var steps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+    var delayBlock = steps.Blocks[1];
+    var logBlock = steps.Blocks[2];
+
+    viewModel.SelectGuiCommandForBulkAction(delayBlock, replaceSelection: true);
+    viewModel.SelectGuiCommandForBulkAction(logBlock, replaceSelection: false);
+    viewModel.DeleteSelectedGuiCommands();
+
+    AssertFalse(viewModel.EditorText.Contains("  - delay:", StringComparison.Ordinal), "multi delete removes delay");
+    AssertFalse(viewModel.EditorText.Contains("  - log.text:", StringComparison.Ordinal), "multi delete removes log");
+    AssertTrue(viewModel.EditorText.Contains("  - set:", StringComparison.Ordinal), "multi delete keeps unselected set");
+    AssertTrue(viewModel.EditorText.Contains("  - assert.eq:", StringComparison.Ordinal), "multi delete keeps unselected assert");
+    AssertEqual(2, viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps").Blocks.Count, "multi delete command count");
+    AssertEqual("assert.eq", viewModel.SelectedGuiCommand?.CommandType, "multi delete selects next remaining command");
+    AssertEqual(7, viewModel.CurrentLineNumber, "multi delete focuses next remaining command line");
+    AssertEqual(0, viewModel.SelectedGuiCommandCount, "multi delete clears bulk selection");
     return Task.CompletedTask;
 }
 

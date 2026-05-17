@@ -54,12 +54,25 @@
                         BorderThickness="4,1,1,1"
                         CornerRadius="4"
                         Cursor="Hand"
+                        MouseEnter="GuiCommandBlock_MouseEnter"
                         PreviewMouseLeftButtonDown="GuiCommandBlock_MouseLeftButtonDown"
-                        PreviewMouseMove="GuiCommandBlock_PreviewMouseMove">
+                        PreviewMouseMove="GuiCommandBlock_PreviewMouseMove"
+                        PreviewMouseRightButtonDown="GuiCommandBlock_PreviewMouseRightButtonDown"
+                        PreviewMouseRightButtonUp="GuiCommandBlock_PreviewMouseRightButtonUp">
+                    <Border.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Delete"
+                                      Click="GuiDeleteSelectedCommands_Click" />
+                        </ContextMenu>
+                    </Border.ContextMenu>
                     <Border.Style>
                         <Style TargetType="{x:Type Border}">
                             <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
                             <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSelectedForBulkAction}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding IsCurrentExecution}" Value="True">
                                     <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
                                     <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
@@ -78,7 +91,6 @@
                             <ColumnDefinition Width="82" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="72" />
-                            <ColumnDefinition Width="30" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
                                    Text="{Binding BreakpointMarker}"
@@ -106,11 +118,6 @@
                                    Foreground="{DynamicResource Workbench.Brush.TextMuted}"
                                    TextAlignment="Right"
                                    VerticalAlignment="Center" />
-                        <Button Grid.Column="5"
-                                Content="×"
-                                Click="GuiDeleteCommand_Click"
-                                Style="{StaticResource IdeToolbarButtonStyle}"
-                                ToolTip="Delete command" />
                     </Grid>
                 </Border>
                 <Border Margin="42,0,0,6"
@@ -219,6 +226,11 @@
                     Margin="6,0,0,0"
                     Style="{StaticResource IdeToolbarButtonStyle}"
                     ToolTip="Open workspace" />
+            <Separator />
+            <Button Content="💾"
+                    Click="Save_Click"
+                    Style="{StaticResource IdeToolbarButtonStyle}"
+                    ToolTip="Save YAML file" />
             <Separator />
             <Button Content="✓"
                     Click="Compile_Click"
@@ -472,7 +484,10 @@
                         </StackPanel>
 
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="GuiPhaseItems" Margin="10,0,10,10">
+                            <ItemsControl x:Name="GuiPhaseItems"
+                                          Margin="10,0,10,10"
+                                          PreviewMouseLeftButtonDown="GuiSelectionSurface_PreviewMouseLeftButtonDown"
+                                          PreviewMouseLeftButtonUp="GuiSelectionSurface_PreviewMouseLeftButtonUp">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:WorkbenchGuiPhase}">
                                         <Border Margin="0,0,0,10"
@@ -620,7 +635,11 @@
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel Margin="10">
                                 <TextBlock Text="Selected File" FontWeight="SemiBold" />
-                                <TextBlock x:Name="SelectedFileText" TextWrapping="Wrap" Margin="0,4,0,12" />
+                                <TextBlock x:Name="SelectedFileText" TextWrapping="Wrap" Margin="0,4,0,6" />
+                                <TextBlock x:Name="SaveStatusTextBlock"
+                                           Foreground="{DynamicResource Workbench.Brush.TextMuted}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,12" />
                                 <TextBlock Text="Current Line" FontWeight="SemiBold" />
                                 <TextBlock x:Name="CurrentLineText" TextWrapping="Wrap" Margin="0,4,0,12" />
                                 <TextBlock Text="Breakpoints" FontWeight="SemiBold" />
