@@ -174,6 +174,10 @@
         </Setter>
     </Style>
 
+    <Style x:Key="{x:Static ToolBar.ComboBoxStyleKey}"
+           TargetType="{x:Type ComboBox}"
+           BasedOn="{StaticResource {x:Type ComboBox}}" />
+
     <Style TargetType="{x:Type ComboBoxItem}">
         <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackground}" />
         <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />

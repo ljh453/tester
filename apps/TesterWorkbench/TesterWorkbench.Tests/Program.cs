@@ -1120,6 +1120,12 @@ static Task RunWorkbenchThemeStyleResourceTest()
         HasTemplateSetter(baseStyles, presentation, "ComboBox"),
         "base styles define a themed combo box template");
     AssertStyleBasedOn(
+        baseStyles,
+        presentation,
+        xaml,
+        "{x:Static ToolBar.ComboBoxStyleKey}",
+        "{StaticResource {x:Type ComboBox}}");
+    AssertStyleBasedOn(
         mainWindow,
         presentation,
         xaml,
