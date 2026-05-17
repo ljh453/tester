@@ -1,6 +1,7 @@
 using TesterWorkbench.Core.Engine;
 using TesterWorkbench.Core.ViewModels;
 using TesterWorkbench.Core.Workspace;
+using System.Xml.Linq;
 
 await RunWorkspaceScannerTest();
 await RunEngineBridgeTest();
@@ -23,6 +24,7 @@ await RunMainWorkbenchEditorZoomSettingTest();
 await RunMainWorkbenchThemeModeSettingTest();
 await RunMainWorkbenchViewModelSavesSelectedFileTest();
 await RunWorkbenchThemeResolverTest();
+await RunWorkbenchThemeStyleResourceTest();
 await RunWorkbenchGuiModelBuilderTest();
 await RunMainWorkbenchViewModelRefreshesGuiModelTest();
 await RunWorkbenchCommandCatalogTest();
@@ -1087,6 +1089,51 @@ static Task RunWorkbenchThemeResolverTest()
     return Task.CompletedTask;
 }
 
+static Task RunWorkbenchThemeStyleResourceTest()
+{
+    var repositoryRoot = Directory.GetCurrentDirectory();
+    var baseStylesPath = Path.Combine(
+        repositoryRoot,
+        "apps",
+        "TesterWorkbench",
+        "TesterWorkbench",
+        "Themes",
+        "BaseWorkbenchStyles.xaml");
+    var mainWindowPath = Path.Combine(
+        repositoryRoot,
+        "apps",
+        "TesterWorkbench",
+        "TesterWorkbench",
+        "MainWindow.xaml");
+    var baseStyles = XDocument.Load(baseStylesPath);
+    var mainWindow = XDocument.Load(mainWindowPath);
+    var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+    var xaml = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+
+    AssertTrue(
+        HasTemplateSetter(baseStyles, presentation, "Button"),
+        "base styles define a themed button template");
+    AssertTrue(
+        HasTemplateSetter(baseStyles, presentation, "ToggleButton"),
+        "base styles define a themed toggle button template");
+    AssertTrue(
+        HasTemplateSetter(baseStyles, presentation, "ComboBox"),
+        "base styles define a themed combo box template");
+    AssertStyleBasedOn(
+        mainWindow,
+        presentation,
+        xaml,
+        "IdeToolbarButtonStyle",
+        "{StaticResource {x:Type Button}}");
+    AssertStyleBasedOn(
+        mainWindow,
+        presentation,
+        xaml,
+        "IdeToggleButtonStyle",
+        "{StaticResource {x:Type ToggleButton}}");
+    return Task.CompletedTask;
+}
+
 static Task RunWorkbenchGuiModelBuilderTest()
 {
     var model = WorkbenchGuiModelBuilder.Build(
@@ -1730,6 +1777,27 @@ static void AssertSequence(IReadOnlyList<string> expected, IReadOnlyList<string>
     {
         AssertEqual(expected[index], actual[index], $"{label}[{index}]");
     }
+}
+
+static bool HasTemplateSetter(XDocument document, XNamespace presentation, string targetType)
+{
+    return document.Descendants(presentation + "Style")
+        .Where(style => style.Attribute("TargetType")?.Value == $"{{x:Type {targetType}}}")
+        .Descendants(presentation + "Setter")
+        .Any(setter => setter.Attribute("Property")?.Value == "Template");
+}
+
+static void AssertStyleBasedOn(
+    XDocument document,
+    XNamespace presentation,
+    XNamespace xaml,
+    string key,
+    string basedOn)
+{
+    var style = document.Descendants(presentation + "Style")
+        .SingleOrDefault(element => element.Attribute(xaml + "Key")?.Value == key);
+    AssertTrue(style is not null, $"{key} style exists");
+    AssertEqual(basedOn, style!.Attribute("BasedOn")?.Value ?? "", $"{key} based on themed style");
 }
 
 static class TestPaths

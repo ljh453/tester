@@ -25,6 +25,77 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
         <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
         <Setter Property="Padding" Value="10,3" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Border x:Name="ButtonChrome"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="2"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.BorderStrong}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextMuted}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type ToggleButton}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="Padding" Value="10,3" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ToggleButton}">
+                    <Border x:Name="ToggleChrome"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="2"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.BorderStrong}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextMuted}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="{x:Type CheckBox}">
@@ -35,6 +106,72 @@
         <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackground}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
         <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="Padding" Value="8,3" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ComboBox}">
+                    <Grid>
+                        <ToggleButton x:Name="ComboToggle"
+                                      Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      Foreground="{TemplateBinding Foreground}"
+                                      Focusable="False"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="22" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left"
+                                                  Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                  ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                                <Path Grid.Column="1"
+                                      Width="8"
+                                      Height="5"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Fill="{DynamicResource Workbench.Brush.TextSecondary}"
+                                      Data="M 0 0 L 8 0 L 4 5 Z" />
+                            </Grid>
+                        </ToggleButton>
+                        <Popup x:Name="Popup"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               Placement="Bottom"
+                               PopupAnimation="Fade">
+                            <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                    MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                    Background="{DynamicResource Workbench.Brush.ControlBackground}"
+                                    BorderBrush="{DynamicResource Workbench.Brush.BorderStrong}"
+                                    BorderThickness="1">
+                                <ScrollViewer CanContentScroll="True">
+                                    <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ComboToggle" Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
+                            <Setter TargetName="ComboToggle" Property="BorderBrush" Value="{DynamicResource Workbench.Brush.BorderStrong}" />
+                        </Trigger>
+                        <Trigger Property="IsDropDownOpen" Value="True">
+                            <Setter TargetName="ComboToggle" Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                            <Setter TargetName="ComboToggle" Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextMuted}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="{x:Type ComboBoxItem}">
