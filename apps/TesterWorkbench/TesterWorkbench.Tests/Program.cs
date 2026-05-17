@@ -896,7 +896,7 @@ static Task RunMainWorkbenchThemeModeSettingTest()
             "/repo",
             new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
 
-    AssertEqual(WorkbenchThemeMode.Dark, viewModel.ThemeMode, "theme mode defaults to dark");
+    AssertEqual(WorkbenchThemeMode.System, viewModel.ThemeMode, "theme mode defaults to system");
     viewModel.SetThemeMode(WorkbenchThemeMode.Light);
     AssertEqual(WorkbenchThemeMode.Light, viewModel.ThemeMode, "theme mode can be light");
     viewModel.SetThemeMode(WorkbenchThemeMode.System);

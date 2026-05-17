@@ -37,6 +37,48 @@
         <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
     </Style>
 
+    <Style TargetType="{x:Type ComboBoxItem}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                    <Border x:Name="ItemBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="Transparent"
+                            BorderThickness="1"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="ItemBorder"
+                                    Property="Background"
+                                    Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
+                            <Setter TargetName="ItemBorder"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource Workbench.Brush.BorderStrong}" />
+                            <Setter Property="Foreground"
+                                    Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="ItemBorder"
+                                    Property="Background"
+                                    Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                            <Setter TargetName="ItemBorder"
+                                    Property="BorderBrush"
+                                    Value="{DynamicResource Workbench.Brush.Accent}" />
+                            <Setter Property="Foreground"
+                                    Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="{x:Type TextBox}">
         <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackground}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />

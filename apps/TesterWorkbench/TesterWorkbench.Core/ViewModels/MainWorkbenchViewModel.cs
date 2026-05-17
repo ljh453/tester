@@ -86,7 +86,7 @@ public sealed class MainWorkbenchViewModel
 
     public double EditorFontSize { get; private set; } = 13.0;
 
-    public WorkbenchThemeMode ThemeMode { get; private set; } = WorkbenchThemeMode.Dark;
+    public WorkbenchThemeMode ThemeMode { get; private set; } = WorkbenchThemeMode.System;
 
     public Task OpenWorkspaceAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
