@@ -96,8 +96,9 @@ public partial class MainWindow : Window
 
     private async void Run_Click(object sender, RoutedEventArgs e)
     {
-        await RunUiAction(() => Task.Run(() => _viewModel.RunAsync(
-            onExecutionChanged: QueueRuntimeRefresh)));
+        await RunUiAction(() => _viewModel.RunAsync(
+            onExecutionChanged: QueueRuntimeRefresh,
+            dispatchExecutionUpdate: DispatchRuntimeViewModelUpdate));
     }
 
     private async void Pause_Click(object sender, RoutedEventArgs e)
@@ -823,6 +824,17 @@ public partial class MainWindow : Window
         }
 
         Dispatcher.BeginInvoke(SafeRefreshRuntimeViews);
+    }
+
+    private void DispatchRuntimeViewModelUpdate(Action update)
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            update();
+            return;
+        }
+
+        Dispatcher.Invoke(update);
     }
 
     private void SafeRefreshRuntimeViews()

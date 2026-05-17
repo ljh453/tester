@@ -137,7 +137,8 @@ public sealed class MainWorkbenchViewModel
     public async Task RunAsync(
         string? runId = null,
         Action? onExecutionChanged = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<Action>? dispatchExecutionUpdate = null)
     {
         EnsureFileSelected();
         var effectiveRunId = string.IsNullOrWhiteSpace(runId)
@@ -169,8 +170,13 @@ public sealed class MainWorkbenchViewModel
                 cancellationToken,
                 runEvent =>
                 {
-                    AppendExecutionTraceEvent(runEvent);
-                    NotifyExecutionChanged(onExecutionChanged);
+                    DispatchExecutionUpdate(
+                        dispatchExecutionUpdate,
+                        () =>
+                        {
+                            AppendExecutionTraceEvent(runEvent);
+                            NotifyExecutionChanged(onExecutionChanged);
+                        });
                 },
                 runControlFile,
                 _breakpointLineNumbers.ToArray());
@@ -755,6 +761,27 @@ public sealed class MainWorkbenchViewModel
         catch
         {
             // UI refresh callbacks should not cancel or corrupt an engine run.
+        }
+    }
+
+    private static void DispatchExecutionUpdate(
+        Action<Action>? dispatchExecutionUpdate,
+        Action update)
+    {
+        try
+        {
+            if (dispatchExecutionUpdate is null)
+            {
+                update();
+            }
+            else
+            {
+                dispatchExecutionUpdate(update);
+            }
+        }
+        catch
+        {
+            // Streaming UI updates should not cancel or corrupt an engine run.
         }
     }
 

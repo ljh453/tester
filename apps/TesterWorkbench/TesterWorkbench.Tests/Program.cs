@@ -8,6 +8,7 @@ await RunEngineBridgePassesDebugControlArgumentsTest();
 await RunEngineBridgeDoesNotRequirePumpedSynchronizationContextTest();
 await RunMainWorkbenchViewModelTest();
 await RunMainWorkbenchViewModelStreamingTest();
+await RunMainWorkbenchViewModelDispatchesStreamingEventUpdatesTest();
 await RunMainWorkbenchViewModelDebugControlTest();
 await RunMainWorkbenchViewModelUpdatesStatusFromPausedEventTest();
 await RunMainWorkbenchViewModelKeepsRunResultWhenRefreshCallbackFailsTest();
@@ -460,6 +461,98 @@ static async Task RunMainWorkbenchViewModelStreamingTest()
         },
         runner.Calls[1].Arguments,
         "streaming run args");
+}
+
+static async Task RunMainWorkbenchViewModelDispatchesStreamingEventUpdatesTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/dispatch-stream.yaml", "testcases:\n  - name: dispatch_case\n    steps: []"));
+    var yamlPath = Path.Combine(root, "tests", "dispatch-stream.yaml");
+    var runningEventJson =
+        """
+        {
+          "testcase": "dispatch_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 0],
+          "command_type": "set",
+          "status": "running",
+          "source_file": "/repo/tests/dispatch-stream.yaml",
+          "source_line": 4,
+          "local_variables": {},
+          "error": null
+        }
+        """;
+    var passedEventJson =
+        """
+        {
+          "testcase": "dispatch_case",
+          "phase": "steps",
+          "command_path": ["testcases", 0, "steps", 0],
+          "command_type": "set",
+          "status": "passed",
+          "source_file": "/repo/tests/dispatch-stream.yaml",
+          "source_line": 4,
+          "local_variables": {"rpm": 700},
+          "error": null
+        }
+        """;
+    var runner = new FakeEngineProcessRunner(
+        (
+            new EngineProcessResult(
+                0,
+                """
+                {
+                  "diagnostics": [],
+                  "testcases": []
+                }
+                """,
+                ""),
+            Array.Empty<string>()
+        ),
+        (
+            new EngineProcessResult(
+                0,
+                """
+                {
+                  "run_id": "gui-run",
+                  "status": "passed",
+                  "testcase_results": [
+                    {
+                      "name": "dispatch_case",
+                      "status": "passed",
+                      "variables": {"rpm": 700},
+                      "events": []
+                    }
+                  ],
+                  "report": {"report_dir": "reports/gui-run"}
+                }
+                """,
+                ""),
+            new[] { runningEventJson, passedEventJson }
+        ));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+    var callbackCount = 0;
+    var dispatchCount = 0;
+
+    await viewModel.OpenWorkspaceAsync(root);
+    await viewModel.OpenFileAsync(yamlPath);
+    await viewModel.CompileAsync();
+    await viewModel.RunAsync(
+        "gui-run",
+        () => callbackCount++,
+        dispatchExecutionUpdate: action =>
+        {
+            dispatchCount++;
+            action();
+        });
+
+    AssertEqual(3, callbackCount, "dispatched streaming callback count");
+    AssertEqual(2, dispatchCount, "streaming event dispatch count");
+    AssertEqual(1, viewModel.ExecutionTrace.Count, "dispatched streaming trace count");
+    AssertEqual("passed", viewModel.ExecutionTrace[0].Status, "dispatched streaming final event");
+    AssertEqual(4, viewModel.CurrentLineNumber, "dispatched streaming current line");
 }
 
 static async Task RunMainWorkbenchViewModelDebugControlTest()
