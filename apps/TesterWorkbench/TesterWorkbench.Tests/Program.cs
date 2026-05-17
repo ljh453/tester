@@ -1119,6 +1119,14 @@ static Task RunWorkbenchThemeStyleResourceTest()
     AssertTrue(
         HasTemplateSetter(baseStyles, presentation, "ComboBox"),
         "base styles define a themed combo box template");
+    AssertEqual(
+        "0",
+        FindNamedElementAttribute(baseStyles, presentation, xaml, "ToggleButton", "ComboToggle", "Padding"),
+        "combo box toggle clears inherited toggle padding");
+    AssertEqual(
+        "Stretch",
+        FindNamedElementAttribute(baseStyles, presentation, xaml, "ToggleButton", "ComboToggle", "HorizontalContentAlignment"),
+        "combo box toggle stretches selected content");
     AssertTrue(
         HasTemplateSetter(baseStyles, presentation, "TabItem"),
         "base styles define a themed tab item template");
@@ -1828,6 +1836,20 @@ static void AssertStyleBasedOn(
         .SingleOrDefault(element => element.Attribute(xaml + "Key")?.Value == key);
     AssertTrue(style is not null, $"{key} style exists");
     AssertEqual(basedOn, style!.Attribute("BasedOn")?.Value ?? "", $"{key} based on themed style");
+}
+
+static string FindNamedElementAttribute(
+    XDocument document,
+    XNamespace presentation,
+    XNamespace xaml,
+    string elementName,
+    string name,
+    string attributeName)
+{
+    return document.Descendants(presentation + elementName)
+        .SingleOrDefault(element => element.Attribute(xaml + "Name")?.Value == name)
+        ?.Attribute(attributeName)
+        ?.Value ?? "";
 }
 
 static class TestPaths

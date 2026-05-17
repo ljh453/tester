@@ -116,6 +116,9 @@
                                       BorderBrush="{TemplateBinding BorderBrush}"
                                       Foreground="{TemplateBinding Foreground}"
                                       Focusable="False"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Stretch"
+                                      VerticalContentAlignment="Stretch"
                                       IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
