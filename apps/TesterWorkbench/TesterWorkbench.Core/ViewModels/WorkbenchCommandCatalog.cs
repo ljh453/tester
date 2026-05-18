@@ -27,18 +27,22 @@ public enum WorkbenchCommandAutocompleteKind
 public sealed class WorkbenchCommandArgumentDefinition
 {
     public WorkbenchCommandArgumentDefinition(
+        string commandType,
         string name,
         WorkbenchCommandArgumentKind kind,
         bool isRequired,
         WorkbenchCommandAutocompleteKind autocompleteKind,
         IReadOnlyList<string> suggestions)
     {
+        CommandType = commandType;
         Name = name;
         Kind = kind;
         IsRequired = isRequired;
         AutocompleteKind = autocompleteKind;
         Suggestions = suggestions;
     }
+
+    public string CommandType { get; }
 
     public string Name { get; }
 
@@ -78,6 +82,7 @@ public sealed class WorkbenchCommandArgumentDefinition
         var kind = ResolveKind(commandType, name);
         var autocompleteKind = ResolveAutocompleteKind(commandType, name, kind);
         return new WorkbenchCommandArgumentDefinition(
+            commandType,
             name,
             kind,
             isRequired,
@@ -107,7 +112,7 @@ public sealed class WorkbenchCommandArgumentDefinition
             or "unit_time_us" or "pulse_pause_frame_period_us" or "message_id"
             or "slow_message_id" or "status_nibble" or "crc_received" or "crc_calculated"
             or "data_nibble_count" or "buffer_index" or "slow_buffer_index" or "index"
-            or "data")
+            or "data" or "status")
         {
             return WorkbenchCommandArgumentKind.Number;
         }
@@ -117,7 +122,12 @@ public sealed class WorkbenchCommandArgumentDefinition
             return WorkbenchCommandArgumentKind.Number;
         }
 
-        if (name is "state" or "autostart" or "auto_start" or "crc"
+        if (commandType == "sent_usb.command" && name == "crc")
+        {
+            return WorkbenchCommandArgumentKind.Number;
+        }
+
+        if (name is "state" or "autostart" or "auto_start" or "average" or "read" or "crc"
             or "pulse_pause_enabled" or "enhanced_format" or "enhanced_config_bit"
             or "enhanced_serial_format" or "slow_channel_tx_crc_fault"
             or "swap_fast_data_nibbles" or "read_ack" or "enabled" or "buffer_enabled")
@@ -216,7 +226,25 @@ public sealed class WorkbenchCommandArgumentDefinition
 
         if (name == "action" && commandType == "power_supply.command")
         {
-            return new[] { "output", "set_voltage", "set_current", "measure", "query" };
+            return new[]
+            {
+                "raw",
+                "apply",
+                "set_voltage",
+                "set_current",
+                "read_voltage",
+                "read_current",
+                "mode",
+                "output",
+                "read_output",
+                "measure_voltage",
+                "measure_current",
+                "track",
+                "read_track",
+                "reset",
+                "identify",
+                "system_error"
+            };
         }
 
         if (name == "direction")
@@ -274,6 +302,286 @@ public sealed class WorkbenchCommandDefinition
     public string RequiredArgsText => RequiredArgs.Count == 0
         ? "no required args"
         : string.Join(", ", RequiredArgs);
+}
+
+public sealed record WorkbenchCommandArgumentSelection(
+    bool IsRelevant,
+    bool IsRequired);
+
+public static class WorkbenchCommandArgumentVisibility
+{
+    private static readonly HashSet<string> PowerQueryActions = new(StringComparer.Ordinal)
+    {
+        "identify",
+        "measure_current",
+        "measure_voltage",
+        "mode",
+        "read_current",
+        "read_output",
+        "read_track",
+        "read_voltage",
+        "system_error"
+    };
+
+    public static WorkbenchCommandArgumentSelection Resolve(
+        string commandType,
+        IReadOnlyDictionary<string, string> values,
+        string argumentName)
+    {
+        return commandType switch
+        {
+            "power_supply.command" => ResolvePowerSupply(values, argumentName),
+            "sent_usb.command" => ResolveSentUsb(values, argumentName),
+            _ => new WorkbenchCommandArgumentSelection(true, false)
+        };
+    }
+
+    private static WorkbenchCommandArgumentSelection ResolvePowerSupply(
+        IReadOnlyDictionary<string, string> values,
+        string argumentName)
+    {
+        var action = NormalizeAction(ValueOf(values, "action"));
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            return Selection(argumentName, new[] { "device", "action" }, new[] { "action" });
+        }
+
+        var relevant = new HashSet<string>(StringComparer.Ordinal) { "device", "action", "timeout_ms" };
+        var required = new HashSet<string>(StringComparer.Ordinal) { "action" };
+
+        switch (action)
+        {
+            case "raw":
+                relevant.Add("text");
+                required.Add("text");
+                break;
+            case "apply":
+                relevant.UnionWith(new[] { "channel", "voltage", "current" });
+                required.UnionWith(new[] { "voltage", "current" });
+                break;
+            case "set_voltage":
+                relevant.UnionWith(new[] { "channel", "voltage" });
+                required.Add("voltage");
+                break;
+            case "set_current":
+                relevant.UnionWith(new[] { "channel", "current" });
+                required.Add("current");
+                break;
+            case "output":
+                relevant.UnionWith(new[] { "channel", "state", "value" });
+                if (string.IsNullOrWhiteSpace(ValueOf(values, "value")))
+                {
+                    required.Add("state");
+                }
+                break;
+            case "track":
+                relevant.UnionWith(new[] { "state", "value" });
+                if (string.IsNullOrWhiteSpace(ValueOf(values, "value")))
+                {
+                    required.Add("state");
+                }
+                break;
+            case "read_voltage":
+            case "read_current":
+            case "mode":
+            case "read_output":
+                relevant.UnionWith(new[] { "channel", "save_as", "until", "match", "read" });
+                break;
+            case "measure_voltage":
+            case "measure_current":
+                relevant.UnionWith(new[] { "channel", "average", "save_as", "until", "match", "read" });
+                break;
+            case "identify":
+            case "read_track":
+            case "system_error":
+                relevant.UnionWith(new[] { "save_as", "until", "match", "read" });
+                break;
+            case "reset":
+                break;
+            default:
+                relevant.UnionWith(new[]
+                {
+                    "average", "channel", "current", "match", "read", "save_as",
+                    "state", "text", "until", "value", "voltage"
+                });
+                break;
+        }
+
+        if (PowerQueryActions.Contains(action))
+        {
+            relevant.Add("save_as");
+        }
+
+        return new WorkbenchCommandArgumentSelection(
+            relevant.Contains(argumentName),
+            required.Contains(argumentName));
+    }
+
+    private static WorkbenchCommandArgumentSelection ResolveSentUsb(
+        IReadOnlyDictionary<string, string> values,
+        string argumentName)
+    {
+        var action = NormalizeSentAction(ValueOf(values, "action"));
+        if (string.IsNullOrWhiteSpace(action))
+        {
+            return Selection(argumentName, new[] { "device", "action" }, Array.Empty<string>());
+        }
+
+        var relevant = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "device",
+            "action",
+            "channel",
+            "timeout_ms",
+            "read_ack",
+            "save_as"
+        };
+        var required = new HashSet<string>(StringComparer.Ordinal);
+
+        switch (action)
+        {
+            case "config":
+                relevant.UnionWith(new[]
+                {
+                    "autostart",
+                    "auto_start",
+                    "direction",
+                    "crc_mode",
+                    "data_nibble_count",
+                    "pulse_pause_enabled",
+                    "rx_forward_mode",
+                    "tx_echo_mode",
+                    "slow_channel_mode",
+                    "slow_channel_tx_crc_fault",
+                    "unit_time_us",
+                    "pulse_pause_frame_period_us",
+                    "swap_fast_data_nibbles"
+                });
+                break;
+            case "transmit_fast":
+                relevant.UnionWith(new[] { "data_nibbles", "status", "status_nibble", "crc", "crc_calculated" });
+                required.Add("data_nibbles");
+                break;
+            case "transmit_slow":
+                relevant.UnionWith(new[]
+                {
+                    "slow_message_id",
+                    "message_id",
+                    "data",
+                    "slow_data",
+                    "crc_received",
+                    "crc",
+                    "frame_type",
+                    "slow_frame_type",
+                    "enhanced_format",
+                    "enhanced_config_bit",
+                    "enhanced_serial_format",
+                    "crc_calculated",
+                    "slow_channel_mode"
+                });
+                if (string.IsNullOrWhiteSpace(ValueOf(values, "message_id")))
+                {
+                    required.Add("slow_message_id");
+                }
+                if (string.IsNullOrWhiteSpace(ValueOf(values, "slow_data")))
+                {
+                    required.Add("data");
+                }
+                break;
+            case "transmit_slow_buffer":
+                relevant.UnionWith(new[]
+                {
+                    "buffer_index",
+                    "slow_buffer_index",
+                    "index",
+                    "enabled",
+                    "buffer_enabled",
+                    "slow_message_id",
+                    "message_id",
+                    "data",
+                    "slow_data",
+                    "enhanced_format",
+                    "enhanced_config_bit",
+                    "enhanced_serial_format"
+                });
+                if (string.IsNullOrWhiteSpace(ValueOf(values, "slow_buffer_index"))
+                    && string.IsNullOrWhiteSpace(ValueOf(values, "index")))
+                {
+                    required.Add("buffer_index");
+                }
+                if (!IsFalse(ValueOf(values, "enabled")) && !IsFalse(ValueOf(values, "buffer_enabled")))
+                {
+                    if (string.IsNullOrWhiteSpace(ValueOf(values, "message_id")))
+                    {
+                        required.Add("slow_message_id");
+                    }
+                    if (string.IsNullOrWhiteSpace(ValueOf(values, "slow_data")))
+                    {
+                        required.Add("data");
+                    }
+                }
+                break;
+            case "start":
+            case "stop":
+                break;
+            default:
+                relevant.UnionWith(new[]
+                {
+                    "autostart", "auto_start", "buffer_enabled", "buffer_index", "crc",
+                    "crc_calculated", "crc_mode", "crc_received", "data", "data_nibble_count",
+                    "data_nibbles", "direction", "enabled", "enhanced_config_bit",
+                    "enhanced_format", "enhanced_serial_format", "frame_type", "index",
+                    "message_id", "pulse_pause_enabled", "pulse_pause_frame_period_us",
+                    "rx_forward_mode", "slow_buffer_index", "slow_channel_mode",
+                    "slow_channel_tx_crc_fault", "slow_data", "slow_frame_type",
+                    "slow_message_id", "status", "status_nibble", "swap_fast_data_nibbles",
+                    "tx_echo_mode", "unit_time_us"
+                });
+                break;
+        }
+
+        return new WorkbenchCommandArgumentSelection(
+            relevant.Contains(argumentName),
+            required.Contains(argumentName));
+    }
+
+    private static WorkbenchCommandArgumentSelection Selection(
+        string argumentName,
+        IReadOnlyList<string> relevant,
+        IReadOnlyList<string> required)
+    {
+        return new WorkbenchCommandArgumentSelection(
+            relevant.Contains(argumentName, StringComparer.Ordinal),
+            required.Contains(argumentName, StringComparer.Ordinal));
+    }
+
+    private static string ValueOf(IReadOnlyDictionary<string, string> values, string name)
+    {
+        return values.TryGetValue(name, out var value) ? value : "";
+    }
+
+    private static string NormalizeAction(string value)
+    {
+        return value.Trim().Trim('"', '\'').ToLowerInvariant().Replace("-", "_", StringComparison.Ordinal);
+    }
+
+    private static string NormalizeSentAction(string value)
+    {
+        var normalized = NormalizeAction(value);
+        return normalized switch
+        {
+            "slow_buffer" or "slow_buffers" or "write_slow_buffer"
+                or "write_slow_buffers" or "transmit_slow_buffers"
+                or "transmit_slow_multiplex" or "transmit_slow_multiplex_buffer" => "transmit_slow_buffer",
+            _ => normalized
+        };
+    }
+
+    private static bool IsFalse(string value)
+    {
+        var normalized = value.Trim().Trim('"', '\'').ToLowerInvariant();
+        return normalized is "0" or "false" or "off" or "no";
+    }
 }
 
 public sealed class WorkbenchCommandCatalogGroup
@@ -383,14 +691,68 @@ public static class WorkbenchCommandCatalog
                 timeout_ms: 1000
                 save_as: sent_frame
                 """),
-            Command("sent_usb.command", "device", "Control or transmit with a Mach Systems SENT-USB gateway command.", new[] { "device", "action" }, new[] { "channel", "data_nibbles", "slow_message_id", "data", "buffer_index", "enabled", "enhanced_format", "timeout_ms", "save_as" },
+            Command("sent_usb.command", "device", "Control or transmit with a Mach Systems SENT-USB gateway command.", new[] { "device", "action" }, new[]
+                {
+                    "autostart",
+                    "auto_start",
+                    "buffer_enabled",
+                    "buffer_index",
+                    "channel",
+                    "crc",
+                    "crc_calculated",
+                    "crc_mode",
+                    "crc_received",
+                    "data",
+                    "data_nibble_count",
+                    "data_nibbles",
+                    "direction",
+                    "enabled",
+                    "enhanced_config_bit",
+                    "enhanced_format",
+                    "enhanced_serial_format",
+                    "frame_type",
+                    "index",
+                    "message_id",
+                    "pulse_pause_enabled",
+                    "pulse_pause_frame_period_us",
+                    "read_ack",
+                    "rx_forward_mode",
+                    "save_as",
+                    "slow_buffer_index",
+                    "slow_channel_mode",
+                    "slow_channel_tx_crc_fault",
+                    "slow_data",
+                    "slow_frame_type",
+                    "slow_message_id",
+                    "status",
+                    "status_nibble",
+                    "swap_fast_data_nibbles",
+                    "timeout_ms",
+                    "tx_echo_mode",
+                    "unit_time_us"
+                },
                 """
                 device: sent_usb
                 action: start
                 channel: 1
                 timeout_ms: 1000
                 """),
-            Command("power_supply.command", "device", "Execute a VUpower K USB power supply command profile action.", new[] { "device" }, new[] { "action", "channel", "voltage", "current", "state", "save_as", "timeout_ms" },
+            Command("power_supply.command", "device", "Execute a VUpower K USB power supply command profile action.", new[] { "device" }, new[]
+                {
+                    "action",
+                    "average",
+                    "channel",
+                    "current",
+                    "match",
+                    "read",
+                    "save_as",
+                    "state",
+                    "text",
+                    "timeout_ms",
+                    "until",
+                    "value",
+                    "voltage"
+                },
                 """
                 device: psu
                 action: output

@@ -172,12 +172,16 @@ public sealed class WorkbenchCommandArgument
         WorkbenchCommandArgumentDefinition definition,
         string value,
         int sourceLine,
-        IReadOnlyList<string>? suggestions = null)
+        IReadOnlyList<string>? suggestions = null,
+        bool isRelevantToCurrentSelection = true,
+        bool isRequiredByCurrentSelection = false)
     {
         Definition = definition;
         Value = value;
         SourceLine = sourceLine;
         Suggestions = suggestions ?? definition.Suggestions;
+        IsRelevantToCurrentSelection = isRelevantToCurrentSelection;
+        IsRequiredByCurrentSelection = isRequiredByCurrentSelection;
     }
 
     public WorkbenchCommandArgumentDefinition Definition { get; }
@@ -199,15 +203,26 @@ public sealed class WorkbenchCommandArgument
 
     public bool HasSuggestions => Suggestions.Count > 0;
 
-    public bool IsMissingRequired => IsRequired && string.IsNullOrWhiteSpace(Value);
+    public bool IsRequiredByCurrentSelection { get; }
+
+    public bool IsRelevantToCurrentSelection { get; }
+
+    public bool IsMissingRequired =>
+        (IsRequired || IsRequiredByCurrentSelection)
+        && IsRelevantToCurrentSelection
+        && string.IsNullOrWhiteSpace(Value);
 
     public bool IsExplicitlyConfigured => SourceLine > 0;
 
-    public bool IsVisibleByDefault => IsRequired || IsExplicitlyConfigured;
+    public bool IsVisibleByDefault =>
+        IsRelevantToCurrentSelection
+        && (IsRequired || IsRequiredByCurrentSelection || IsExplicitlyConfigured);
 
     public string RequirementText => IsMissingRequired
         ? "missing required"
-        : Definition.RequirementText;
+        : IsRequiredByCurrentSelection
+            ? "required"
+            : Definition.RequirementText;
 
     public string Value { get; }
 

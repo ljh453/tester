@@ -935,7 +935,10 @@ public partial class MainWindow : Window
 
     private bool ShouldShowGuiArgument(WorkbenchCommandArgument argument)
     {
-        return _showOptionalGuiArguments || argument.IsVisibleByDefault;
+        var canBeEditedForCurrentSelection =
+            argument.IsRelevantToCurrentSelection || argument.IsExplicitlyConfigured;
+        return canBeEditedForCurrentSelection
+            && (_showOptionalGuiArguments || argument.IsVisibleByDefault);
     }
 
     private void ApplyGuiCommandArgumentEdit(FrameworkElement editor, string value)

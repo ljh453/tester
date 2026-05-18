@@ -214,15 +214,35 @@ public static class WorkbenchGuiModelBuilder
             return BuildUnknownCommandArguments(lines, tempBlock);
         }
 
-        return definition.Arguments
+        var rawArguments = definition.Arguments
             .Select(argumentDefinition =>
             {
                 var argumentValue = ReadArgumentValue(lines, tempBlock, argumentDefinition);
+                return (
+                    Definition: argumentDefinition,
+                    Value: argumentValue.Value,
+                    SourceLine: argumentValue.SourceLine);
+            })
+            .ToArray();
+        var values = rawArguments.ToDictionary(
+            argument => argument.Definition.Name,
+            argument => argument.Value,
+            StringComparer.Ordinal);
+
+        return rawArguments
+            .Select(argument =>
+            {
+                var selection = WorkbenchCommandArgumentVisibility.Resolve(
+                    tempBlock.CommandType,
+                    values,
+                    argument.Definition.Name);
                 return new WorkbenchCommandArgument(
-                    argumentDefinition,
-                    argumentValue.Value,
-                    argumentValue.SourceLine,
-                    suggestionContext.SuggestionsFor(argumentDefinition));
+                    argument.Definition,
+                    argument.Value,
+                    argument.SourceLine,
+                    suggestionContext.SuggestionsFor(argument.Definition),
+                    selection.IsRelevant,
+                    selection.IsRequired);
             })
             .ToArray();
     }
@@ -248,6 +268,7 @@ public static class WorkbenchGuiModelBuilder
             }
 
             var definition = new WorkbenchCommandArgumentDefinition(
+                tempBlock.CommandType,
                 match.Groups[1].Value,
                 string.IsNullOrWhiteSpace(match.Groups[2].Value)
                     ? WorkbenchCommandArgumentKind.Map

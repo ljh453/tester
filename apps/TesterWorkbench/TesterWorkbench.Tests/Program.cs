@@ -34,6 +34,7 @@ await RunWorkbenchThemeResolverTest();
 await RunWorkbenchThemeStyleResourceTest();
 await RunWorkbenchGuiModelBuilderTest();
 await RunWorkbenchGuiModelBuilderCommandArgumentTest();
+await RunWorkbenchGuiModelBuilderActionArgumentVisibilityTest();
 await RunWorkbenchGuiModelBuilderValidationTest();
 await RunWorkbenchGuiModelBuilderAutocompleteSuggestionTest();
 await RunWorkbenchGuiModelBuilderComplexArgumentTest();
@@ -1809,6 +1810,69 @@ static Task RunWorkbenchGuiModelBuilderCommandArgumentTest()
     return Task.CompletedTask;
 }
 
+static Task RunWorkbenchGuiModelBuilderActionArgumentVisibilityTest()
+{
+    var model = WorkbenchGuiModelBuilder.Build(
+        """
+        testcases:
+          - name: action_argument_case
+            steps:
+              - power_supply.command:
+                  device: psu
+                  action: apply
+              - power_supply.command:
+                  device: psu
+                  action: output
+              - power_supply.command:
+                  device: psu
+                  action: identify
+              - sent_usb.command:
+                  device: sent_usb
+                  action: transmit_fast
+              - sent_usb.command:
+                  device: sent_usb
+                  action: transmit_slow
+              - sent_usb.command:
+                  device: sent_usb
+                  action: transmit_slow_buffer
+        """);
+    var blocks = model.Testcases[0].Phases.Single(phase => phase.YamlName == "steps").Blocks;
+
+    var powerApply = blocks[0];
+    AssertTrue(Argument(powerApply, "action").IsVisibleByDefault, "power action is visible by default");
+    AssertTrue(Argument(powerApply, "voltage").IsVisibleByDefault, "power apply voltage is visible by default");
+    AssertTrue(Argument(powerApply, "current").IsVisibleByDefault, "power apply current is visible by default");
+    AssertTrue(Argument(powerApply, "channel").IsRelevantToCurrentSelection, "power apply channel is relevant");
+    AssertFalse(Argument(powerApply, "state").IsRelevantToCurrentSelection, "power apply state is hidden");
+
+    var powerOutput = blocks[1];
+    AssertTrue(Argument(powerOutput, "state").IsVisibleByDefault, "power output state is visible by default");
+    AssertFalse(Argument(powerOutput, "voltage").IsRelevantToCurrentSelection, "power output voltage is hidden");
+    AssertFalse(Argument(powerOutput, "current").IsRelevantToCurrentSelection, "power output current is hidden");
+
+    var powerIdentify = blocks[2];
+    AssertFalse(Argument(powerIdentify, "channel").IsRelevantToCurrentSelection, "power identify channel is hidden");
+    AssertFalse(Argument(powerIdentify, "state").IsRelevantToCurrentSelection, "power identify state is hidden");
+
+    var sentFast = blocks[3];
+    AssertTrue(Argument(sentFast, "data_nibbles").IsVisibleByDefault, "sent fast data nibbles are visible by default");
+    AssertFalse(Argument(sentFast, "slow_message_id").IsRelevantToCurrentSelection, "sent fast slow message id is hidden");
+    AssertFalse(Argument(sentFast, "buffer_index").IsRelevantToCurrentSelection, "sent fast buffer index is hidden");
+
+    var sentSlow = blocks[4];
+    AssertTrue(Argument(sentSlow, "slow_message_id").IsVisibleByDefault, "sent slow message id is visible by default");
+    AssertTrue(Argument(sentSlow, "data").IsVisibleByDefault, "sent slow data is visible by default");
+    AssertFalse(Argument(sentSlow, "data_nibbles").IsRelevantToCurrentSelection, "sent slow data nibbles are hidden");
+
+    var sentSlowBuffer = blocks[5];
+    AssertTrue(Argument(sentSlowBuffer, "buffer_index").IsVisibleByDefault, "sent slow buffer index is visible by default");
+    AssertTrue(Argument(sentSlowBuffer, "slow_message_id").IsVisibleByDefault, "sent slow buffer message id is visible by default");
+    AssertTrue(Argument(sentSlowBuffer, "data").IsVisibleByDefault, "sent slow buffer data is visible by default");
+    AssertFalse(Argument(sentSlowBuffer, "data_nibbles").IsRelevantToCurrentSelection, "sent slow buffer data nibbles are hidden");
+
+    return Task.CompletedTask;
+}
+
 static Task RunWorkbenchGuiModelBuilderValidationTest()
 {
     var model = WorkbenchGuiModelBuilder.Build(
@@ -2873,6 +2937,11 @@ static void AssertFalse(bool condition, string label)
     {
         throw new InvalidOperationException($"{label}: expected false.");
     }
+}
+
+static WorkbenchCommandArgument Argument(WorkbenchCommandBlock block, string name)
+{
+    return block.Arguments.Single(argument => argument.Name == name);
 }
 
 static void AssertContains(string expected, string actual, string label)
