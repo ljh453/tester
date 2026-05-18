@@ -46,6 +46,7 @@ def test_json_line_canoe_bridge_transport_writes_request_and_reads_response():
                     "status": "passed",
                     "message": "read",
                     "values": {"signal": "CarSpeed", "value": 42},
+                    "duration_ms": 17,
                 }
             )
             + "\n"
@@ -80,6 +81,7 @@ def test_json_line_canoe_bridge_transport_writes_request_and_reads_response():
     assert result.status == "passed"
     assert result.message == "read"
     assert result.values == {"signal": "CarSpeed", "value": 42}
+    assert result.duration_ms == 17
 
 
 def test_json_line_canoe_bridge_transport_reports_mismatched_response_id():

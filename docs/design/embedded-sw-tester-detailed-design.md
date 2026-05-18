@@ -530,7 +530,8 @@ Vector CANoe 14 COM 도움말 기준 실제 helper는 아래 API shape를 사용
 
 - 실행 엔진은 `JsonLineCanoeBridgeTransport`를 통해 helper process stdin에 request JSON 한 줄을 쓴다.
 - helper는 동일한 `request_id`를 가진 response JSON 한 줄을 stdout으로 반환한다.
-- `timeout_ms`는 command args와 분리된 top-level field로 전달한다.
+- `timeout_ms`는 command args와 분리된 top-level field로 전달한다. Measurement start/stop에서는 `Measurement.Running`이 목표 상태가 될 때까지 해당 timeout 안에서 polling한다.
+- helper response의 `duration_ms`는 `AdapterResult.duration_ms`와 report event output으로 전달한다.
 - response id 불일치, 빈 응답, invalid JSON, IO 오류는 failed `AdapterResult`로 변환한다.
 - `CanoeAdapter`는 `bridge_transport`가 주입된 경우 CANoe/CANalyzer 명령을 bridge로 위임하고, 주입되지 않은 경우 기존 in-memory contract adapter로 동작한다.
 

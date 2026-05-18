@@ -52,6 +52,7 @@ class CanoeBridgeResponse:
     message: str = ""
     values: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
+    duration_ms: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -61,6 +62,7 @@ class CanoeBridgeResponse:
             "message": self.message,
             "values": self.values,
             "error": self.error,
+            "duration_ms": self.duration_ms,
         }
 
     @classmethod
@@ -72,6 +74,7 @@ class CanoeBridgeResponse:
             message=str(payload.get("message", "")),
             values=dict(payload.get("values", {})),
             error=payload.get("error"),
+            duration_ms=int(payload.get("duration_ms", 0)),
         )
 
     def to_adapter_result(self) -> AdapterResult:
@@ -80,6 +83,7 @@ class CanoeBridgeResponse:
             status=self.status,
             message=self.error or self.message,
             values=dict(self.values),
+            duration_ms=self.duration_ms,
         )
 
 

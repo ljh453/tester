@@ -24,6 +24,25 @@ class FakeMeasurement:
         return self.running
 
 
+class SequenceMeasurement:
+    def __init__(self, running_values):
+        self.running_values = list(running_values)
+        self.start_count = 0
+        self.stop_count = 0
+
+    def Start(self):
+        self.start_count += 1
+
+    def Stop(self):
+        self.stop_count += 1
+
+    @property
+    def Running(self):
+        if len(self.running_values) > 1:
+            return self.running_values.pop(0)
+        return self.running_values[0]
+
+
 class FakeVariable:
     def __init__(self, value=None):
         self.Value = value
@@ -65,8 +84,8 @@ class FakeBus:
 
 
 class FakeApplication:
-    def __init__(self):
-        self.Measurement = FakeMeasurement()
+    def __init__(self, measurement=None):
+        self.Measurement = measurement or FakeMeasurement()
         self.System = FakeSystem()
         self.buses = {}
         self.opened_configurations = []
@@ -95,6 +114,67 @@ def test_canoe_com_client_starts_measurement_after_opening_configuration():
     assert application.Measurement.start_count == 1
     assert response.values["measurement_running"] is True
     assert response.values["configuration"] == "C:/cfg/demo.cfg"
+
+
+def test_canoe_com_client_waits_until_measurement_start_is_running():
+    application = FakeApplication(measurement=SequenceMeasurement([False, False, True]))
+    now = [10.0]
+    sleep_calls = []
+
+    def sleep_fn(seconds):
+        sleep_calls.append(seconds)
+        now[0] += seconds
+
+    client = CanoeComClient(
+        dispatch_factory=lambda prog_id: application,
+        monotonic_fn=lambda: now[0],
+        sleep_fn=sleep_fn,
+        poll_interval_s=0.01,
+    )
+
+    response = client.execute(
+        CanoeBridgeRequest(
+            request_id="req-1",
+            command_type="canoe.measurement.start",
+            args={},
+            timeout_ms=100,
+        )
+    )
+
+    assert response.success is True
+    assert response.values["measurement_running"] is True
+    assert sleep_calls == [0.01, 0.01]
+    assert response.duration_ms == 20
+
+
+def test_canoe_com_client_reports_measurement_stop_timeout():
+    application = FakeApplication(measurement=SequenceMeasurement([True, True, True, True]))
+    now = [3.0]
+
+    def sleep_fn(seconds):
+        now[0] += seconds
+
+    client = CanoeComClient(
+        dispatch_factory=lambda prog_id: application,
+        monotonic_fn=lambda: now[0],
+        sleep_fn=sleep_fn,
+        poll_interval_s=0.05,
+    )
+
+    response = client.execute(
+        CanoeBridgeRequest(
+            request_id="req-1",
+            command_type="canoe.measurement.stop",
+            args={},
+            timeout_ms=100,
+        )
+    )
+
+    assert response.success is False
+    assert response.status == "failed"
+    assert response.error == "TimeoutError"
+    assert "did not stop" in response.message
+    assert response.duration_ms == 100
 
 
 def test_canoe_com_client_uses_canalyzer_prog_id_when_requested():
@@ -196,3 +276,4 @@ def test_canoe_com_helper_serves_json_line_requests():
     assert response["success"] is True
     assert response["status"] == "passed"
     assert response["values"]["measurement_running"] is True
+    assert isinstance(response["duration_ms"], int)

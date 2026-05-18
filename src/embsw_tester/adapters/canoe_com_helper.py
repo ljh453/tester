@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from typing import Any, Callable, Mapping, Optional, TextIO
 
 from embsw_tester.adapters.canoe_bridge import (
@@ -12,6 +13,8 @@ from embsw_tester.adapters.canoe_bridge import (
 
 
 DispatchFactory = Callable[[str], Any]
+SleepFn = Callable[[float], None]
+MonotonicFn = Callable[[], float]
 
 CANOE_PROG_ID = "CANoe.Application"
 CANALYZER_PROG_ID = "CANalyzer.Application"
@@ -23,42 +26,80 @@ class CanoeComClient:
         dispatch_factory: Optional[DispatchFactory] = None,
         application_name: str = "canoe",
         prog_id: Optional[str] = None,
+        sleep_fn: SleepFn = time.sleep,
+        monotonic_fn: MonotonicFn = time.monotonic,
+        poll_interval_s: float = 0.05,
     ):
         self._dispatch_factory = dispatch_factory or _default_dispatch_factory
         self._application_name = application_name.strip().lower()
         self._prog_id = prog_id or _prog_id_for_application(self._application_name)
         self._application: Any = None
+        self._sleep_fn = sleep_fn
+        self._monotonic_fn = monotonic_fn
+        self._poll_interval_s = max(0.001, float(poll_interval_s))
 
     def execute(self, request: CanoeBridgeRequest) -> CanoeBridgeResponse:
+        start_time = self._monotonic_fn()
         try:
             if request.command_type == "canoe.measurement.start":
-                values = self._start_measurement(request.args)
-                return _passed(request, "CANoe/CANalyzer measurement started.", values)
+                values = self._start_measurement(request.args, request.timeout_ms)
+                return _passed(
+                    request,
+                    "CANoe/CANalyzer measurement started.",
+                    values,
+                    duration_ms=_duration_ms(start_time, self._monotonic_fn()),
+                )
             if request.command_type == "canoe.measurement.stop":
-                values = self._stop_measurement()
-                return _passed(request, "CANoe/CANalyzer measurement stopped.", values)
+                values = self._stop_measurement(request.timeout_ms)
+                return _passed(
+                    request,
+                    "CANoe/CANalyzer measurement stopped.",
+                    values,
+                    duration_ms=_duration_ms(start_time, self._monotonic_fn()),
+                )
             if request.command_type == "canoe.sysvar.set":
                 values = self._set_system_variable(request.args)
-                return _passed(request, "Set CANoe/CANalyzer system variable.", values)
+                return _passed(
+                    request,
+                    "Set CANoe/CANalyzer system variable.",
+                    values,
+                    duration_ms=_duration_ms(start_time, self._monotonic_fn()),
+                )
             if request.command_type == "canoe.sysvar.read":
                 values = self._read_system_variable(request.args)
-                return _passed(request, "Read CANoe/CANalyzer system variable.", values)
+                return _passed(
+                    request,
+                    "Read CANoe/CANalyzer system variable.",
+                    values,
+                    duration_ms=_duration_ms(start_time, self._monotonic_fn()),
+                )
             if request.command_type == "canoe.signal.read":
                 values = self._read_signal(request.args)
-                return _passed(request, "Read CANoe/CANalyzer signal.", values)
+                return _passed(
+                    request,
+                    "Read CANoe/CANalyzer signal.",
+                    values,
+                    duration_ms=_duration_ms(start_time, self._monotonic_fn()),
+                )
             return _failed(
                 request,
                 f"Unsupported CANoe command '{request.command_type}'.",
+                duration_ms=_duration_ms(start_time, self._monotonic_fn()),
             )
         except Exception as exc:
-            return _failed(request, str(exc), error=exc.__class__.__name__)
+            return _failed(
+                request,
+                str(exc),
+                error=exc.__class__.__name__,
+                duration_ms=_duration_ms(start_time, self._monotonic_fn()),
+            )
 
     def _get_application(self) -> Any:
         if self._application is None:
             self._application = self._dispatch_factory(self._prog_id)
         return self._application
 
-    def _start_measurement(self, args: Mapping[str, Any]) -> dict[str, Any]:
+    def _start_measurement(self, args: Mapping[str, Any], timeout_ms: int) -> dict[str, Any]:
         application = self._get_application()
         configuration = _optional_text(args, "configuration")
         if configuration:
@@ -66,17 +107,25 @@ class CanoeComClient:
         application.Measurement.Start()
 
         values = self._common_values()
-        values["measurement_running"] = _measurement_running(application, True)
+        values["measurement_running"] = self._wait_for_measurement_state(
+            application,
+            expected=True,
+            timeout_ms=timeout_ms,
+        )
         if configuration:
             values["configuration"] = configuration
         return values
 
-    def _stop_measurement(self) -> dict[str, Any]:
+    def _stop_measurement(self, timeout_ms: int) -> dict[str, Any]:
         application = self._get_application()
         application.Measurement.Stop()
 
         values = self._common_values()
-        values["measurement_running"] = _measurement_running(application, False)
+        values["measurement_running"] = self._wait_for_measurement_state(
+            application,
+            expected=False,
+            timeout_ms=timeout_ms,
+        )
         return values
 
     def _set_system_variable(self, args: Mapping[str, Any]) -> dict[str, Any]:
@@ -151,6 +200,26 @@ class CanoeComClient:
             "application": self._application_name,
             "prog_id": self._prog_id,
         }
+
+    def _wait_for_measurement_state(
+        self,
+        application: Any,
+        expected: bool,
+        timeout_ms: int,
+    ) -> bool:
+        timeout_s = max(0.0, timeout_ms / 1000)
+        deadline = self._monotonic_fn() + timeout_s
+        while True:
+            running = _measurement_running(application, expected)
+            if running == expected:
+                return running
+            now = self._monotonic_fn()
+            if now >= deadline:
+                state_text = "start" if expected else "stop"
+                raise TimeoutError(
+                    f"CANoe/CANalyzer measurement did not {state_text} within {timeout_ms} ms."
+                )
+            self._sleep_fn(min(self._poll_interval_s, max(0.0, deadline - now)))
 
 
 def serve(
@@ -227,6 +296,7 @@ def _passed(
     request: CanoeBridgeRequest,
     message: str,
     values: Mapping[str, Any],
+    duration_ms: int = 0,
 ) -> CanoeBridgeResponse:
     return CanoeBridgeResponse(
         request_id=request.request_id,
@@ -234,6 +304,7 @@ def _passed(
         status="passed",
         message=message,
         values=dict(values),
+        duration_ms=duration_ms,
     )
 
 
@@ -241,6 +312,7 @@ def _failed(
     request: CanoeBridgeRequest,
     message: str,
     error: Optional[str] = None,
+    duration_ms: int = 0,
 ) -> CanoeBridgeResponse:
     return CanoeBridgeResponse(
         request_id=request.request_id,
@@ -248,6 +320,7 @@ def _failed(
         status="failed",
         message=message,
         error=error,
+        duration_ms=duration_ms,
     )
 
 
@@ -303,6 +376,10 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
     return str(value)
+
+
+def _duration_ms(start_time: float, end_time: float) -> int:
+    return max(0, int(round((end_time - start_time) * 1000)))
 
 
 if __name__ == "__main__":

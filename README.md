@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 27: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP + Runtime IPC Hardening**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, CANoe/CANalyzer COM helper RPC schema와 JSON line process transport, CANoe tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton, GUI run trace/variables/detail viewer, subprocess event streaming, breakpoint/pause/stop control에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 29: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP + Runtime IPC Hardening + CANoe/CANalyzer COM Helper**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, CANoe/CANalyzer COM helper RPC schema와 JSON line process transport, CANoe tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton, GUI run trace/variables/detail viewer, subprocess event streaming, breakpoint/pause/stop control, 실장비 guarded smoke workspace에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -26,6 +26,7 @@
 - 테스트 가능한 `CanoeAdapter`
 - 테스트 가능한 `IncaAdapter`
 - CANoe/CANalyzer COM helper request/response schema와 JSON line process transport
+- CANoe/CANalyzer COM helper measurement start/stop timeout wait와 duration reporting
 - tool profile snapshot에서 `CanoeAdapter` 구성
 - INCA 32bit helper request/response schema와 JSON line process transport
 - tool profile snapshot에서 `IncaAdapter` 구성
@@ -387,7 +388,7 @@ package = compile_file("tests/canoe.yaml")
 result = run_package(package, adapter_registry=registry)
 ```
 
-실제 Vector COM 실행은 helper 프로세스로 격리합니다. Vector CANoe 14 COM 도움말 기준으로 helper는 `CANoe.Application` 또는 `CANalyzer.Application` ProgID를 열고, `Application.Measurement.Start/Stop`, `Application.System.Namespaces(...).Variables(...).Value`, `Application.Bus("CAN").GetSignal(channel, message, signal).Value` 경로를 사용합니다.
+실제 Vector COM 실행은 helper 프로세스로 격리합니다. Vector CANoe 14 COM 도움말 기준으로 helper는 `CANoe.Application` 또는 `CANalyzer.Application` ProgID를 열고, `Application.Measurement.Start/Stop`, `Application.System.Namespaces(...).Variables(...).Value`, `Application.Bus("CAN").GetSignal(channel, message, signal).Value` 경로를 사용합니다. Measurement start/stop은 request의 `timeout_ms` 동안 `Measurement.Running`이 원하는 상태가 될 때까지 polling하며, helper response의 `duration_ms`는 최종 `AdapterResult`와 report event output까지 전달됩니다.
 
 ```python
 from pathlib import Path
@@ -430,7 +431,7 @@ canoe:
       - embsw_tester.adapters.canoe_com_helper
 ```
 
-`application`은 `canoe` 또는 `canalyzer`를 받으며, 필요하면 `prog_id: CANoe.Application`처럼 명시 ProgID로 override할 수 있습니다. profile snapshot 기반 registry factory는 `canoe.helper.command`가 있으면 `CanoeAdapter`를 helper-backed adapter로 등록합니다. 실제 helper 실행 PC에는 Vector CANoe/CANalyzer COM registration과 Python용 `pywin32`가 필요합니다.
+`application`은 `canoe` 또는 `canalyzer`를 받으며, 필요하면 `prog_id: CANoe.Application`처럼 명시 ProgID로 override할 수 있습니다. profile snapshot 기반 registry factory는 `canoe.helper.command`가 있으면 `CanoeAdapter`를 helper-backed adapter로 등록합니다. `samples/real-tools-smoke.yaml`에는 CANoe/CANalyzer helper smoke testcase가 포함되어 있으므로 실제 실험실에서는 `samples/tool-profiles/lab.tools.yaml`의 `canoe.helper.application`, helper Python command, configuration path, system variable, signal 이름을 장비 환경에 맞게 수정해야 합니다. 실제 helper 실행 PC에는 Vector CANoe/CANalyzer COM registration과 Python용 `pywin32`가 필요합니다.
 
 ## INCA Adapter
 
@@ -805,12 +806,13 @@ testcases:
 - Phase 23 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase23-gui-workbench-mvp.md`
 - Phase 24 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase24-gui-trace-variables.md`
 - Phase 27 구현 계획: `docs/superpowers/plans/2026-05-19-embedded-sw-tester-phase27-runtime-ipc.md`
+- Phase 28 구현 계획: `docs/superpowers/plans/2026-05-19-embedded-sw-tester-phase28-real-tools-smoke.md`
+- Phase 29 구현 계획: `docs/superpowers/plans/2026-05-19-embedded-sw-tester-phase29-canoe-helper.md`
 
 ## 다음 구현 단계
 
-다음 단계는 실제 장비 smoke workspace와 helper 실행 경로를 좁혀가는 쪽이 좋습니다.
+다음 단계는 장비별 명령 확장을 좁혀가는 쪽이 좋습니다.
 
-- `samples/real-tools-smoke.yaml` 작성
-- `tool-profiles/lab.tools.yaml` 템플릿 작성
-- Serial, Trace32, INCA helper 실행 경로를 profile로 묶기
-- 실제 장비 없는 환경에서는 실행 차단/명확한 진단 제공
+- Mach SENT slow message multiplex buffer 명령
+- VuPower power supply 입력 포맷 실장비 확인 후 command profile 보강
+- Trace32 flash/memory/symbol 계열 명령 후보 정리

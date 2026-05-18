@@ -216,3 +216,5 @@ def test_compile_real_tools_smoke_sample_uses_lab_profile():
     assert "sent_usb" in package.tool_profile_snapshot["serial"]["devices"]
     assert "trace32" in package.tool_profile_snapshot
     assert package.tool_profile_snapshot["inca"]["helper"]["enabled"] is True
+    assert package.tool_profile_snapshot["canoe"]["helper"]["enabled"] is True
+    assert any(testcase.name == "canoe_helper_smoke" for testcase in package.testcases)

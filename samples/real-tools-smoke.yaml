@@ -73,3 +73,39 @@ testcases:
       - log.value:
           name: inca_engine_speed
           value: "${inca_engine_speed}"
+
+  - name: canoe_helper_smoke
+    description: Starts Vector measurement through the CANoe/CANalyzer helper and reads a representative signal.
+    tags: [sample, real-tools, canoe, canalyzer]
+    on_step_failure: stop
+    preconditions:
+      - canoe.measurement.start:
+          configuration: C:/Vector/Configs/sample.cfg
+          timeout_ms: 5000
+    steps:
+      - canoe.sysvar.set:
+          namespace: Vehicle
+          name: Ignition
+          value: true
+          timeout_ms: 1000
+      - canoe.sysvar.read:
+          namespace: Vehicle
+          name: Ignition
+          timeout_ms: 1000
+          save_as: vector_ignition
+      - log.value:
+          name: vector_ignition
+          value: "${vector_ignition}"
+      - canoe.signal.read:
+          bus: CAN
+          channel: 1
+          message: ABSData
+          signal: CarSpeed
+          timeout_ms: 1000
+          save_as: vector_car_speed
+      - log.value:
+          name: vector_car_speed
+          value: "${vector_car_speed}"
+    postconditions:
+      - canoe.measurement.stop:
+          timeout_ms: 5000
