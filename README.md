@@ -81,9 +81,11 @@ apps/
       Program.cs
 samples/
   boot-smoke.yaml
+  real-tools-smoke.yaml
   libs/
     common-power-sequence.yaml
   tool-profiles/
+    lab.tools.yaml
     lab-serial.tools.yaml
 src/
   embsw_tester/
@@ -252,6 +254,18 @@ Windows PowerShell:
 ```
 
 이 모드에서는 resolved `tool_profile_snapshot`에서 Serial, Trace32, CANoe/CANalyzer, INCA adapter를 구성합니다. `--reports-root`와 `--run-id`가 함께 있으면 adapter raw evidence root도 같은 report run directory를 사용합니다.
+
+실제 장비 smoke 전용 profile은 accidental run을 막기 위해 `execution.requires_real_hardware: true`를 둡니다. 예를 들어 `samples/real-tools-smoke.yaml`은 장비 연결 확인 전에는 실행이 차단됩니다.
+
+```bash
+.venv/bin/embsw-tester run samples/real-tools-smoke.yaml --json
+```
+
+위 명령은 `REAL_HARDWARE_CONFIRMATION_REQUIRED` 진단으로 실패합니다. 장비와 COM 포트, Trace32, INCA 32bit helper 경로를 확인한 뒤에만 아래처럼 명시적으로 허용합니다.
+
+```bash
+EMBSW_TESTER_ALLOW_REAL_HARDWARE=1 .venv/bin/embsw-tester run samples/real-tools-smoke.yaml --use-tool-profile-adapters --allow-real-hardware --run-id lab-smoke --reports-root reports --json
+```
 
 ## Adapter Framework
 
@@ -641,7 +655,7 @@ result = run_package(package, run_id="real-serial-run", adapter_registry=registr
 
 `create_adapter_registry_from_tool_profile`는 profile의 논리 장비 이름을 `SerialAdapter` port 이름으로 사용합니다. 예를 들어 YAML의 `port: psu`는 profile의 `serial.devices.psu.port: COM3`로 연결됩니다. profile에 `trace32`, `canoe`, `inca` 섹션이 있으면 각 실제 adapter도 함께 등록합니다.
 
-CLI에서는 같은 경로를 `--use-tool-profile-adapters`로 사용할 수 있습니다. 이 옵션을 주지 않으면 `tool_profile`이 있어도 mock adapter registry를 사용합니다.
+CLI에서는 같은 경로를 `--use-tool-profile-adapters`로 사용할 수 있습니다. 이 옵션을 주지 않으면 `tool_profile`이 있어도 mock adapter registry를 사용합니다. 단, profile에 `execution.requires_real_hardware: true`가 있으면 mock 실행도 false pass를 만들지 않도록 `--allow-real-hardware` 또는 profile의 `execution.allow_env` 환경변수 확인 전까지 run을 차단합니다.
 
 ## Device Command Profiles
 

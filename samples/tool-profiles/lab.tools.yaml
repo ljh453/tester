@@ -1,0 +1,76 @@
+execution:
+  requires_real_hardware: true
+  allow_env: EMBSW_TESTER_ALLOW_REAL_HARDWARE
+  notes: "Integrated lab smoke profile. Edit ports, paths, and Vector/INCA/Trace32 settings before running."
+
+serial:
+  devices:
+    psu:
+      device_type: power_supply
+      port: COM3
+      baudrate: 9600
+      parity: none
+      stop_bits: 1
+      byte_size: 8
+      timeout_ms: 1000
+      command_profile: vupower_k_usb
+      notes: "VuPower K Series USB-to-Serial SCPI-style protocol."
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      parity: none
+      stop_bits: 1
+      byte_size: 8
+      timeout_ms: 1000
+      command_profile: mach_sent_gateway
+      notes: "Mach Systems SENT-USB interface using the SENT Gateway binary protocol."
+
+trace32:
+  rcl:
+    enabled: true
+    client_factory: lab_trace32:create_client
+    command_method: cmd
+    client_args:
+      node: TRACE32-A
+  udp:
+    enabled: true
+    host: 127.0.0.1
+    port: 20000
+    terminator: "\n"
+    encoding: utf-8
+    response_bytes: 4096
+
+inca:
+  helper:
+    enabled: true
+    command:
+      - C:/Python32/python.exe
+      - -m
+      - embsw_tester.adapters.inca_com_helper
+
+canoe:
+  helper:
+    enabled: true
+    application: canoe
+    command:
+      - python
+      - -m
+      - embsw_tester.adapters.canoe_com_helper
+
+command_profiles:
+  vupower_k_usb:
+    notes: "VuPower K USB manual Ver3.2. Commands are line-based and terminated by LF."
+    commands:
+      power_supply.command:
+        protocol: vupower_k_usb
+        channel: P1
+  mach_sent_gateway:
+    notes: "Mach Systems SENT Gateway protocol. Supports fast frame receive and fast/slow TX control commands."
+    commands:
+      sent_usb.read:
+        protocol: mach_sent_gateway
+        max_frames: 3
+      sent_usb.command:
+        protocol: mach_sent_gateway
+        read_ack: true

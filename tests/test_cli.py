@@ -206,3 +206,103 @@ testcases:
     event = payload["testcase_results"][0]["events"][0]
     assert event["command_type"] == "trace32.command"
     assert "transport is not configured" in event["error"]
+
+
+def test_cli_run_blocks_real_hardware_profile_without_confirmation(tmp_path: Path):
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+execution:
+  requires_real_hardware: true
+  allow_env: LAB_HW_READY
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "real-smoke.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: guarded_case
+    steps:
+      - set:
+          var: ready
+          value: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            str(test_file),
+            "--json",
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "failed"
+    assert payload["testcase_results"] == []
+    assert payload["diagnostics"][0]["code"] == "REAL_HARDWARE_CONFIRMATION_REQUIRED"
+    assert "--allow-real-hardware" in payload["diagnostics"][0]["message"]
+    assert "LAB_HW_READY=1" in payload["diagnostics"][0]["message"]
+
+
+def test_cli_run_allows_real_hardware_profile_with_confirmation_env(tmp_path: Path):
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    env["LAB_HW_READY"] = "1"
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+execution:
+  requires_real_hardware: true
+  allow_env: LAB_HW_READY
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "real-smoke.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: guarded_case
+    steps:
+      - set:
+          var: ready
+          value: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            str(test_file),
+            "--json",
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "passed"
+    assert payload["testcase_results"][0]["variables"] == {"ready": True}

@@ -27,8 +27,11 @@ def normalize_tool_profile(document: Mapping[str, Any]) -> Dict[str, Any]:
     canoe_section = document.get("canoe")
     if canoe_section is not None:
         normalized["canoe"] = _normalize_canoe_section(canoe_section)
+    execution_section = document.get("execution")
+    if execution_section is not None:
+        normalized["execution"] = _normalize_execution_section(execution_section)
     for key, value in document.items():
-        if key in {"serial", "trace32", "inca", "canoe"}:
+        if key in {"serial", "trace32", "inca", "canoe", "execution"}:
             continue
         normalized[str(key)] = value
     return normalized
@@ -244,6 +247,22 @@ def _normalize_command_sequence(value: Any, path: str = "inca.helper") -> list[s
     if not value:
         raise ValueError(f"'{path}.command' must not be empty.")
     return [str(item) for item in value]
+
+
+def _normalize_execution_section(section: Any) -> Dict[str, Any]:
+    if not isinstance(section, Mapping):
+        raise ValueError("'execution' profile section must be a mapping.")
+    normalized = {
+        str(key): value
+        for key, value in section.items()
+    }
+    normalized["requires_real_hardware"] = _as_bool(
+        normalized.get("requires_real_hardware", False)
+    )
+    normalized["allow_env"] = str(
+        normalized.get("allow_env", "EMBSW_TESTER_ALLOW_REAL_HARDWARE")
+    )
+    return normalized
 
 
 def _as_bool(value: Any) -> bool:

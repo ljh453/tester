@@ -1,0 +1,75 @@
+tool_profile: tool-profiles/lab.tools.yaml
+
+testcases:
+  - name: lab_profile_preflight
+    description: Verifies the integrated lab profile is loaded before hardware smoke tests run.
+    tags: [sample, real-tools, preflight]
+    steps:
+      - log.text:
+          text: "Lab profile loaded. Confirm bench wiring before enabling real hardware execution."
+
+  - name: psu_identify_smoke
+    description: Queries the VuPower K Series power supply over the configured serial port.
+    tags: [sample, real-tools, serial, psu]
+    on_step_failure: stop
+    steps:
+      - power_supply.command:
+          device: psu
+          action: identify
+          timeout_ms: 1000
+          save_as: psu_id
+      - log.value:
+          name: psu_id
+          value: "${psu_id}"
+
+  - name: sent_usb_gateway_smoke
+    description: Sends low-impact SENT-USB channel configuration and stop commands.
+    tags: [sample, real-tools, serial, sent-usb]
+    on_step_failure: stop
+    steps:
+      - sent_usb.command:
+          device: sent_usb
+          action: config
+          channel: 1
+          direction: tx
+          data_nibble_count: 6
+          unit_time_us: 3.0
+          pulse_pause_enabled: false
+          timeout_ms: 1000
+          save_as: sent_config_ack
+      - log.value:
+          name: sent_config_ack
+          value: "${sent_config_ack}"
+    postconditions:
+      - sent_usb.command:
+          device: sent_usb
+          action: stop
+          channel: 1
+          timeout_ms: 1000
+
+  - name: trace32_connection_smoke
+    description: Runs a harmless Trace32 command through RCL with UDP fallback configured in the lab profile.
+    tags: [sample, real-tools, trace32]
+    on_step_failure: stop
+    steps:
+      - trace32.command:
+          command: "VERSION()"
+          fallback: true
+          timeout_ms: 3000
+          save_as: trace32_version
+      - log.value:
+          name: trace32_version
+          value: "${trace32_version}"
+
+  - name: inca_helper_smoke
+    description: Reads one INCA measurement variable through the 32bit helper process.
+    tags: [sample, real-tools, inca]
+    on_step_failure: stop
+    steps:
+      - inca.measure.read:
+          variable: EngineSpeed
+          timeout_ms: 3000
+          save_as: inca_engine_speed
+      - log.value:
+          name: inca_engine_speed
+          value: "${inca_engine_speed}"

@@ -145,6 +145,25 @@ canoe:
     ]
 
 
+def test_load_tool_profile_normalizes_real_hardware_execution_guard(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+execution:
+  requires_real_hardware: yes
+  allow_env: LAB_HW_READY
+  notes: "Only run after confirming the bench is connected."
+""".strip(),
+        encoding="utf-8",
+    )
+
+    profile = load_tool_profile(profile_file)
+
+    assert profile["execution"]["requires_real_hardware"] is True
+    assert profile["execution"]["allow_env"] == "LAB_HW_READY"
+    assert profile["execution"]["notes"] == "Only run after confirming the bench is connected."
+
+
 def test_compile_file_includes_tool_profile_snapshot(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(
@@ -186,3 +205,14 @@ testcases:
         == "mach_systems_sent_usb"
     )
     assert package.to_dict()["tool_profile_snapshot"]["serial"]["devices"]["psu"]["port"] == "COM3"
+
+
+def test_compile_real_tools_smoke_sample_uses_lab_profile():
+    package = compile_file(Path("samples/real-tools-smoke.yaml"))
+
+    assert package.diagnostics == []
+    assert package.tool_profile_snapshot["execution"]["requires_real_hardware"] is True
+    assert "psu" in package.tool_profile_snapshot["serial"]["devices"]
+    assert "sent_usb" in package.tool_profile_snapshot["serial"]["devices"]
+    assert "trace32" in package.tool_profile_snapshot
+    assert package.tool_profile_snapshot["inca"]["helper"]["enabled"] is True

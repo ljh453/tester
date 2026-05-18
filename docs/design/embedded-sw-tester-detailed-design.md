@@ -266,6 +266,16 @@ command_profiles:
         read_ack: true
 ```
 
+실제 장비 smoke용 profile은 최상위 `execution` 섹션을 둘 수 있다.
+
+```yaml
+execution:
+  requires_real_hardware: true
+  allow_env: EMBSW_TESTER_ALLOW_REAL_HARDWARE
+```
+
+`requires_real_hardware`가 true이면 CLI `run`은 기본적으로 실행을 차단하고 `REAL_HARDWARE_CONFIRMATION_REQUIRED` 진단을 반환한다. 사용자는 장비 연결, COM 포트, helper 실행 경로를 확인한 뒤 `--allow-real-hardware` 또는 `allow_env` 환경변수로 명시적으로 허용해야 한다. 이 guard는 mock registry로 실장비 smoke YAML이 false pass 되는 상황도 막는다.
+
 Serial framing 설정은 `baudrate`, `parity`, `stop_bits`, `byte_size`, `timeout_ms`를 기본 필드로 가진다. `parity`는 `none/even/odd/mark/space`, `stop_bits`는 `1/1.5/2`, `byte_size`는 `5/6/7/8`을 허용한다. GUI Workbench는 `Tools > Settings...` 창에서 현재 YAML의 `tool_profile`이 가리키는 serial device framing 값을 편집하고 저장할 수 있어야 한다. 같은 Settings 창에는 theme처럼 자주 바뀌지 않는 workbench 설정을 함께 둔다.
 
 `vupower_k_usb` protocol은 [VuPower K USB Manual Korea Ver3.2](http://www.vupower.com/download/K_USB_Manual_Korea_Ver3.2.pdf)를 따른다. 해당 장비는 USB-to-Serial 방식이며, 명령은 한 번에 하나씩 전송하고 LF로 종료한다. command와 첫 번째 parameter는 공백으로, parameter 사이는 쉼표로 구분한다. 1차 구현은 `APPL`, `SOUR:VOLT`, `SOUR:CURR`, `OUTP:STAT`, `OUTP:STAT?`, `MEAS:VOLT?`, `MEAS:VOLTA?`, `MEAS:CURR?`, `MEAS:CURRA?`, `*IDN?`, `*RST`, `SYST:ERR?`를 대상으로 한다. 측정/조회 응답은 float, bool, mode 문자열, error code 등 타입화된 값으로 변환해 `save_as`에 저장한다.
@@ -566,7 +576,7 @@ CLI 실행 모드는 두 가지를 구분한다.
 - 기본 `run`: `tool_profile`을 resolved package에 보관하지만 adapter registry는 mock을 유지한다.
 - `run --use-tool-profile-adapters`: resolved `tool_profile_snapshot`을 사용해 Serial, Trace32, CANoe/CANalyzer, INCA adapter registry를 구성한다.
 
-이 구분은 로컬/CI smoke가 실제 장비를 건드리지 않게 하면서도 Windows 장비 연결 smoke에서는 같은 YAML과 같은 profile snapshot으로 실제 adapter 경로를 실행하기 위한 안전 장치다.
+이 구분은 로컬/CI smoke가 실제 장비를 건드리지 않게 하면서도 Windows 장비 연결 smoke에서는 같은 YAML과 같은 profile snapshot으로 실제 adapter 경로를 실행하기 위한 안전 장치다. 실장비 전용 profile은 추가로 `execution.requires_real_hardware` guard를 사용해 사용자가 명시적으로 허용하기 전까지 기본 run도 차단한다.
 
 ## 14. IDE UX 및 워크벤치 구조
 
