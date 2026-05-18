@@ -4,6 +4,13 @@ using System.Text.Json;
 
 namespace TesterWorkbench.Core.ViewModels;
 
+public enum WorkbenchProjectExplorerNodeRole
+{
+    Normal,
+    Current,
+    Referenced
+}
+
 public sealed class MainWorkbenchViewModel
 {
     public const string AvailableBreakpointMarker = "\u25A1";
@@ -18,6 +25,7 @@ public sealed class MainWorkbenchViewModel
     private readonly SortedSet<int> _breakpointLineNumbers = new();
     private readonly SortedSet<int> _selectedGuiCommandLineNumbers = new();
     private readonly HashSet<string> _selectedGuiTestcaseRunNames = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _referencedYamlFilePaths = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<EngineVariableValue> _runVariables = Array.Empty<EngineVariableValue>();
     private string? _activeRunControlFile;
     private bool _isRunInProgress;
@@ -56,6 +64,8 @@ public sealed class MainWorkbenchViewModel
     public string EditorLineNumbersText { get; private set; } = "1";
 
     public IReadOnlyCollection<int> BreakpointLineNumbers => _breakpointLineNumbers;
+
+    public IReadOnlyCollection<string> ReferencedYamlFilePaths => _referencedYamlFilePaths.ToArray();
 
     public string BreakpointsText { get; private set; } = "No breakpoints.";
 
@@ -126,6 +136,7 @@ public sealed class MainWorkbenchViewModel
             cancellationToken);
         WorkspacePath = resolvedWorkspacePath;
         WorkspaceRoot = workspaceRoot;
+        RefreshReferencedYamlFilePaths();
         ClearCurrentExecutionLocation();
         ConsoleText = $"Opened workspace: {WorkspacePath}";
     }
@@ -136,6 +147,7 @@ public sealed class MainWorkbenchViewModel
         _breakpointLineNumbers.Clear();
         _selectedGuiCommandLineNumbers.Clear();
         _selectedGuiTestcaseRunNames.Clear();
+        _referencedYamlFilePaths.Clear();
         _guiBulkSelectionAnchorLineNumber = null;
         UpdateBreakpointsText();
         var editorText = await File.ReadAllTextAsync(SelectedFilePath, cancellationToken);
@@ -355,6 +367,7 @@ public sealed class MainWorkbenchViewModel
         GuiModel = WorkbenchGuiModelBuilder.Build(
             editorText,
             BuildExternalGuiSuggestionContext(editorText));
+        RefreshReferencedYamlFilePaths();
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase => testcase.Name == previousTestcaseName)
             ?? GuiModel.Testcases.FirstOrDefault();
         PruneSelectedGuiTestcaseRunNames();
@@ -375,6 +388,25 @@ public sealed class MainWorkbenchViewModel
         UpdateGuiCurrentExecutionBlock();
         UpdateGuiBreakpointMarkers();
         UpdateGuiSelectionMarkers();
+    }
+
+    public WorkbenchProjectExplorerNodeRole GetProjectExplorerNodeRole(WorkspaceNode node)
+    {
+        if (node.Kind != WorkspaceNodeKind.File)
+        {
+            return WorkbenchProjectExplorerNodeRole.Normal;
+        }
+
+        var fullPath = Path.GetFullPath(node.FullPath);
+        if (!string.IsNullOrWhiteSpace(SelectedFilePath)
+            && string.Equals(fullPath, Path.GetFullPath(SelectedFilePath), StringComparison.OrdinalIgnoreCase))
+        {
+            return WorkbenchProjectExplorerNodeRole.Current;
+        }
+
+        return _referencedYamlFilePaths.Contains(fullPath)
+            ? WorkbenchProjectExplorerNodeRole.Referenced
+            : WorkbenchProjectExplorerNodeRole.Normal;
     }
 
     public void SetAutoFocusExecutionLine(bool enabled)
@@ -546,6 +578,78 @@ public sealed class MainWorkbenchViewModel
         return ResolveWorkspacePath(toolProfilePath);
     }
 
+    private void RefreshReferencedYamlFilePaths()
+    {
+        _referencedYamlFilePaths.Clear();
+        if (string.IsNullOrWhiteSpace(SelectedFilePath))
+        {
+            return;
+        }
+
+        var selectedFile = Path.GetFullPath(SelectedFilePath);
+        var selectedDirectory = Path.GetDirectoryName(selectedFile) ?? Environment.CurrentDirectory;
+        var visitedImports = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var toolProfilePath = ResolveCurrentToolProfilePath();
+        if (!string.IsNullOrWhiteSpace(toolProfilePath))
+        {
+            AddReferencedYamlPath(toolProfilePath, selectedFile, visitedImports, followImports: false);
+        }
+
+        foreach (var importPath in FindImportPaths(EditorText)
+            .Select(importRef => ResolveReferencePath(selectedDirectory, importRef)))
+        {
+            AddReferencedYamlPath(importPath, selectedFile, visitedImports, followImports: true);
+        }
+    }
+
+    private void AddReferencedYamlPath(
+        string? yamlPath,
+        string selectedFile,
+        HashSet<string> visitedImports,
+        bool followImports)
+    {
+        if (string.IsNullOrWhiteSpace(yamlPath))
+        {
+            return;
+        }
+
+        var resolvedPath = Path.GetFullPath(yamlPath);
+        if (string.Equals(resolvedPath, selectedFile, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _referencedYamlFilePaths.Add(resolvedPath);
+        if (!followImports || !visitedImports.Add(resolvedPath) || !File.Exists(resolvedPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var importedText = File.ReadAllText(resolvedPath);
+            var importedDirectory = Path.GetDirectoryName(resolvedPath) ?? Environment.CurrentDirectory;
+            foreach (var nestedImportPath in FindImportPaths(importedText)
+                .Select(importRef => ResolveReferencePath(importedDirectory, importRef)))
+            {
+                AddReferencedYamlPath(nestedImportPath, selectedFile, visitedImports, followImports: true);
+            }
+        }
+        catch
+        {
+            // Reference badges should never block opening or editing a YAML file.
+        }
+    }
+
+    private static string ResolveReferencePath(string baseDirectory, string referencePath)
+    {
+        var normalizedPath = NormalizeYamlReference(referencePath);
+        return Path.IsPathRooted(normalizedPath)
+            ? normalizedPath
+            : Path.GetFullPath(Path.Combine(baseDirectory, normalizedPath));
+    }
+
     private static string FindToolProfilePath(string editorText)
     {
         foreach (var line in editorText.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
@@ -560,6 +664,96 @@ public sealed class MainWorkbenchViewModel
         }
 
         return string.Empty;
+    }
+
+    private static IReadOnlyList<string> FindImportPaths(string editorText)
+    {
+        var imports = new List<string>();
+        var lines = editorText.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var line = lines[index];
+            var trimmed = line.Trim();
+            if (LeadingSpaceCount(line) != 0 || !trimmed.StartsWith("imports:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var inlineValue = trimmed["imports:".Length..].Trim();
+            if (!string.IsNullOrWhiteSpace(inlineValue))
+            {
+                imports.AddRange(ParseImportValue(inlineValue));
+                continue;
+            }
+
+            while (index + 1 < lines.Length)
+            {
+                var childLine = lines[index + 1];
+                var childTrimmed = childLine.Trim();
+                if (string.IsNullOrWhiteSpace(childTrimmed))
+                {
+                    index++;
+                    continue;
+                }
+
+                if (LeadingSpaceCount(childLine) == 0)
+                {
+                    break;
+                }
+
+                index++;
+                if (childTrimmed.StartsWith("-", StringComparison.Ordinal))
+                {
+                    imports.AddRange(ParseImportValue(childTrimmed[1..].Trim()));
+                }
+            }
+        }
+
+        return imports
+            .Select(NormalizeYamlReference)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IEnumerable<string> ParseImportValue(string value)
+    {
+        var trimmed = StripYamlComment(value).Trim();
+        if (trimmed.StartsWith("[", StringComparison.Ordinal)
+            && trimmed.EndsWith("]", StringComparison.Ordinal))
+        {
+            return trimmed[1..^1]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(NormalizeYamlReference);
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed)
+            ? Array.Empty<string>()
+            : new[] { NormalizeYamlReference(trimmed) };
+    }
+
+    private static string NormalizeYamlReference(string value)
+    {
+        return StripYamlComment(value)
+            .Trim()
+            .Trim('"', '\'');
+    }
+
+    private static string StripYamlComment(string value)
+    {
+        var commentIndex = value.IndexOf('#', StringComparison.Ordinal);
+        return commentIndex < 0 ? value : value[..commentIndex];
+    }
+
+    private static int LeadingSpaceCount(string line)
+    {
+        var count = 0;
+        while (count < line.Length && line[count] == ' ')
+        {
+            count++;
+        }
+
+        return count;
     }
 
     public void ZoomEditorIn()

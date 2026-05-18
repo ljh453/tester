@@ -1443,11 +1443,11 @@ public partial class MainWindow : Window
         CurrentExecutionLineBadge.Visibility = Visibility.Visible;
     }
 
-    private static TreeViewItem CreateTreeItem(WorkspaceNode node)
+    private TreeViewItem CreateTreeItem(WorkspaceNode node)
     {
         var item = new TreeViewItem
         {
-            Header = node.Name,
+            Header = CreateProjectTreeItemHeader(node),
             Tag = node,
             IsExpanded = node.RelativePath is "tests" or "libs" or "tool-profiles"
         };
@@ -1457,6 +1457,43 @@ public partial class MainWindow : Window
         }
 
         return item;
+    }
+
+    private object CreateProjectTreeItemHeader(WorkspaceNode node)
+    {
+        var role = _viewModel.GetProjectExplorerNodeRole(node);
+        if (role == WorkbenchProjectExplorerNodeRole.Normal)
+        {
+            return node.Name;
+        }
+
+        var marker = role == WorkbenchProjectExplorerNodeRole.Current ? "●" : "↪";
+        var textBlock = new TextBlock
+        {
+            Text = $"{marker} {node.Name}",
+            ToolTip = role == WorkbenchProjectExplorerNodeRole.Current
+                ? "Current YAML file"
+                : "Referenced YAML file"
+        };
+        if (role == WorkbenchProjectExplorerNodeRole.Current)
+        {
+            textBlock.FontWeight = FontWeights.SemiBold;
+            textBlock.Foreground = ResolveBrush("Workbench.Brush.Accent", System.Windows.Media.Brushes.DodgerBlue);
+        }
+        else
+        {
+            textBlock.FontStyle = FontStyles.Italic;
+            textBlock.Foreground = ResolveBrush("Workbench.Brush.TextSecondary", System.Windows.Media.Brushes.Gray);
+        }
+
+        return textBlock;
+    }
+
+    private System.Windows.Media.Brush ResolveBrush(
+        string resourceKey,
+        System.Windows.Media.Brush fallback)
+    {
+        return TryFindResource(resourceKey) as System.Windows.Media.Brush ?? fallback;
     }
 
     private static bool IsYamlFile(string path)

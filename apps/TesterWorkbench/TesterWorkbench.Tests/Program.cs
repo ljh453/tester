@@ -11,6 +11,7 @@ await RunEngineBridgePassesDebugControlArgumentsTest();
 await RunEngineBridgePassesSelectedTestcaseArgumentsTest();
 await RunEngineBridgeDoesNotRequirePumpedSynchronizationContextTest();
 await RunMainWorkbenchViewModelTest();
+await RunMainWorkbenchViewModelMarksProjectExplorerFileRolesTest();
 await RunMainWorkbenchViewModelRunsSelectedGuiTestcasesTest();
 await RunMainWorkbenchViewModelIgnoresRunWhileActiveTest();
 await RunMainWorkbenchViewModelStopRunAsyncTest();
@@ -489,6 +490,71 @@ static async Task RunMainWorkbenchViewModelTest()
     AssertEqual(1, viewModel.Variables.Count, "selected trace variable count");
     AssertEqual("rpm", viewModel.Variables[0].Name, "selected trace variable name");
     AssertEqual("900", viewModel.Variables[0].Value, "selected trace variable value");
+}
+
+static async Task RunMainWorkbenchViewModelMarksProjectExplorerFileRolesTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/case.yaml",
+            """
+            tool_profile: tool-profiles/lab.tools.yaml
+            imports:
+              - ../libs/common.yaml
+            testcases:
+              - name: case
+                steps: []
+            """),
+        ("libs/common.yaml",
+            """
+            imports:
+              - nested.yaml
+            functions:
+              common:
+                steps: []
+            """),
+        ("libs/nested.yaml",
+            """
+            functions:
+              nested:
+                steps: []
+            """),
+        ("tool-profiles/lab.tools.yaml", "serial: {}"),
+        ("tests/other.yaml", "testcases: []"));
+    var yamlPath = Path.Combine(root, "tests", "case.yaml");
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            root,
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    await viewModel.OpenWorkspaceAsync(root);
+    await viewModel.OpenFileAsync(yamlPath);
+
+    var nodes = viewModel.WorkspaceRoot!.Flatten().ToDictionary(
+        node => node.RelativePath.Replace('\\', '/'),
+        StringComparer.Ordinal);
+
+    AssertEqual(
+        WorkbenchProjectExplorerNodeRole.Current,
+        viewModel.GetProjectExplorerNodeRole(nodes["tests/case.yaml"]),
+        "project explorer marks current YAML");
+    AssertEqual(
+        WorkbenchProjectExplorerNodeRole.Referenced,
+        viewModel.GetProjectExplorerNodeRole(nodes["libs/common.yaml"]),
+        "project explorer marks imported YAML");
+    AssertEqual(
+        WorkbenchProjectExplorerNodeRole.Referenced,
+        viewModel.GetProjectExplorerNodeRole(nodes["libs/nested.yaml"]),
+        "project explorer marks nested imported YAML");
+    AssertEqual(
+        WorkbenchProjectExplorerNodeRole.Referenced,
+        viewModel.GetProjectExplorerNodeRole(nodes["tool-profiles/lab.tools.yaml"]),
+        "project explorer marks tool profile YAML");
+    AssertEqual(
+        WorkbenchProjectExplorerNodeRole.Normal,
+        viewModel.GetProjectExplorerNodeRole(nodes["tests/other.yaml"]),
+        "project explorer leaves unrelated YAML normal");
 }
 
 static async Task RunMainWorkbenchViewModelRunsSelectedGuiTestcasesTest()
