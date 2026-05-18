@@ -1,4 +1,5 @@
 using System.IO;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -35,6 +36,7 @@ public partial class MainWindow : Window
     private bool _isGuiBulkSelectingWithLeftButton;
     private bool _isGuiBulkSelectingWithRightButton;
     private bool _isRuntimeRefreshQueued;
+    private string? _lastReportSummaryPath;
 
     public MainWindow()
     {
@@ -113,6 +115,20 @@ public partial class MainWindow : Window
         await RunUiAction(() => _viewModel.ResumeRunAsync());
     }
 
+    private void OpenReportSummary_Click(object sender, RoutedEventArgs e)
+    {
+        var summaryPath = _viewModel.ReportSummaryPath;
+        if (string.IsNullOrWhiteSpace(summaryPath) || !File.Exists(summaryPath))
+        {
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo(summaryPath)
+        {
+            UseShellExecute = true
+        });
+    }
+
     private void ToggleBreakpoint_Click(object sender, RoutedEventArgs e)
     {
         var lineNumber = EditorBox.GetLineIndexFromCharacterIndex(EditorBox.CaretIndex) + 1;
@@ -178,7 +194,9 @@ public partial class MainWindow : Window
         _viewModel.SelectExecutionTraceEvent(runEvent);
         VariablesGrid.ItemsSource = _viewModel.Variables;
         CurrentLineText.Text = _viewModel.CurrentLocationText;
+        FocusYamlLine(_viewModel.CurrentLineNumber);
         HighlightCurrentExecutionLine();
+        RefreshSelectedTraceDetails();
     }
 
     private void GuiTestcaseComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -752,11 +770,69 @@ public partial class MainWindow : Window
         RunStatusText.Text = _viewModel.RunStatus;
         BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
         ReportPathText.Text = _viewModel.ReportDirectory ?? "";
-        ReportTabText.Text = _viewModel.ReportDirectory is null
-            ? "No report generated yet."
-            : $"Report directory: {_viewModel.ReportDirectory}";
+        RefreshReportViewer();
+        RefreshSelectedTraceDetails();
         RefreshConsole();
         HighlightCurrentExecutionLine();
+    }
+
+    private void RefreshSelectedTraceDetails()
+    {
+        var selectedEvent = ExecutionTraceGrid.SelectedItem as EngineRunEvent;
+        TraceResolvedInputsBox.Text = selectedEvent?.ResolvedInputsDetail ?? string.Empty;
+        TraceOutputsBox.Text = selectedEvent?.OutputsDetail ?? string.Empty;
+        TraceEvidenceBox.Text = selectedEvent is null
+            ? string.Empty
+            : string.Join(
+                Environment.NewLine,
+                new[] { selectedEvent.RawEvidenceRefs, selectedEvent.DurationDetail }
+                    .Where(value => !string.IsNullOrWhiteSpace(value)));
+        TraceErrorBox.Text = selectedEvent?.Error ?? string.Empty;
+    }
+
+    private void RefreshReportViewer()
+    {
+        var reportDirectory = _viewModel.ReportDirectory;
+        var summaryPath = _viewModel.ReportSummaryPath;
+        ReportTabText.Text = reportDirectory is null
+            ? "No report generated yet."
+            : $"Report directory: {reportDirectory}";
+        ReportSummaryPathText.Text = summaryPath ?? string.Empty;
+
+        var summaryExists = !string.IsNullOrWhiteSpace(summaryPath) && File.Exists(summaryPath);
+        ReportSummaryButton.IsEnabled = summaryExists;
+        if (!summaryExists)
+        {
+            if (_lastReportSummaryPath is not null)
+            {
+                try
+                {
+                    ReportBrowser.NavigateToString(string.Empty);
+                }
+                catch
+                {
+                    // Clearing the embedded browser is best-effort UI cleanup.
+                }
+            }
+
+            _lastReportSummaryPath = null;
+            return;
+        }
+
+        if (_lastReportSummaryPath == summaryPath)
+        {
+            return;
+        }
+
+        try
+        {
+            ReportBrowser.Navigate(new Uri(summaryPath!));
+            _lastReportSummaryPath = summaryPath;
+        }
+        catch (Exception ex)
+        {
+            ReportTabText.Text = $"Report generated, but the viewer could not open summary.html: {ex.Message}";
+        }
     }
 
     private void RefreshEditorAfterGuiEdit()

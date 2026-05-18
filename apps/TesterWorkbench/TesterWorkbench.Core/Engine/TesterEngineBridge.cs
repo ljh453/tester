@@ -4,6 +4,11 @@ namespace TesterWorkbench.Core.Engine;
 
 public sealed class TesterEngineBridge
 {
+    private static readonly JsonSerializerOptions DetailJsonOptions = new()
+    {
+        WriteIndented = true
+    };
+
     private readonly string _pythonExecutable;
     private readonly string _repositoryRoot;
     private readonly IEngineProcessRunner _processRunner;
@@ -185,7 +190,11 @@ public sealed class TesterEngineBridge
             HasVariableObject(runEvent, "local_variables"),
             GetNullableString(runEvent, "error"),
             FormatEventDetail(runEvent),
-            FormatLogText(runEvent));
+            FormatLogText(runEvent),
+            FormatJsonDetail(runEvent, "resolved_inputs"),
+            FormatJsonDetail(runEvent, "outputs"),
+            FormatRawEvidenceRefs(runEvent),
+            FormatDurationDetail(runEvent));
     }
 
     private static IReadOnlyList<EngineVariableValue> ParseVariables(JsonElement root)
@@ -304,6 +313,124 @@ public sealed class TesterEngineBridge
         var lineNumber = GetInt(runEvent, "source_line");
         var lineText = lineNumber > 0 ? $" L{lineNumber}" : string.Empty;
         return $"[{GetString(runEvent, "testcase")}/{GetString(runEvent, "phase")}{lineText}] {detail}";
+    }
+
+    private static string FormatJsonDetail(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property)
+            || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return string.Empty;
+        }
+
+        return JsonSerializer.Serialize(property, DetailJsonOptions);
+    }
+
+    private static string FormatRawEvidenceRefs(JsonElement runEvent)
+    {
+        if (!runEvent.TryGetProperty("outputs", out var outputsElement))
+        {
+            return string.Empty;
+        }
+
+        var evidenceRefs = new List<string>();
+        CollectStringPropertyValues(outputsElement, "raw_evidence_ref", evidenceRefs);
+        return string.Join(Environment.NewLine, evidenceRefs.Distinct());
+    }
+
+    private static void CollectStringPropertyValues(
+        JsonElement element,
+        string propertyName,
+        List<string> values)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.NameEquals(propertyName))
+                {
+                    var value = FormatJsonValue(property.Value);
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        values.Add(value);
+                    }
+                }
+
+                CollectStringPropertyValues(property.Value, propertyName, values);
+            }
+            return;
+        }
+
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                CollectStringPropertyValues(item, propertyName, values);
+            }
+        }
+    }
+
+    private static string FormatDurationDetail(JsonElement runEvent)
+    {
+        if (!runEvent.TryGetProperty("outputs", out var outputsElement))
+        {
+            return string.Empty;
+        }
+
+        var durations = new List<string>();
+        CollectDurationValues(outputsElement, string.Empty, durations);
+        return string.Join(Environment.NewLine, durations);
+    }
+
+    private static void CollectDurationValues(
+        JsonElement element,
+        string inheritedLabel,
+        List<string> durations)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            var label = inheritedLabel;
+            if (element.TryGetProperty("command_type", out var commandTypeElement))
+            {
+                label = FormatJsonValue(commandTypeElement);
+            }
+
+            if (element.TryGetProperty("duration_ms", out var durationElement)
+                && TryGetDurationMs(durationElement, out var durationMs))
+            {
+                var prefix = string.IsNullOrWhiteSpace(label) ? string.Empty : $"{label}: ";
+                durations.Add($"{prefix}{durationMs} ms");
+            }
+
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.NameEquals("duration_ms"))
+                {
+                    continue;
+                }
+
+                CollectDurationValues(property.Value, label, durations);
+            }
+            return;
+        }
+
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                CollectDurationValues(item, inheritedLabel, durations);
+            }
+        }
+    }
+
+    private static bool TryGetDurationMs(JsonElement element, out int durationMs)
+    {
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out durationMs))
+        {
+            return true;
+        }
+
+        return int.TryParse(FormatJsonValue(element), out durationMs);
     }
 
     private static string GetString(JsonElement element, string propertyName, string fallback)

@@ -66,6 +66,10 @@ public sealed class MainWorkbenchViewModel
 
     public string? ReportDirectory { get; private set; }
 
+    public string? ReportSummaryPath => string.IsNullOrWhiteSpace(ReportDirectory)
+        ? null
+        : Path.Combine(ReportDirectory, "summary.html");
+
     public IReadOnlyList<EngineRunEvent> ExecutionTrace { get; private set; } = Array.Empty<EngineRunEvent>();
 
     public IReadOnlyList<EngineVariableValue> Variables { get; private set; } = Array.Empty<EngineVariableValue>();

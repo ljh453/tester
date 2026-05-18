@@ -37,7 +37,11 @@ public sealed record EngineRunEvent(
     bool HasLocalVariables,
     string Error,
     string Detail,
-    string LogText);
+    string LogText,
+    string ResolvedInputsDetail,
+    string OutputsDetail,
+    string RawEvidenceRefs,
+    string DurationDetail);
 
 public sealed record EngineVariableValue(
     string Testcase,

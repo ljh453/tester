@@ -5,6 +5,7 @@ using System.Xml.Linq;
 
 await RunWorkspaceScannerTest();
 await RunEngineBridgeTest();
+await RunEngineBridgeParsesExecutionTraceDetailsTest();
 await RunEngineBridgePassesDebugControlArgumentsTest();
 await RunEngineBridgeDoesNotRequirePumpedSynchronizationContextTest();
 await RunMainWorkbenchViewModelTest();
@@ -232,6 +233,83 @@ static async Task RunEngineBridgePassesDebugControlArgumentsTest()
         "debug run args");
 }
 
+static async Task RunEngineBridgeParsesExecutionTraceDetailsTest()
+{
+    var runner = new FakeEngineProcessRunner(
+        new EngineProcessResult(
+            0,
+            """
+            {
+              "run_id": "trace-detail-run",
+              "status": "passed",
+              "testcase_results": [
+                {
+                  "name": "psu_case",
+                  "status": "passed",
+                  "variables": {},
+                  "events": [
+                    {
+                      "testcase": "psu_case",
+                      "phase": "steps",
+                      "command_path": ["testcases", 0, "steps", 0],
+                      "command_type": "power_supply.command",
+                      "status": "passed",
+                      "source_file": "/repo/samples/psu-vupower-smoke.yaml",
+                      "source_line": 20,
+                      "resolved_inputs": {
+                        "device": "psu",
+                        "action": "output",
+                        "channel": 1,
+                        "state": true
+                      },
+                      "outputs": {
+                        "device": "psu",
+                        "command": "OUTP:STAT P1,ON",
+                        "serial": [
+                          {
+                            "command_type": "serial.write",
+                            "outputs": {
+                              "success": true,
+                              "status": "passed",
+                              "message": "Wrote to serial port 'psu'.",
+                              "values": {
+                                "port": "psu",
+                                "tx": "OUTP:STAT P1,ON",
+                                "bytes_written": 16
+                              },
+                              "raw_evidence_ref": "raw-logs/serial/trace-detail-run/psu_case.log",
+                              "duration_ms": 23
+                            }
+                          }
+                        ]
+                      },
+                      "local_variables": {},
+                      "error": null
+                    }
+                  ]
+                }
+              ],
+              "report": {"report_dir": "/repo/reports/trace-detail-run"}
+            }
+            """,
+            ""));
+    var bridge = new TesterEngineBridge("python", "/repo", runner);
+
+    var run = await bridge.RunAsync(
+        "/repo/samples/psu-vupower-smoke.yaml",
+        "trace-detail-run",
+        "/repo/reports");
+
+    var runEvent = run.Events[0];
+    AssertContains("\"action\": \"output\"", runEvent.ResolvedInputsDetail, "trace detail inputs");
+    AssertContains("\"tx\": \"OUTP:STAT P1,ON\"", runEvent.OutputsDetail, "trace detail outputs");
+    AssertEqual(
+        "raw-logs/serial/trace-detail-run/psu_case.log",
+        runEvent.RawEvidenceRefs,
+        "trace detail raw evidence");
+    AssertEqual("serial.write: 23 ms", runEvent.DurationDetail, "trace detail duration");
+}
+
 static async Task RunEngineBridgeDoesNotRequirePumpedSynchronizationContextTest()
 {
     var previousContext = SynchronizationContext.Current;
@@ -340,6 +418,10 @@ static async Task RunMainWorkbenchViewModelTest()
     AssertEqual("YAML_SCHEMA", viewModel.Problems[0].Code, "problem code");
     AssertEqual("passed", viewModel.RunStatus, "run status");
     AssertEqual("reports/gui-run", viewModel.ReportDirectory, "report directory");
+    AssertEqual(
+        Path.Combine("reports", "gui-run", "summary.html"),
+        viewModel.ReportSummaryPath,
+        "report summary path");
     AssertEqual(2, viewModel.ExecutionTrace.Count, "view model trace count");
     AssertEqual(8, viewModel.CurrentLineNumber, "view model current line after run");
     AssertEqual("call", viewModel.ExecutionTrace[0].CommandType, "view model trace command");
@@ -1367,6 +1449,18 @@ static Task RunWorkbenchThemeStyleResourceTest()
         settingsWindow.Descendants(presentation + "DataGrid")
             .Any(item => item.Attribute(xaml + "Name")?.Value == "SerialDevicesGrid"),
         "settings window contains serial device settings grid");
+    AssertTrue(
+        mainWindow.Descendants(presentation + "TextBox")
+            .Any(item => item.Attribute(xaml + "Name")?.Value == "TraceResolvedInputsBox"),
+        "execution trace contains resolved input details");
+    AssertTrue(
+        mainWindow.Descendants(presentation + "TextBox")
+            .Any(item => item.Attribute(xaml + "Name")?.Value == "TraceOutputsBox"),
+        "execution trace contains output details");
+    AssertTrue(
+        mainWindow.Descendants(presentation + "WebBrowser")
+            .Any(item => item.Attribute(xaml + "Name")?.Value == "ReportBrowser"),
+        "report tab contains an embedded HTML viewer");
     return Task.CompletedTask;
 }
 
@@ -2461,6 +2555,14 @@ static void AssertFalse(bool condition, string label)
     if (condition)
     {
         throw new InvalidOperationException($"{label}: expected false.");
+    }
+}
+
+static void AssertContains(string expected, string actual, string label)
+{
+    if (!actual.Contains(expected, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException($"{label}: expected to contain '{expected}', got '{actual}'.");
     }
 }
 
