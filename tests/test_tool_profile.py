@@ -33,6 +33,32 @@ serial:
     assert profile["serial"]["devices"]["sent_usb"]["baudrate"] == 115200
 
 
+def test_load_tool_profile_normalizes_serial_framing_settings(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      parity: even
+      stop_bits: 2
+      byte_size: 7
+      command_profile: sent_usb_line
+""".strip(),
+        encoding="utf-8",
+    )
+
+    profile = load_tool_profile(profile_file)
+
+    sent_usb = profile["serial"]["devices"]["sent_usb"]
+    assert sent_usb["parity"] == "even"
+    assert sent_usb["stop_bits"] == 2.0
+    assert sent_usb["byte_size"] == 7
+
+
 def test_load_tool_profile_normalizes_trace32_settings(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(

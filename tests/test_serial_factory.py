@@ -49,6 +49,9 @@ def test_create_serial_adapter_from_profile_builds_ports_from_profile(tmp_path):
     assert created["sent_usb"].system_port == "COM4"
     assert created["sent_usb"].baudrate == 115200
     assert created["sent_usb"].device_type == "mach_systems_sent_usb"
+    assert created["sent_usb"].parity == "none"
+    assert created["sent_usb"].stop_bits == 1.0
+    assert created["sent_usb"].byte_size == 8
     assert result.values["text"] == "OK"
 
 
@@ -79,3 +82,36 @@ def test_create_adapter_registry_from_tool_profile_replaces_serial_adapter(tmp_p
 
     assert result.values["tx"] == "OUT 1 ON"
     assert result.raw_evidence_ref == "raw-logs/serial/factory-run/psu_case.log"
+
+
+def test_create_serial_adapter_from_profile_passes_framing_settings(tmp_path):
+    profile = {
+        "serial": {
+            "devices": {
+                "sent_usb": {
+                    "device_type": "mach_systems_sent_usb",
+                    "port": "COM4",
+                    "baudrate": 115200,
+                    "parity": "odd",
+                    "stop_bits": 1.5,
+                    "byte_size": 7,
+                    "command_profile": "sent_usb_line",
+                },
+            }
+        }
+    }
+    created = {}
+
+    def port_factory(settings):
+        created[settings.logical_name] = settings
+        return FakeSerialPort(rx_lines=["OK"])
+
+    create_serial_adapter_from_profile(
+        profile,
+        evidence_root=tmp_path,
+        port_factory=port_factory,
+    )
+
+    assert created["sent_usb"].parity == "odd"
+    assert created["sent_usb"].stop_bits == 1.5
+    assert created["sent_usb"].byte_size == 7

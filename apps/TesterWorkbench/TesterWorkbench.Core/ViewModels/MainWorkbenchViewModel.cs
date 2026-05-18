@@ -331,6 +331,46 @@ public sealed class MainWorkbenchViewModel
         ThemeMode = themeMode;
     }
 
+    public async Task<WorkbenchSettingsSnapshot> GetSettingsSnapshotAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var toolProfilePath = ResolveCurrentToolProfilePath();
+        if (string.IsNullOrWhiteSpace(toolProfilePath) || !File.Exists(toolProfilePath))
+        {
+            return new WorkbenchSettingsSnapshot(
+                ThemeMode,
+                toolProfilePath,
+                Array.Empty<WorkbenchSerialDeviceSettings>());
+        }
+
+        var profileText = await File.ReadAllTextAsync(toolProfilePath, cancellationToken);
+        return new WorkbenchSettingsSnapshot(
+            ThemeMode,
+            toolProfilePath,
+            WorkbenchToolProfileSettingsEditor.ReadSerialDevices(profileText));
+    }
+
+    public async Task ApplySettingsAsync(
+        WorkbenchSettingsUpdate settings,
+        CancellationToken cancellationToken = default)
+    {
+        ThemeMode = settings.ThemeMode;
+        var toolProfilePath = ResolveCurrentToolProfilePath();
+        if (!string.IsNullOrWhiteSpace(toolProfilePath)
+            && File.Exists(toolProfilePath)
+            && settings.SerialDevices.Count > 0)
+        {
+            var profileText = await File.ReadAllTextAsync(toolProfilePath, cancellationToken);
+            var updatedProfileText = await WorkbenchToolProfileSettingsEditor.UpdateSerialDevicesAsync(
+                profileText,
+                settings.SerialDevices);
+            await File.WriteAllTextAsync(toolProfilePath, updatedProfileText, cancellationToken);
+            _cachedSuggestionContextPath = null;
+            _cachedSuggestionContext = WorkbenchGuiSuggestionContext.Empty;
+            AppendConsoleLine($"Saved settings to {Path.GetFileName(toolProfilePath)}.");
+        }
+    }
+
     private WorkbenchGuiSuggestionContext BuildExternalGuiSuggestionContext(string editorText)
     {
         var toolProfilePath = FindToolProfilePath(editorText);
@@ -386,6 +426,17 @@ public sealed class MainWorkbenchViewModel
         }
 
         return null;
+    }
+
+    private string? ResolveCurrentToolProfilePath()
+    {
+        var toolProfilePath = FindToolProfilePath(EditorText);
+        if (string.IsNullOrWhiteSpace(toolProfilePath))
+        {
+            return null;
+        }
+
+        return ResolveWorkspacePath(toolProfilePath);
     }
 
     private static string FindToolProfilePath(string editorText)

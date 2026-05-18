@@ -71,9 +71,45 @@ def _normalize_serial_device(name: str, config: Any) -> Dict[str, Any]:
         normalized["baudrate"] = int(normalized["baudrate"])
     else:
         normalized["baudrate"] = 9600
+    normalized["parity"] = _normalize_serial_parity(normalized.get("parity", "none"))
+    normalized["stop_bits"] = _normalize_serial_stop_bits(normalized.get("stop_bits", 1.0))
+    normalized["byte_size"] = _normalize_serial_byte_size(normalized.get("byte_size", 8))
     if "command_profile" in normalized:
         normalized["command_profile"] = str(normalized["command_profile"])
     return normalized
+
+
+def _normalize_serial_parity(value: Any) -> str:
+    normalized = str(value).strip().lower()
+    aliases = {
+        "n": "none",
+        "none": "none",
+        "e": "even",
+        "even": "even",
+        "o": "odd",
+        "odd": "odd",
+        "m": "mark",
+        "mark": "mark",
+        "s": "space",
+        "space": "space",
+    }
+    if normalized not in aliases:
+        raise ValueError("'serial.devices.*.parity' must be one of none, even, odd, mark, or space.")
+    return aliases[normalized]
+
+
+def _normalize_serial_stop_bits(value: Any) -> float:
+    stop_bits = float(value)
+    if stop_bits not in {1.0, 1.5, 2.0}:
+        raise ValueError("'serial.devices.*.stop_bits' must be 1, 1.5, or 2.")
+    return stop_bits
+
+
+def _normalize_serial_byte_size(value: Any) -> int:
+    byte_size = int(value)
+    if byte_size not in {5, 6, 7, 8}:
+        raise ValueError("'serial.devices.*.byte_size' must be 5, 6, 7, or 8.")
+    return byte_size
 
 
 def _normalize_trace32_section(section: Any) -> Dict[str, Any]:

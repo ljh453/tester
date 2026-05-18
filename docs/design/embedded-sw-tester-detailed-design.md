@@ -229,11 +229,17 @@ serial:
       device_type: power_supply
       port: COM3
       baudrate: 9600
+      parity: none
+      stop_bits: 1
+      byte_size: 8
       command_profile: vupower_k_usb
     sent_usb:
       device_type: mach_systems_sent_usb
       port: COM4
       baudrate: 115200
+      parity: none
+      stop_bits: 1
+      byte_size: 8
       command_profile: mach_sent_gateway
 command_profiles:
   vupower_k_usb:
@@ -249,6 +255,8 @@ command_profiles:
         protocol: mach_sent_gateway
         read_ack: true
 ```
+
+Serial framing 설정은 `baudrate`, `parity`, `stop_bits`, `byte_size`, `timeout_ms`를 기본 필드로 가진다. `parity`는 `none/even/odd/mark/space`, `stop_bits`는 `1/1.5/2`, `byte_size`는 `5/6/7/8`을 허용한다. GUI Workbench는 `Tools > Settings...` 창에서 현재 YAML의 `tool_profile`이 가리키는 serial device framing 값을 편집하고 저장할 수 있어야 한다. 같은 Settings 창에는 theme처럼 자주 바뀌지 않는 workbench 설정을 함께 둔다.
 
 `vupower_k_usb` protocol은 [VuPower K USB Manual Korea Ver3.2](http://www.vupower.com/download/K_USB_Manual_Korea_Ver3.2.pdf)를 따른다. 해당 장비는 USB-to-Serial 방식이며, 명령은 한 번에 하나씩 전송하고 LF로 종료한다. command와 첫 번째 parameter는 공백으로, parameter 사이는 쉼표로 구분한다. 1차 구현은 `APPL`, `SOUR:VOLT`, `SOUR:CURR`, `OUTP:STAT`, `OUTP:STAT?`, `MEAS:VOLT?`, `MEAS:VOLTA?`, `MEAS:CURR?`, `MEAS:CURRA?`, `*IDN?`, `*RST`, `SYST:ERR?`를 대상으로 한다. 측정/조회 응답은 float, bool, mode 문자열, error code 등 타입화된 값으로 변환해 `save_as`에 저장한다.
 

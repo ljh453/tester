@@ -50,8 +50,6 @@ public partial class MainWindow : Window
                 new ProcessEngineRunner()));
         WorkspacePathBox.Text = repositoryRoot;
         AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
-        ThemeModeComboBox.ItemsSource = Enum.GetValues<WorkbenchThemeMode>();
-        ThemeModeComboBox.SelectedItem = _viewModel.ThemeMode;
         WorkbenchThemeManager.Apply(_viewModel.ThemeMode);
         CommandCatalogGroupsControl.ItemsSource = _viewModel.CommandCatalogGroups;
         ApplyEditorFontSize();
@@ -127,17 +125,6 @@ public partial class MainWindow : Window
         _viewModel.SetAutoFocusExecutionLine(AutoFocusLineCheckBox.IsChecked == true);
     }
 
-    private void ThemeMode_Changed(object sender, SelectionChangedEventArgs e)
-    {
-        if (ThemeModeComboBox.SelectedItem is not WorkbenchThemeMode themeMode)
-        {
-            return;
-        }
-
-        _viewModel.SetThemeMode(themeMode);
-        WorkbenchThemeManager.Apply(themeMode);
-    }
-
     private void GuiEditorToggle_Click(object sender, RoutedEventArgs e)
     {
         if (GuiEditorToggleButton.IsChecked == true)
@@ -147,6 +134,29 @@ public partial class MainWindow : Window
         else
         {
             HideGuiEditorGroup();
+        }
+    }
+
+    private async void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var snapshot = await _viewModel.GetSettingsSnapshotAsync();
+            var dialog = new SettingsWindow(snapshot)
+            {
+                Owner = this
+            };
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            await RunUiAction(() => _viewModel.ApplySettingsAsync(dialog.CreateUpdate()));
+            WorkbenchThemeManager.Apply(_viewModel.ThemeMode);
+        }
+        catch (Exception ex)
+        {
+            ConsoleBox.Text = ex.Message;
         }
     }
 
@@ -718,7 +728,6 @@ public partial class MainWindow : Window
         LineNumbersTextBlock.Text = _viewModel.EditorLineNumbersText;
         CommandCatalogGroupsControl.ItemsSource = _viewModel.CommandCatalogGroups;
         AutoFocusLineCheckBox.IsChecked = _viewModel.AutoFocusExecutionLine;
-        ThemeModeComboBox.SelectedItem = _viewModel.ThemeMode;
         ApplyEditorFontSize();
         SelectedFileText.Text = _viewModel.SelectedFileDisplayText;
         SaveStatusTextBlock.Text = _viewModel.SaveStatusText;

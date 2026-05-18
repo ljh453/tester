@@ -255,6 +255,17 @@
     </Window.Resources>
 
     <DockPanel Background="{DynamicResource Workbench.Brush.AppBackground}">
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Save"
+                          InputGestureText="Ctrl+S"
+                          Click="Save_Click" />
+            </MenuItem>
+            <MenuItem Header="_Tools">
+                <MenuItem Header="_Settings..."
+                          Click="Settings_Click" />
+            </MenuItem>
+        </Menu>
         <ToolBar DockPanel.Dock="Top">
             <TextBlock Text="Workspace" VerticalAlignment="Center" Margin="8,0,4,0" />
             <TextBox x:Name="WorkspacePathBox" Width="420" />
@@ -304,11 +315,6 @@
                           Style="{StaticResource IdeToggleButtonStyle}"
                           ToolTip="Show or hide GUI Editor"
                           VerticalAlignment="Center" />
-            <Separator />
-            <TextBlock Text="Theme" VerticalAlignment="Center" Margin="8,0,4,0" />
-            <ComboBox x:Name="ThemeModeComboBox"
-                      Width="96"
-                      SelectionChanged="ThemeMode_Changed" />
         </ToolBar>
 
         <Grid x:Name="WorkbenchRootGrid">

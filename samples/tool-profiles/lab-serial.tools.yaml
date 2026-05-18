@@ -4,12 +4,18 @@ serial:
       device_type: power_supply
       port: COM3
       baudrate: 9600
+      parity: none
+      stop_bits: 1
+      byte_size: 8
       command_profile: vupower_k_usb
       notes: "VuPower K Series USB-to-Serial SCPI-style protocol."
     sent_usb:
       device_type: mach_systems_sent_usb
       port: COM4
       baudrate: 115200
+      parity: none
+      stop_bits: 1
+      byte_size: 8
       command_profile: mach_sent_gateway
       notes: "Mach Systems SENT-USB interface using the SENT Gateway binary protocol."
 command_profiles:

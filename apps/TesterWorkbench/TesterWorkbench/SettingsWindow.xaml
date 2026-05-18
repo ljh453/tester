@@ -1,0 +1,95 @@
+<Window x:Class="TesterWorkbench.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:TesterWorkbench"
+        Title="Settings"
+        MinHeight="430"
+        MinWidth="720"
+        Height="500"
+        Width="760"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Background="{DynamicResource Workbench.Brush.AppBackground}">
+        <StackPanel DockPanel.Dock="Bottom"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="12">
+            <Button Content="OK"
+                    Width="88"
+                    Margin="0,0,8,0"
+                    Click="Ok_Click" />
+            <Button Content="Cancel"
+                    Width="88"
+                    IsCancel="True" />
+        </StackPanel>
+
+        <TabControl Margin="12">
+            <TabItem Header="General">
+                <Grid Margin="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="240" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Theme"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource Workbench.Brush.TextSecondary}" />
+                    <ComboBox x:Name="ThemeModeComboBox"
+                              Grid.Column="1"
+                              Width="180"
+                              HorizontalAlignment="Left" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Serial">
+                <DockPanel Margin="14">
+                    <StackPanel DockPanel.Dock="Top"
+                                Margin="0,0,0,10">
+                        <TextBlock Text="Tool Profile"
+                                   Foreground="{DynamicResource Workbench.Brush.TextSecondary}" />
+                        <TextBlock x:Name="ToolProfilePathTextBlock"
+                                   Margin="0,3,0,0"
+                                   FontFamily="Consolas"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                    </StackPanel>
+
+                    <DataGrid x:Name="SerialDevicesGrid"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Device"
+                                                Binding="{Binding Name}"
+                                                IsReadOnly="True"
+                                                Width="150" />
+                            <DataGridTextColumn Header="Port"
+                                                Binding="{Binding Port}"
+                                                IsReadOnly="True"
+                                                Width="110" />
+                            <DataGridTextColumn Header="Baudrate"
+                                                Binding="{Binding Baudrate}"
+                                                IsReadOnly="True"
+                                                Width="100" />
+                            <DataGridComboBoxColumn Header="Parity"
+                                                    ItemsSource="{x:Static local:SettingsWindow.ParityOptions}"
+                                                    SelectedItemBinding="{Binding Parity, UpdateSourceTrigger=PropertyChanged}"
+                                                    Width="120" />
+                            <DataGridComboBoxColumn Header="Stop Bits"
+                                                    ItemsSource="{x:Static local:SettingsWindow.StopBitsOptions}"
+                                                    SelectedItemBinding="{Binding StopBits, UpdateSourceTrigger=PropertyChanged}"
+                                                    Width="100" />
+                            <DataGridComboBoxColumn Header="Byte Size"
+                                                    ItemsSource="{x:Static local:SettingsWindow.ByteSizeOptions}"
+                                                    SelectedItemBinding="{Binding ByteSize, UpdateSourceTrigger=PropertyChanged}"
+                                                    Width="100" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

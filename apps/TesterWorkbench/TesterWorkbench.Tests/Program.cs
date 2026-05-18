@@ -23,6 +23,8 @@ await RunYamlExecutionBlockRangeTest();
 await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
 await RunMainWorkbenchThemeModeSettingTest();
+await RunWorkbenchToolProfileSettingsEditorTest();
+await RunMainWorkbenchViewModelSettingsSnapshotTest();
 await RunMainWorkbenchViewModelSavesSelectedFileTest();
 await RunWorkbenchThemeResolverTest();
 await RunWorkbenchThemeStyleResourceTest();
@@ -1089,6 +1091,98 @@ static Task RunMainWorkbenchThemeModeSettingTest()
     return Task.CompletedTask;
 }
 
+static async Task RunWorkbenchToolProfileSettingsEditorTest()
+{
+    var profileText =
+        """
+        serial:
+          devices:
+            psu:
+              device_type: power_supply
+              port: COM3
+              baudrate: 9600
+            sent_usb:
+              device_type: mach_systems_sent_usb
+              port: COM4
+              baudrate: 115200
+              parity: odd
+              stop_bits: 1.5
+              byte_size: 7
+              command_profile: sent_usb_line
+        """;
+
+    var devices = WorkbenchToolProfileSettingsEditor.ReadSerialDevices(profileText);
+
+    AssertEqual(2, devices.Count, "settings editor serial device count");
+    var sentUsb = devices.Single(device => device.Name == "sent_usb");
+    AssertEqual("COM4", sentUsb.Port, "settings editor port");
+    AssertEqual(115200, sentUsb.Baudrate, "settings editor baudrate");
+    AssertEqual("odd", sentUsb.Parity, "settings editor parity");
+    AssertEqual(1.5, sentUsb.StopBits, "settings editor stop bits");
+    AssertEqual(7, sentUsb.ByteSize, "settings editor byte size");
+
+    var updated = await WorkbenchToolProfileSettingsEditor.UpdateSerialDevicesAsync(
+        profileText,
+        new[]
+        {
+            new WorkbenchSerialDeviceSettingsUpdate("psu", "even", 2, 7),
+            new WorkbenchSerialDeviceSettingsUpdate("sent_usb", "none", 1, 8)
+        });
+
+    AssertTrue(updated.Contains("parity: even", StringComparison.Ordinal), "settings editor inserts parity");
+    AssertTrue(updated.Contains("stop_bits: 2", StringComparison.Ordinal), "settings editor inserts stop bits");
+    AssertTrue(updated.Contains("byte_size: 8", StringComparison.Ordinal), "settings editor updates byte size");
+}
+
+static async Task RunMainWorkbenchViewModelSettingsSnapshotTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/case.yaml",
+            """
+            tool_profile: tool-profiles/lab.tools.yaml
+            testcases:
+              - name: case
+                steps: []
+            """),
+        ("tool-profiles/lab.tools.yaml",
+            """
+            serial:
+              devices:
+                sent_usb:
+                  device_type: mach_systems_sent_usb
+                  port: COM4
+                  baudrate: 115200
+                  command_profile: sent_usb_line
+            """));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            root,
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+    await viewModel.OpenWorkspaceAsync(root);
+    await viewModel.OpenFileAsync(Path.Combine(root, "tests", "case.yaml"));
+
+    var snapshot = await viewModel.GetSettingsSnapshotAsync();
+
+    AssertEqual(WorkbenchThemeMode.System, snapshot.ThemeMode, "settings snapshot theme");
+    AssertTrue(snapshot.ToolProfilePath!.EndsWith("lab.tools.yaml", StringComparison.Ordinal), "settings snapshot profile path");
+    AssertEqual("sent_usb", snapshot.SerialDevices.Single().Name, "settings snapshot serial device");
+    AssertEqual("none", snapshot.SerialDevices.Single().Parity, "settings snapshot default parity");
+    AssertEqual(1.0, snapshot.SerialDevices.Single().StopBits, "settings snapshot default stop bits");
+    AssertEqual(8, snapshot.SerialDevices.Single().ByteSize, "settings snapshot default byte size");
+
+    await viewModel.ApplySettingsAsync(new WorkbenchSettingsUpdate(
+        WorkbenchThemeMode.Dark,
+        new[] { new WorkbenchSerialDeviceSettingsUpdate("sent_usb", "even", 2, 7) }));
+
+    var updatedProfile = await File.ReadAllTextAsync(Path.Combine(root, "tool-profiles", "lab.tools.yaml"));
+    AssertEqual(WorkbenchThemeMode.Dark, viewModel.ThemeMode, "settings apply theme");
+    AssertTrue(updatedProfile.Contains("parity: even", StringComparison.Ordinal), "settings apply parity");
+    AssertTrue(updatedProfile.Contains("stop_bits: 2", StringComparison.Ordinal), "settings apply stop bits");
+    AssertTrue(updatedProfile.Contains("byte_size: 7", StringComparison.Ordinal), "settings apply byte size");
+}
+
 static async Task RunMainWorkbenchViewModelSavesSelectedFileTest()
 {
     var root = TestPaths.CreateWorkspace(
@@ -1163,8 +1257,15 @@ static Task RunWorkbenchThemeStyleResourceTest()
         "TesterWorkbench",
         "TesterWorkbench",
         "MainWindow.xaml");
+    var settingsWindowPath = Path.Combine(
+        repositoryRoot,
+        "apps",
+        "TesterWorkbench",
+        "TesterWorkbench",
+        "SettingsWindow.xaml");
     var baseStyles = XDocument.Load(baseStylesPath);
     var mainWindow = XDocument.Load(mainWindowPath);
+    var settingsWindow = XDocument.Load(settingsWindowPath);
     var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
     var xaml = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
 
@@ -1177,6 +1278,10 @@ static Task RunWorkbenchThemeStyleResourceTest()
     AssertTrue(
         HasTemplateSetter(baseStyles, presentation, "ComboBox"),
         "base styles define a themed combo box template");
+    AssertEqual(
+        "{DynamicResource Workbench.Brush.TextPrimary}",
+        FindStyleSetterValue(baseStyles, presentation, "MenuItem", "Foreground"),
+        "menu item foreground uses theme text brush");
     AssertEqual(
         "0",
         FindNamedElementAttribute(baseStyles, presentation, xaml, "ToggleButton", "ComboToggle", "Padding"),
@@ -1236,6 +1341,18 @@ static Task RunWorkbenchThemeStyleResourceTest()
         xaml,
         "IdeToggleButtonStyle",
         "{StaticResource {x:Type ToggleButton}}");
+    AssertTrue(
+        mainWindow.Descendants(presentation + "MenuItem")
+            .Any(item => item.Attribute("Header")?.Value == "_Settings..."),
+        "main window exposes settings from the menu");
+    AssertTrue(
+        settingsWindow.Descendants(presentation + "ComboBox")
+            .Any(item => item.Attribute(xaml + "Name")?.Value == "ThemeModeComboBox"),
+        "settings window contains theme selector");
+    AssertTrue(
+        settingsWindow.Descendants(presentation + "DataGrid")
+            .Any(item => item.Attribute(xaml + "Name")?.Value == "SerialDevicesGrid"),
+        "settings window contains serial device settings grid");
     return Task.CompletedTask;
 }
 
@@ -2381,6 +2498,20 @@ static string FindTriggerSetterValue(
         .Descendants(presentation + "Trigger")
         .Where(trigger => trigger.Attribute("Property")?.Value == triggerProperty)
         .Descendants(presentation + "Setter")
+        .FirstOrDefault(setter => setter.Attribute("Property")?.Value == setterProperty)
+        ?.Attribute("Value")
+        ?.Value ?? "";
+}
+
+static string FindStyleSetterValue(
+    XDocument document,
+    XNamespace presentation,
+    string targetType,
+    string setterProperty)
+{
+    return document.Descendants(presentation + "Style")
+        .Where(style => style.Attribute("TargetType")?.Value == $"{{x:Type {targetType}}}")
+        .Elements(presentation + "Setter")
         .FirstOrDefault(setter => setter.Attribute("Property")?.Value == setterProperty)
         ?.Attribute("Value")
         ?.Value ?? "";

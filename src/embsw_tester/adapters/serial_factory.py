@@ -116,6 +116,9 @@ def _serial_settings_from_device(
         system_port=str(device_config["port"]),
         baudrate=int(device_config.get("baudrate", 9600)),
         timeout_ms=int(device_config.get("timeout_ms", 1000)),
+        parity=str(device_config.get("parity", "none")),
+        stop_bits=float(device_config.get("stop_bits", 1.0)),
+        byte_size=int(device_config.get("byte_size", 8)),
         device_type=str(device_config.get("device_type", "generic_serial")),
         command_profile=str(device_config.get("command_profile", "raw_line")),
     )

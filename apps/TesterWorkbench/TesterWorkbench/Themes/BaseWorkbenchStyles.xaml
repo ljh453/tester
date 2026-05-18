@@ -16,6 +16,17 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
     </Style>
 
+    <Style TargetType="{x:Type Menu}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+    </Style>
+
+    <Style TargetType="{x:Type MenuItem}">
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="Padding" Value="8,4" />
+    </Style>
+
     <Style TargetType="{x:Type Separator}">
         <Setter Property="Background" Value="{DynamicResource Workbench.Brush.Border}" />
     </Style>

@@ -28,6 +28,9 @@ class SerialPortSettings:
     system_port: str
     baudrate: int = 9600
     timeout_ms: int = 1000
+    parity: str = "none"
+    stop_bits: float = 1.0
+    byte_size: int = 8
     device_type: str = "generic_serial"
     command_profile: str = "raw_line"
 
@@ -46,6 +49,9 @@ class PySerialPort:
             baudrate=settings.baudrate,
             timeout=settings.timeout_ms / 1000,
             write_timeout=settings.timeout_ms / 1000,
+            parity=_pyserial_parity(settings.parity),
+            stopbits=float(settings.stop_bits),
+            bytesize=int(settings.byte_size),
         )
 
     def write_line(self, text: str) -> int:
@@ -272,6 +278,27 @@ def _required_text(args: Dict[str, object], name: str) -> str:
     if value is None:
         raise KeyError(f"Missing required serial argument '{name}'.")
     return str(value)
+
+
+def _pyserial_parity(value: str) -> str:
+    normalized = str(value).strip().lower()
+    aliases = {
+        "none": "N",
+        "n": "N",
+        "even": "E",
+        "e": "E",
+        "odd": "O",
+        "o": "O",
+        "mark": "M",
+        "m": "M",
+        "space": "S",
+        "s": "S",
+    }
+    if normalized not in aliases:
+        raise ValueError(
+            "Serial parity must be one of none, even, odd, mark, or space."
+        )
+    return aliases[normalized]
 
 
 def _safe_segment(value: str) -> str:
