@@ -956,31 +956,94 @@
                 <TabItem Header="Execution Trace">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="5" />
                             <RowDefinition Height="170" MinHeight="120" />
                         </Grid.RowDefinitions>
+                        <Border Grid.Row="0"
+                                Padding="6,3"
+                                BorderBrush="{DynamicResource Workbench.Brush.Border}"
+                                BorderThickness="0,0,0,1"
+                                Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}">
+                            <CheckBox x:Name="TraceFollowLatestCheckBox"
+                                      Content="Follow latest"
+                                      IsChecked="True"
+                                      Click="TraceFollowLatestCheckBox_Click"
+                                      ToolTip="When enabled, the selected trace row and detail panes follow the latest event. Select a row or turn this off to keep details pinned." />
+                        </Border>
                         <DataGrid x:Name="ExecutionTraceGrid"
+                                  Grid.Row="1"
                                   AutoGenerateColumns="False"
                                   SelectionChanged="ExecutionTraceGrid_SelectionChanged"
                                   IsReadOnly="True">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Testcase" Binding="{Binding Testcase}" Width="140" />
-                                <DataGridTextColumn Header="Phase" Binding="{Binding Phase}" Width="110" />
-                                <DataGridTextColumn Header="Command" Binding="{Binding CommandType}" Width="160" />
-                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" />
-                                <DataGridTextColumn Header="Line" Binding="{Binding SourceLine}" Width="70" />
-                                <DataGridTextColumn Header="Path" Binding="{Binding CommandPath}" Width="200" />
-                                <DataGridTextColumn Header="Detail" Binding="{Binding Detail}" Width="220" />
-                                <DataGridTextColumn Header="Evidence" Binding="{Binding RawEvidenceRefs}" Width="220" />
-                                <DataGridTextColumn Header="Duration" Binding="{Binding DurationDetail}" Width="120" />
-                                <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="*" />
+                                <DataGridTextColumn Binding="{Binding Testcase}" Width="140">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Testcase"
+                                                   ToolTip="Testcase that produced this execution event." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding Phase}" Width="110">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Phase"
+                                                   ToolTip="Execution section: preconditions, steps, or postconditions." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding CommandType}" Width="160">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Command"
+                                                   ToolTip="Normalized DSL command type executed by the runtime." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding Status}" Width="90">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Status"
+                                                   ToolTip="Current or final result of the command event." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding SourceLine}" Width="70">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Line"
+                                                   ToolTip="YAML source line where the command starts." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding CommandPath}" Width="200">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Path"
+                                                   ToolTip="Stable command path inside testcase, phase, and nested blocks." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding Detail}" Width="220">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Detail"
+                                                   ToolTip="Human-readable message such as log text or assertion detail." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding RawEvidenceRefs}" Width="220">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Evidence"
+                                                   ToolTip="Raw log or attachment references produced by the command." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding DurationDetail}" Width="120">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Duration"
+                                                   ToolTip="Elapsed execution time reported for the command." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Binding="{Binding Error}" Width="*">
+                                    <DataGridTextColumn.Header>
+                                        <TextBlock Text="Error"
+                                                   ToolTip="Assertion, adapter, runtime, or abort error for this event." />
+                                    </DataGridTextColumn.Header>
+                                </DataGridTextColumn>
                             </DataGrid.Columns>
                         </DataGrid>
-                        <GridSplitter Grid.Row="1"
+                        <GridSplitter Grid.Row="2"
                                       Height="5"
                                       HorizontalAlignment="Stretch" />
-                        <Grid Grid.Row="2" Margin="6">
+                        <Grid Grid.Row="3" Margin="6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
@@ -992,19 +1055,23 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <TextBlock Text="Resolved Inputs"
-                                       Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                                       Foreground="{DynamicResource Workbench.Brush.TextMuted}"
+                                       ToolTip="Command arguments after variable substitution, defaults, and runtime resolution." />
                             <TextBlock Grid.Column="1"
                                        Text="Outputs / Values"
                                        Foreground="{DynamicResource Workbench.Brush.TextMuted}"
-                                       Margin="8,0,0,0" />
+                                       Margin="8,0,0,0"
+                                       ToolTip="Adapter outputs and values produced or saved by the command." />
                             <TextBlock Grid.Column="2"
                                        Text="Evidence / Duration"
                                        Foreground="{DynamicResource Workbench.Brush.TextMuted}"
-                                       Margin="8,0,0,0" />
+                                       Margin="8,0,0,0"
+                                       ToolTip="Raw evidence references and elapsed command duration." />
                             <TextBlock Grid.Column="3"
                                        Text="Error"
                                        Foreground="{DynamicResource Workbench.Brush.TextMuted}"
-                                       Margin="8,0,0,0" />
+                                       Margin="8,0,0,0"
+                                       ToolTip="Error detail captured for assertion, adapter, runtime, or abort failures." />
                             <TextBox x:Name="TraceResolvedInputsBox"
                                      Grid.Row="1"
                                      FontFamily="Consolas"
@@ -1012,7 +1079,8 @@
                                      IsReadOnly="True"
                                      TextWrapping="NoWrap"
                                      HorizontalScrollBarVisibility="Auto"
-                                     VerticalScrollBarVisibility="Auto" />
+                                     VerticalScrollBarVisibility="Auto"
+                                     ToolTip="Command arguments after variable substitution, defaults, and runtime resolution." />
                             <TextBox x:Name="TraceOutputsBox"
                                      Grid.Column="1"
                                      Grid.Row="1"
@@ -1022,7 +1090,8 @@
                                      TextWrapping="NoWrap"
                                      HorizontalScrollBarVisibility="Auto"
                                      VerticalScrollBarVisibility="Auto"
-                                     Margin="8,0,0,0" />
+                                     Margin="8,0,0,0"
+                                     ToolTip="Adapter outputs and values produced or saved by the command." />
                             <TextBox x:Name="TraceEvidenceBox"
                                      Grid.Column="2"
                                      Grid.Row="1"
@@ -1031,7 +1100,8 @@
                                      IsReadOnly="True"
                                      TextWrapping="Wrap"
                                      VerticalScrollBarVisibility="Auto"
-                                     Margin="8,0,0,0" />
+                                     Margin="8,0,0,0"
+                                     ToolTip="Raw evidence references and elapsed command duration." />
                             <TextBox x:Name="TraceErrorBox"
                                      Grid.Column="3"
                                      Grid.Row="1"
@@ -1040,7 +1110,8 @@
                                      IsReadOnly="True"
                                      TextWrapping="Wrap"
                                      VerticalScrollBarVisibility="Auto"
-                                     Margin="8,0,0,0" />
+                                     Margin="8,0,0,0"
+                                     ToolTip="Error detail captured for assertion, adapter, runtime, or abort failures." />
                         </Grid>
                     </Grid>
                 </TabItem>

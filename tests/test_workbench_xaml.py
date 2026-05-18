@@ -255,3 +255,67 @@ def test_gui_exposes_extended_testcase_run_selection_list():
     assert testcase_list is not None
     assert testcase_list.attrib["SelectionMode"] == "Extended"
     assert testcase_list.attrib["SelectionChanged"] == "GuiRunTestcaseListBox_SelectionChanged"
+
+
+def test_execution_trace_columns_explain_their_meaning_with_tooltips():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    expected_headers = {
+        "Testcase",
+        "Phase",
+        "Command",
+        "Status",
+        "Line",
+        "Path",
+        "Detail",
+        "Evidence",
+        "Duration",
+        "Error",
+    }
+    header_tooltips = {
+        element.attrib.get("Text"): element.attrib.get("ToolTip")
+        for element in root.iter(f"{PRESENTATION}TextBlock")
+        if element.attrib.get("Text") in expected_headers
+    }
+
+    assert set(header_tooltips) == expected_headers
+    assert all(header_tooltips[header] for header in expected_headers)
+
+
+def test_execution_trace_details_can_be_pinned_instead_of_following_fast_events():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    follow_checkbox = next(
+        (
+            element
+            for element in root.iter(f"{PRESENTATION}CheckBox")
+            if element.attrib.get(f"{XAML}Name") == "TraceFollowLatestCheckBox"
+        ),
+        None,
+    )
+
+    assert follow_checkbox is not None
+    assert follow_checkbox.attrib["Click"] == "TraceFollowLatestCheckBox_Click"
+    assert follow_checkbox.attrib["IsChecked"] == "True"
+    assert "latest" in follow_checkbox.attrib["ToolTip"].lower()
+
+
+def test_execution_trace_detail_regions_explain_resolved_runtime_data():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    detail_tooltips = {
+        element.attrib.get(f"{XAML}Name"): element.attrib.get("ToolTip")
+        for element in root.iter(f"{PRESENTATION}TextBox")
+        if element.attrib.get(f"{XAML}Name")
+        in {
+            "TraceResolvedInputsBox",
+            "TraceOutputsBox",
+            "TraceEvidenceBox",
+            "TraceErrorBox",
+        }
+    }
+
+    assert detail_tooltips["TraceResolvedInputsBox"]
+    assert detail_tooltips["TraceOutputsBox"]
+    assert detail_tooltips["TraceEvidenceBox"]
+    assert detail_tooltips["TraceErrorBox"]

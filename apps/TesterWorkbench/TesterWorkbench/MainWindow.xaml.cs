@@ -36,7 +36,11 @@ public partial class MainWindow : Window
     private System.Windows.Point? _guiSelectionDragStartPoint;
     private bool _isGuiBulkSelectingWithLeftButton;
     private bool _isRuntimeRefreshQueued;
+    private bool _isTraceFollowLatestEnabled = true;
+    private bool _isUpdatingTraceSelection;
+    private bool _isRefreshingTraceGrid;
     private string? _lastReportSummaryPath;
+    private EngineRunEvent? _selectedTraceEvent;
 
     public MainWindow()
     {
@@ -157,6 +161,21 @@ public partial class MainWindow : Window
         _viewModel.SetAutoFocusExecutionLine(AutoFocusLineCheckBox.IsChecked == true);
     }
 
+    private void TraceFollowLatestCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        _isTraceFollowLatestEnabled = TraceFollowLatestCheckBox.IsChecked == true;
+        if (_isTraceFollowLatestEnabled)
+        {
+            SelectLatestTraceEvent();
+        }
+        else
+        {
+            _selectedTraceEvent = ExecutionTraceGrid.SelectedItem as EngineRunEvent ?? _selectedTraceEvent;
+        }
+
+        RefreshSelectedTraceDetails();
+    }
+
     private void GuiEditorToggle_Click(object sender, RoutedEventArgs e)
     {
         if (GuiEditorToggleButton.IsChecked == true)
@@ -205,6 +224,13 @@ public partial class MainWindow : Window
         if (ExecutionTraceGrid.SelectedItem is not EngineRunEvent runEvent)
         {
             return;
+        }
+
+        _selectedTraceEvent = runEvent;
+        if (!_isUpdatingTraceSelection && !_isRefreshingTraceGrid)
+        {
+            _isTraceFollowLatestEnabled = false;
+            TraceFollowLatestCheckBox.IsChecked = false;
         }
 
         _viewModel.SelectExecutionTraceEvent(runEvent);
@@ -936,12 +962,22 @@ public partial class MainWindow : Window
     {
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         ProblemsGrid.ItemsSource = _viewModel.Problems;
-        ExecutionTraceGrid.ItemsSource = _viewModel.ExecutionTrace;
-        if (selectLatestTrace && _viewModel.ExecutionTrace.Count > 0)
+        _isRefreshingTraceGrid = true;
+        try
         {
-            var latestEvent = _viewModel.ExecutionTrace[^1];
-            ExecutionTraceGrid.SelectedItem = latestEvent;
-            ExecutionTraceGrid.ScrollIntoView(latestEvent);
+            ExecutionTraceGrid.ItemsSource = _viewModel.ExecutionTrace;
+            if (selectLatestTrace && _isTraceFollowLatestEnabled)
+            {
+                SelectLatestTraceEvent();
+            }
+            else if (!_isTraceFollowLatestEnabled)
+            {
+                RestorePinnedTraceSelection();
+            }
+        }
+        finally
+        {
+            _isRefreshingTraceGrid = false;
         }
 
         VariablesGrid.ItemsSource = _viewModel.Variables;
@@ -957,6 +993,11 @@ public partial class MainWindow : Window
     private void RefreshSelectedTraceDetails()
     {
         var selectedEvent = ExecutionTraceGrid.SelectedItem as EngineRunEvent;
+        if (selectedEvent is null && !_isTraceFollowLatestEnabled)
+        {
+            selectedEvent = _selectedTraceEvent;
+        }
+
         TraceResolvedInputsBox.Text = selectedEvent?.ResolvedInputsDetail ?? string.Empty;
         TraceOutputsBox.Text = selectedEvent?.OutputsDetail ?? string.Empty;
         TraceEvidenceBox.Text = selectedEvent is null
@@ -966,6 +1007,59 @@ public partial class MainWindow : Window
                 new[] { selectedEvent.RawEvidenceRefs, selectedEvent.DurationDetail }
                     .Where(value => !string.IsNullOrWhiteSpace(value)));
         TraceErrorBox.Text = selectedEvent?.Error ?? string.Empty;
+    }
+
+    private void SelectLatestTraceEvent()
+    {
+        if (_viewModel.ExecutionTrace.Count == 0)
+        {
+            return;
+        }
+
+        SelectTraceGridEvent(_viewModel.ExecutionTrace[^1], scrollIntoView: true);
+    }
+
+    private void RestorePinnedTraceSelection()
+    {
+        var pinnedEvent = FindMatchingTraceEvent(_selectedTraceEvent);
+        if (pinnedEvent is not null)
+        {
+            SelectTraceGridEvent(pinnedEvent, scrollIntoView: false);
+            _selectedTraceEvent = pinnedEvent;
+        }
+    }
+
+    private EngineRunEvent? FindMatchingTraceEvent(EngineRunEvent? runEvent)
+    {
+        if (runEvent is null)
+        {
+            return null;
+        }
+
+        return _viewModel.ExecutionTrace.LastOrDefault(candidate =>
+            candidate.Testcase == runEvent.Testcase
+            && candidate.Phase == runEvent.Phase
+            && candidate.CommandType == runEvent.CommandType
+            && candidate.CommandPath == runEvent.CommandPath
+            && candidate.SourceFile == runEvent.SourceFile
+            && candidate.SourceLine == runEvent.SourceLine);
+    }
+
+    private void SelectTraceGridEvent(EngineRunEvent runEvent, bool scrollIntoView)
+    {
+        _isUpdatingTraceSelection = true;
+        try
+        {
+            ExecutionTraceGrid.SelectedItem = runEvent;
+            if (scrollIntoView)
+            {
+                ExecutionTraceGrid.ScrollIntoView(runEvent);
+            }
+        }
+        finally
+        {
+            _isUpdatingTraceSelection = false;
+        }
     }
 
     private void RefreshReportViewer()
