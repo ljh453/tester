@@ -34,7 +34,6 @@ public partial class MainWindow : Window
     private WorkbenchCommandBlock? _dragCommandBlock;
     private System.Windows.Point? _guiSelectionDragStartPoint;
     private bool _isGuiBulkSelectingWithLeftButton;
-    private bool _isGuiBulkSelectingWithRightButton;
     private bool _isRuntimeRefreshQueued;
     private string? _lastReportSummaryPath;
 
@@ -402,7 +401,6 @@ public partial class MainWindow : Window
         _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
         RefreshGuiCommandProperties();
         CurrentLineText.Text = _viewModel.CurrentLocationText;
-        BeginGuiBulkSelection(e.GetPosition(GuiSelectionHost));
         e.Handled = true;
     }
 
@@ -437,10 +435,8 @@ public partial class MainWindow : Window
 
     private void GuiCommandBlock_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        var isRangeSelecting =
-            _isGuiBulkSelectingWithRightButton && e.RightButton == MouseButtonState.Pressed
-            || _isGuiBulkSelectingWithLeftButton && e.LeftButton == MouseButtonState.Pressed;
-        if (!isRangeSelecting
+        if (!_isGuiBulkSelectingWithLeftButton
+            || e.LeftButton != MouseButtonState.Pressed
             || sender is not FrameworkElement { DataContext: WorkbenchCommandBlock commandBlock })
         {
             return;
@@ -468,7 +464,6 @@ public partial class MainWindow : Window
             _viewModel.SelectGuiCommand(commandBlock);
         }
 
-        _isGuiBulkSelectingWithRightButton = true;
         RefreshGuiCommandProperties();
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         UpdateCurrentExecutionLineMarker();
@@ -476,7 +471,6 @@ public partial class MainWindow : Window
 
     private void GuiCommandBlock_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
-        _isGuiBulkSelectingWithRightButton = false;
     }
 
     private void GuiSelectionSurface_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -601,7 +595,6 @@ public partial class MainWindow : Window
         _dragCommandBlock = null;
         _commandBlockDragStartPoint = null;
         EndGuiBulkSelection();
-        _isGuiBulkSelectingWithRightButton = false;
         RefreshEditorAfterGuiEdit();
         e.Handled = true;
     }
