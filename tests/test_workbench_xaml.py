@@ -101,3 +101,38 @@ def test_gui_command_tree_suppresses_default_tree_selection_chrome():
         if trigger.attrib.get("Property") == "IsSelected"
     ]
     assert selected_triggers == []
+
+
+def test_gui_command_block_header_wraps_long_command_text():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    display_type = next(
+        (
+            element
+            for element in root.iter(f"{PRESENTATION}TextBlock")
+            if element.attrib.get("Text") == "{Binding DisplayType}"
+        ),
+        None,
+    )
+    assert display_type is not None
+    assert display_type.attrib["TextWrapping"] == "Wrap"
+    assert int(display_type.attrib["MaxWidth"]) >= 150
+
+    summary = next(
+        (
+            element
+            for element in root.iter(f"{PRESENTATION}TextBlock")
+            if element.attrib.get("Text") == "{Binding Summary}"
+        ),
+        None,
+    )
+    assert summary is not None
+    assert summary.attrib["TextWrapping"] == "Wrap"
+    assert int(summary.attrib["MinWidth"]) >= 120
+
+    fixed_command_columns = [
+        column
+        for column in root.iter(f"{PRESENTATION}ColumnDefinition")
+        if column.attrib.get("Width") == "82"
+    ]
+    assert fixed_command_columns == []

@@ -92,8 +92,8 @@
                             <ColumnDefinition Width="22" />
                             <ColumnDefinition Width="22" />
                             <ColumnDefinition Width="42" />
-                            <ColumnDefinition Width="82" />
-                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" MinWidth="120" />
                             <ColumnDefinition Width="72" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
@@ -120,10 +120,14 @@
                         <TextBlock Grid.Column="3"
                                    Text="{Binding DisplayType}"
                                    FontWeight="SemiBold"
+                                   MaxWidth="170"
+                                   Margin="0,0,10,0"
+                                   TextWrapping="Wrap"
                                    VerticalAlignment="Center" />
                         <TextBlock Grid.Column="4"
                                    Text="{Binding Summary}"
                                    Foreground="{DynamicResource Workbench.Brush.TextSecondary}"
+                                   MinWidth="120"
                                    TextWrapping="Wrap"
                                    VerticalAlignment="Center" />
                         <TextBlock Grid.Column="5"
