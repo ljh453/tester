@@ -569,6 +569,56 @@ testcases:
     assert event.outputs["duration_ms"] == 7
 
 
+def test_runtime_applies_tool_profile_command_defaults_to_adapter_commands(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+command_defaults:
+  serial.write:
+    timeout_ms: 1500
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "adapter-default.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: adapter_default_case
+    steps:
+      - serial.write:
+          port: psu
+          text: "OUT 1 ON"
+      - serial.write:
+          port: psu
+          text: "OUT 1 OFF"
+          timeout_ms: 25
+""".strip(),
+        encoding="utf-8",
+    )
+    registry = AdapterRegistry()
+    adapter = RecordingAdapter()
+    registry.register("serial", adapter)
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="run-adapter-default",
+        adapter_registry=registry,
+    )
+
+    assert result.status == "passed"
+    assert adapter.calls[0][1] == {
+        "port": "psu",
+        "text": "OUT 1 ON",
+        "timeout_ms": 1500,
+    }
+    assert adapter.calls[1][1] == {
+        "port": "psu",
+        "text": "OUT 1 OFF",
+        "timeout_ms": 25,
+    }
+
+
 def test_runtime_serial_read_saves_response_into_variable(tmp_path: Path):
     test_file = tmp_path / "serial-read.yaml"
     test_file.write_text(

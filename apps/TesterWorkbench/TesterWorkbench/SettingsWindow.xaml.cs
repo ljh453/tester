@@ -29,6 +29,7 @@ public partial class SettingsWindow : Window
     public static IReadOnlyList<int> ByteSizeOptions { get; } = new[] { 5, 6, 7, 8 };
 
     private readonly ObservableCollection<SerialDeviceSettingsRow> _serialDeviceRows;
+    private readonly ObservableCollection<CommandDefaultSettingsRow> _commandDefaultRows;
 
     public SettingsWindow(WorkbenchSettingsSnapshot settings)
     {
@@ -41,6 +42,9 @@ public partial class SettingsWindow : Window
         _serialDeviceRows = new ObservableCollection<SerialDeviceSettingsRow>(
             settings.SerialDevices.Select(SerialDeviceSettingsRow.FromSettings));
         SerialDevicesGrid.ItemsSource = _serialDeviceRows;
+        _commandDefaultRows = new ObservableCollection<CommandDefaultSettingsRow>(
+            settings.CommandDefaults.Select(CommandDefaultSettingsRow.FromSettings));
+        CommandDefaultsGrid.ItemsSource = _commandDefaultRows;
     }
 
     public WorkbenchSettingsUpdate CreateUpdate()
@@ -56,6 +60,13 @@ public partial class SettingsWindow : Window
                     row.Parity.Trim().ToLowerInvariant(),
                     row.StopBits,
                     row.ByteSize))
+                .ToArray(),
+            _commandDefaultRows
+                .Select(row => new WorkbenchCommandDefaultSettingsUpdate(
+                    row.ProfileName,
+                    row.CommandType,
+                    row.ArgumentName,
+                    row.Value.Trim()))
                 .ToArray());
     }
 
@@ -108,6 +119,28 @@ public partial class SettingsWindow : Window
         }
 
         return true;
+    }
+}
+
+public sealed class CommandDefaultSettingsRow
+{
+    public string ProfileName { get; set; } = "";
+
+    public string CommandType { get; set; } = "";
+
+    public string ArgumentName { get; set; } = "";
+
+    public string Value { get; set; } = "";
+
+    public static CommandDefaultSettingsRow FromSettings(WorkbenchCommandDefaultSettings settings)
+    {
+        return new CommandDefaultSettingsRow
+        {
+            ProfileName = settings.ProfileName,
+            CommandType = settings.CommandType,
+            ArgumentName = settings.ArgumentName,
+            Value = settings.Value
+        };
     }
 }
 

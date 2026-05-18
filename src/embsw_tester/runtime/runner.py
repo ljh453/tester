@@ -493,7 +493,8 @@ async def _execute_adapter_command_async(
     if spec.adapter is None:
         raise CommandFailed(f"Command '{command.type}' does not declare an adapter.")
 
-    resolved_inputs = evaluate_value(command.args, frame.variables)
+    command_args = _with_command_defaults(context.package, command)
+    resolved_inputs = evaluate_value(command_args, frame.variables)
     adapter = context.adapter_registry.get(spec.adapter)
     adapter_context = AdapterContext(
         run_id=context.run_id,
@@ -508,8 +509,8 @@ async def _execute_adapter_command_async(
     )
     if not adapter_result.success:
         raise CommandFailed(adapter_result.message or f"Adapter '{spec.adapter}' failed.")
-    if "save_as" in command.args:
-        frame.variables[str(command.args["save_as"])] = _adapter_save_value(adapter_result.values)
+    if "save_as" in command_args:
+        frame.variables[str(command_args["save_as"])] = _adapter_save_value(adapter_result.values)
     return resolved_inputs, adapter_result.to_outputs()
 
 
@@ -531,6 +532,18 @@ def _adapter_save_value(values: Dict[str, Any]) -> Any:
     if "value" in values:
         return values["value"]
     return dict(values)
+
+
+def _with_command_defaults(package: ResolvedPackage, command: NormalizedCommand) -> Dict[str, Any]:
+    command_defaults = package.tool_profile_snapshot.get("command_defaults", {})
+    if not isinstance(command_defaults, Mapping):
+        return dict(command.args)
+    defaults = command_defaults.get(command.type)
+    if not isinstance(defaults, Mapping):
+        return dict(command.args)
+    merged = dict(defaults)
+    merged.update(command.args)
+    return merged
 
 
 async def _execute_device_command_async(

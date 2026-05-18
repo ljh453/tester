@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private bool _isGuiEditorVisible = true;
     private bool _isRefreshingGuiTestcaseSelection;
     private bool _isApplyingGuiCommandArgumentEdit;
+    private bool _showOptionalGuiArguments;
     private System.Windows.Point? _commandDragStartPoint;
     private WorkbenchCommandDefinition? _dragCommandDefinition;
     private System.Windows.Point? _commandBlockDragStartPoint;
@@ -319,6 +320,12 @@ public partial class MainWindow : Window
 
         comboBox.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
         e.Handled = true;
+    }
+
+    private void ShowOptionalArgumentsCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        _showOptionalGuiArguments = ShowOptionalArgumentsCheckBox.IsChecked == true;
+        RefreshGuiCommandProperties();
     }
 
     private void GuiCommandComplexArgumentTextBox_LostFocus(object sender, RoutedEventArgs e)
@@ -914,13 +921,21 @@ public partial class MainWindow : Window
             ? System.Windows.Media.Brushes.DarkOrange
             : TryFindResource("Workbench.Brush.TextSecondary") as System.Windows.Media.Brush
                 ?? System.Windows.Media.Brushes.Gray;
+        ShowOptionalArgumentsCheckBox.IsEnabled = command is not null;
         GuiCommandArgumentsControl.ItemsSource = command?.Arguments
             .Where(argument => argument.IsScalarEditable)
+            .Where(ShouldShowGuiArgument)
             .ToArray() ?? Array.Empty<WorkbenchCommandArgument>();
         GuiCommandComplexArgumentsControl.ItemsSource = command?.Arguments
             .Where(argument => !argument.IsScalarEditable)
+            .Where(ShouldShowGuiArgument)
             .ToArray() ?? Array.Empty<WorkbenchCommandArgument>();
         GuiCommandSourceBox.Text = command?.SourcePreview ?? "";
+    }
+
+    private bool ShouldShowGuiArgument(WorkbenchCommandArgument argument)
+    {
+        return _showOptionalGuiArguments || argument.IsVisibleByDefault;
     }
 
     private void ApplyGuiCommandArgumentEdit(FrameworkElement editor, string value)

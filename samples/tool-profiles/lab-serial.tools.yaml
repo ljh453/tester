@@ -18,6 +18,17 @@ serial:
       byte_size: 8
       command_profile: mach_sent_gateway
       notes: "Mach Systems SENT-USB interface using the SENT Gateway binary protocol."
+
+command_defaults:
+  serial.write:
+    timeout_ms: 1000
+  serial.read:
+    timeout_ms: 1000
+  serial.write_bytes:
+    timeout_ms: 1000
+  serial.read_bytes:
+    timeout_ms: 1000
+
 command_profiles:
   vupower_k_usb:
     notes: "VuPower K USB manual Ver3.2. Commands are line-based and terminated by LF."
@@ -25,11 +36,16 @@ command_profiles:
       power_supply.command:
         protocol: vupower_k_usb
         channel: P1
+        timeout_ms: 1000
   mach_sent_gateway:
     notes: "Mach Systems SENT Gateway protocol. Supports fast frame receive, fast TX, single slow TX, and slow multiplex buffer TX commands."
     commands:
       sent_usb.read:
         protocol: mach_sent_gateway
+        channel: 1
+        timeout_ms: 1000
+        max_frames: 3
       sent_usb.command:
         protocol: mach_sent_gateway
         read_ack: true
+        timeout_ms: 1000

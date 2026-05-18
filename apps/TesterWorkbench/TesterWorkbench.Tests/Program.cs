@@ -1275,9 +1275,22 @@ static async Task RunWorkbenchToolProfileSettingsEditorTest()
               stop_bits: 1.5
               byte_size: 7
               command_profile: sent_usb_line
+        command_defaults:
+          serial.write:
+            timeout_ms: 1000
+        command_profiles:
+          sent_usb_line:
+            commands:
+              sent_usb.read:
+                protocol: mach_sent_gateway
+                max_frames: 3
+              sent_usb.command:
+                protocol: mach_sent_gateway
+                read_ack: true
         """;
 
     var devices = WorkbenchToolProfileSettingsEditor.ReadSerialDevices(profileText);
+    var defaults = WorkbenchToolProfileSettingsEditor.ReadCommandDefaults(profileText);
 
     AssertEqual(2, devices.Count, "settings editor serial device count");
     var sentUsb = devices.Single(device => device.Name == "sent_usb");
@@ -1286,18 +1299,72 @@ static async Task RunWorkbenchToolProfileSettingsEditorTest()
     AssertEqual("odd", sentUsb.Parity, "settings editor parity");
     AssertEqual(1.5, sentUsb.StopBits, "settings editor stop bits");
     AssertEqual(7, sentUsb.ByteSize, "settings editor byte size");
+    AssertEqual(
+        "3",
+        defaults.Single(row =>
+            row.ProfileName == "sent_usb_line"
+            && row.CommandType == "sent_usb.read"
+            && row.ArgumentName == "max_frames").Value,
+        "settings editor reads command default");
+    AssertEqual(
+        "1000",
+        defaults.Single(row =>
+            row.ProfileName == WorkbenchToolProfileSettingsEditor.GlobalCommandDefaultsScope
+            && row.CommandType == "serial.write"
+            && row.ArgumentName == "timeout_ms").Value,
+        "settings editor reads global command default");
 
-    var updated = await WorkbenchToolProfileSettingsEditor.UpdateSerialDevicesAsync(
+    var serialUpdated = await WorkbenchToolProfileSettingsEditor.UpdateSerialDevicesAsync(
         profileText,
         new[]
         {
             new WorkbenchSerialDeviceSettingsUpdate("psu", "even", 2, 7),
             new WorkbenchSerialDeviceSettingsUpdate("sent_usb", "none", 1, 8)
         });
+    var updated = await WorkbenchToolProfileSettingsEditor.UpdateCommandDefaultsAsync(
+        serialUpdated,
+        new[]
+        {
+            new WorkbenchCommandDefaultSettingsUpdate(
+                "sent_usb_line",
+                "sent_usb.read",
+                "timeout_ms",
+                "1500"),
+            new WorkbenchCommandDefaultSettingsUpdate(
+                "sent_usb_line",
+                "sent_usb.command",
+                "read_ack",
+                "false"),
+            new WorkbenchCommandDefaultSettingsUpdate(
+                "sent_usb_line",
+                "sent_usb.read",
+                "max_frames",
+                ""),
+            new WorkbenchCommandDefaultSettingsUpdate(
+                WorkbenchToolProfileSettingsEditor.GlobalCommandDefaultsScope,
+                "serial.write",
+                "timeout_ms",
+                "1750"),
+            new WorkbenchCommandDefaultSettingsUpdate(
+                WorkbenchToolProfileSettingsEditor.GlobalCommandDefaultsScope,
+                "trace32.command",
+                "fallback",
+                "true"),
+            new WorkbenchCommandDefaultSettingsUpdate(
+                WorkbenchToolProfileSettingsEditor.GlobalCommandDefaultsScope,
+                "trace32.command",
+                "transport",
+                "")
+        });
 
     AssertTrue(updated.Contains("parity: even", StringComparison.Ordinal), "settings editor inserts parity");
     AssertTrue(updated.Contains("stop_bits: 2", StringComparison.Ordinal), "settings editor inserts stop bits");
     AssertTrue(updated.Contains("byte_size: 8", StringComparison.Ordinal), "settings editor updates byte size");
+    AssertTrue(updated.Contains("timeout_ms: 1500", StringComparison.Ordinal), "settings editor inserts command default");
+    AssertTrue(updated.Contains("timeout_ms: 1750", StringComparison.Ordinal), "settings editor updates global command default");
+    AssertTrue(updated.Contains("fallback: true", StringComparison.Ordinal), "settings editor inserts global command default");
+    AssertTrue(updated.Contains("read_ack: false", StringComparison.Ordinal), "settings editor updates boolean command default");
+    AssertFalse(updated.Contains("max_frames: 3", StringComparison.Ordinal), "settings editor clears command default");
 }
 
 static async Task RunMainWorkbenchViewModelSettingsSnapshotTest()
@@ -1319,6 +1386,12 @@ static async Task RunMainWorkbenchViewModelSettingsSnapshotTest()
                   port: COM4
                   baudrate: 115200
                   command_profile: sent_usb_line
+            command_profiles:
+              sent_usb_line:
+                commands:
+                  sent_usb.read:
+                    protocol: mach_sent_gateway
+                    max_frames: 3
             """));
     var viewModel = new MainWorkbenchViewModel(
         new WorkspaceScanner(),
@@ -1337,16 +1410,32 @@ static async Task RunMainWorkbenchViewModelSettingsSnapshotTest()
     AssertEqual("none", snapshot.SerialDevices.Single().Parity, "settings snapshot default parity");
     AssertEqual(1.0, snapshot.SerialDevices.Single().StopBits, "settings snapshot default stop bits");
     AssertEqual(8, snapshot.SerialDevices.Single().ByteSize, "settings snapshot default byte size");
+    AssertEqual(
+        "3",
+        snapshot.CommandDefaults.Single(row =>
+            row.ProfileName == "sent_usb_line"
+            && row.CommandType == "sent_usb.read"
+            && row.ArgumentName == "max_frames").Value,
+        "settings snapshot command default");
 
     await viewModel.ApplySettingsAsync(new WorkbenchSettingsUpdate(
         WorkbenchThemeMode.Dark,
-        new[] { new WorkbenchSerialDeviceSettingsUpdate("sent_usb", "even", 2, 7) }));
+        new[] { new WorkbenchSerialDeviceSettingsUpdate("sent_usb", "even", 2, 7) },
+        new[]
+        {
+            new WorkbenchCommandDefaultSettingsUpdate(
+                "sent_usb_line",
+                "sent_usb.read",
+                "timeout_ms",
+                "2000")
+        }));
 
     var updatedProfile = await File.ReadAllTextAsync(Path.Combine(root, "tool-profiles", "lab.tools.yaml"));
     AssertEqual(WorkbenchThemeMode.Dark, viewModel.ThemeMode, "settings apply theme");
     AssertTrue(updatedProfile.Contains("parity: even", StringComparison.Ordinal), "settings apply parity");
     AssertTrue(updatedProfile.Contains("stop_bits: 2", StringComparison.Ordinal), "settings apply stop bits");
     AssertTrue(updatedProfile.Contains("byte_size: 7", StringComparison.Ordinal), "settings apply byte size");
+    AssertTrue(updatedProfile.Contains("timeout_ms: 2000", StringComparison.Ordinal), "settings apply command default");
 }
 
 static async Task RunMainWorkbenchViewModelSavesSelectedFileTest()
@@ -1693,6 +1782,29 @@ static Task RunWorkbenchGuiModelBuilderCommandArgumentTest()
     AssertTrue(
         forBlock.Arguments.Any(argument => argument.Name == "do" && !argument.IsScalarEditable),
         "for do is not scalar editable");
+
+    var optionalModel = WorkbenchGuiModelBuilder.Build(
+        """
+        testcases:
+          - name: optional_argument_case
+            steps:
+              - sent_usb.read:
+                  device: sent_usb
+                  channel: 1
+        """);
+    var sentRead = optionalModel.Testcases[0].Phases.Single(phase => phase.YamlName == "steps").Blocks[0];
+    AssertTrue(
+        sentRead.Arguments.Single(argument => argument.Name == "device").IsVisibleByDefault,
+        "required sent_usb.read argument is visible by default");
+    AssertTrue(
+        sentRead.Arguments.Single(argument => argument.Name == "channel").IsVisibleByDefault,
+        "configured optional sent_usb.read argument is visible by default");
+    AssertFalse(
+        sentRead.Arguments.Single(argument => argument.Name == "timeout_ms").IsVisibleByDefault,
+        "empty optional sent_usb.read timeout is hidden by default");
+    AssertFalse(
+        sentRead.Arguments.Single(argument => argument.Name == "max_frames").IsVisibleByDefault,
+        "empty optional sent_usb.read max_frames is hidden by default");
 
     return Task.CompletedTask;
 }

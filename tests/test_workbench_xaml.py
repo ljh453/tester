@@ -36,3 +36,34 @@ def test_combo_box_template_supports_editable_text_display():
 
     assert editable_text_box is not None
     assert editable_text_box.attrib["Visibility"] == "Hidden"
+
+
+def test_properties_pane_can_show_optional_arguments_on_demand():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    checkbox = next(
+        (
+            element
+            for element in root.iter(f"{PRESENTATION}CheckBox")
+            if element.attrib.get(f"{XAML}Name") == "ShowOptionalArgumentsCheckBox"
+        ),
+        None,
+    )
+
+    assert checkbox is not None
+    assert checkbox.attrib["Click"] == "ShowOptionalArgumentsCheckBox_Click"
+
+
+def test_settings_window_exposes_command_defaults_grid():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/SettingsWindow.xaml")
+
+    grid = next(
+        (
+            element
+            for element in root.iter(f"{PRESENTATION}DataGrid")
+            if element.attrib.get(f"{XAML}Name") == "CommandDefaultsGrid"
+        ),
+        None,
+    )
+
+    assert grid is not None

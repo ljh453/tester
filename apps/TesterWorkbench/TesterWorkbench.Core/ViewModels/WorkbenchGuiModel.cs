@@ -201,6 +201,10 @@ public sealed class WorkbenchCommandArgument
 
     public bool IsMissingRequired => IsRequired && string.IsNullOrWhiteSpace(Value);
 
+    public bool IsExplicitlyConfigured => SourceLine > 0;
+
+    public bool IsVisibleByDefault => IsRequired || IsExplicitlyConfigured;
+
     public string RequirementText => IsMissingRequired
         ? "missing required"
         : Definition.RequirementText;

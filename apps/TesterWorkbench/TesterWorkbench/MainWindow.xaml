@@ -734,7 +734,14 @@
                                             <TextBlock x:Name="GuiCommandValidationText"
                                                        TextWrapping="Wrap"
                                                        Margin="0,3,0,8" />
-                                            <TextBlock Text="Arguments" Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                                            <Grid>
+                                                <TextBlock Text="Arguments"
+                                                           Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                                                <CheckBox x:Name="ShowOptionalArgumentsCheckBox"
+                                                          Content="Show optional"
+                                                          HorizontalAlignment="Right"
+                                                          Click="ShowOptionalArgumentsCheckBox_Click" />
+                                            </Grid>
                                             <ItemsControl x:Name="GuiCommandArgumentsControl"
                                                           Margin="0,3,0,8" />
                                             <TextBlock Text="Complex Arguments" Foreground="{DynamicResource Workbench.Brush.TextMuted}" />

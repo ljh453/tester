@@ -90,6 +90,45 @@
                     </DataGrid>
                 </DockPanel>
             </TabItem>
+
+            <TabItem Header="Command Defaults">
+                <DockPanel Margin="14">
+                    <StackPanel DockPanel.Dock="Top"
+                                Margin="0,0,0,10">
+                        <TextBlock Text="Tool Profile"
+                                   Foreground="{DynamicResource Workbench.Brush.TextSecondary}" />
+                        <TextBlock Text="{Binding ElementName=ToolProfilePathTextBlock, Path=Text}"
+                                   Margin="0,3,0,0"
+                                   FontFamily="Consolas"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                    </StackPanel>
+
+                    <DataGrid x:Name="CommandDefaultsGrid"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Scope/Profile"
+                                                Binding="{Binding ProfileName}"
+                                                IsReadOnly="True"
+                                                Width="150" />
+                            <DataGridTextColumn Header="Command"
+                                                Binding="{Binding CommandType}"
+                                                IsReadOnly="True"
+                                                Width="170" />
+                            <DataGridTextColumn Header="Argument"
+                                                Binding="{Binding ArgumentName}"
+                                                IsReadOnly="True"
+                                                Width="120" />
+                            <DataGridTextColumn Header="Default"
+                                                Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>

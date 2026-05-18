@@ -371,14 +371,16 @@ public sealed class MainWorkbenchViewModel
             return new WorkbenchSettingsSnapshot(
                 ThemeMode,
                 toolProfilePath,
-                Array.Empty<WorkbenchSerialDeviceSettings>());
+                Array.Empty<WorkbenchSerialDeviceSettings>(),
+                Array.Empty<WorkbenchCommandDefaultSettings>());
         }
 
         var profileText = await File.ReadAllTextAsync(toolProfilePath, cancellationToken);
         return new WorkbenchSettingsSnapshot(
             ThemeMode,
             toolProfilePath,
-            WorkbenchToolProfileSettingsEditor.ReadSerialDevices(profileText));
+            WorkbenchToolProfileSettingsEditor.ReadSerialDevices(profileText),
+            WorkbenchToolProfileSettingsEditor.ReadCommandDefaults(profileText));
     }
 
     public async Task ApplySettingsAsync(
@@ -389,12 +391,15 @@ public sealed class MainWorkbenchViewModel
         var toolProfilePath = ResolveCurrentToolProfilePath();
         if (!string.IsNullOrWhiteSpace(toolProfilePath)
             && File.Exists(toolProfilePath)
-            && settings.SerialDevices.Count > 0)
+            && (settings.SerialDevices.Count > 0 || settings.CommandDefaults.Count > 0))
         {
             var profileText = await File.ReadAllTextAsync(toolProfilePath, cancellationToken);
             var updatedProfileText = await WorkbenchToolProfileSettingsEditor.UpdateSerialDevicesAsync(
                 profileText,
                 settings.SerialDevices);
+            updatedProfileText = await WorkbenchToolProfileSettingsEditor.UpdateCommandDefaultsAsync(
+                updatedProfileText,
+                settings.CommandDefaults);
             await File.WriteAllTextAsync(toolProfilePath, updatedProfileText, cancellationToken);
             _cachedSuggestionContextPath = null;
             _cachedSuggestionContext = WorkbenchGuiSuggestionContext.Empty;

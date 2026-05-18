@@ -58,6 +58,39 @@ canoe:
       - -m
       - embsw_tester.adapters.canoe_com_helper
 
+command_defaults:
+  serial.write:
+    timeout_ms: 1000
+  serial.read:
+    timeout_ms: 1000
+  canoe.measurement.stop:
+    timeout_ms: 1000
+  canoe.signal.read:
+    timeout_ms: 1000
+  canoe.sysvar.read:
+    timeout_ms: 1000
+  canoe.sysvar.set:
+    timeout_ms: 1000
+  inca.measure.read:
+    timeout_ms: 1000
+  inca.calibration.set:
+    timeout_ms: 1000
+    value_kind: phys
+  inca.recording.start:
+    timeout_ms: 1000
+    file_format: MDF
+  inca.recording.stop:
+    timeout_ms: 1000
+    file_format: MDF4
+  trace32.command:
+    timeout_ms: 1000
+    transport: rcl
+    fallback: true
+  trace32.command_sequence:
+    timeout_ms: 1000
+    transport: rcl
+    fallback: true
+
 command_profiles:
   vupower_k_usb:
     notes: "VuPower K USB manual Ver3.2. Commands are line-based and terminated by LF."
@@ -65,12 +98,16 @@ command_profiles:
       power_supply.command:
         protocol: vupower_k_usb
         channel: P1
+        timeout_ms: 1000
   mach_sent_gateway:
     notes: "Mach Systems SENT Gateway protocol. Supports fast frame receive, fast TX, single slow TX, and slow multiplex buffer TX commands."
     commands:
       sent_usb.read:
         protocol: mach_sent_gateway
+        channel: 1
+        timeout_ms: 1000
         max_frames: 3
       sent_usb.command:
         protocol: mach_sent_gateway
         read_ack: true
+        timeout_ms: 1000
