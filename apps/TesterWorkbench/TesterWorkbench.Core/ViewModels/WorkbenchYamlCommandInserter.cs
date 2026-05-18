@@ -128,10 +128,10 @@ public static class WorkbenchYamlCommandInserter
     {
         if (parentCommand.Children.Count > 0)
         {
-            var lastChild = parentCommand.Children[^1];
-            var childLineIndex = ToLineIndex(lastChild.SourceLineStart, lines.Count);
+            var firstChild = parentCommand.Children[0];
+            var childLineIndex = ToLineIndex(firstChild.SourceLineStart, lines.Count);
             return new InsertionTarget(
-                ToInsertionIndex(lastChild.SourceLineEnd, lines.Count),
+                childLineIndex,
                 LeadingSpaceCount(lines[childLineIndex]));
         }
 

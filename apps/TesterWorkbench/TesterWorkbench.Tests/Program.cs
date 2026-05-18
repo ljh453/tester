@@ -2306,9 +2306,9 @@ static Task RunWorkbenchYamlCommandInserterTest()
     var normalizedNestedFor = nestedForInserted.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
     AssertTrue(
         normalizedNestedFor.Contains(
-            "            - log.text:\n                text: \"inner\"\n            - for:\n                each: \"${items}\"",
+            "          do:\n            - for:\n                each: \"${items}\"\n                as: item\n                do:\n                  - log.text:\n                      text: \"loop item\"\n            - log.text:\n                text: \"inner\"",
             StringComparison.Ordinal),
-        "YAML command insertion supports nested for loop body");
+        "YAML command insertion puts nested command directly under for");
 
     var emptyLoopYaml =
         """
@@ -2440,9 +2440,9 @@ static Task RunWorkbenchYamlCommandMoverTest()
 
     AssertTrue(
         normalizedInsideMove.Contains(
-            "            - delay:\n                ms: 100\n            - log.text:\n                text: \"outer\"",
+            "          do:\n            - log.text:\n                text: \"outer\"\n            - delay:\n                ms: 100",
             StringComparison.Ordinal),
-        "YAML command mover supports moving block inside for loop");
+        "YAML command mover puts moved block directly under for");
 
     var emptyLoopYaml =
         """
