@@ -1,0 +1,40 @@
+tool_profile: tool-profiles/vector-canoe.tools.yaml
+
+testcases:
+  - name: canoe_com_smoke
+    description: CANoe COM smoke test. Update configuration path, namespace, message, and signal names for the target setup.
+    tags: [sample, canoe, com]
+    on_step_failure: stop
+    preconditions:
+      - log.text:
+          text: "Starting CANoe measurement"
+      - canoe.measurement.start:
+          configuration: C:/Vector/Configs/sample.cfg
+          timeout_ms: 5000
+    steps:
+      - canoe.sysvar.set:
+          namespace: Vehicle
+          name: Ignition
+          value: true
+          timeout_ms: 1000
+      - canoe.sysvar.read:
+          namespace: Vehicle
+          name: Ignition
+          timeout_ms: 1000
+          save_as: canoe_ignition
+      - assert.eq:
+          left: "${canoe_ignition}"
+          right: true
+      - canoe.signal.read:
+          bus: CAN
+          channel: 1
+          message: ABSData
+          signal: CarSpeed
+          timeout_ms: 1000
+          save_as: canoe_car_speed
+      - log.value:
+          name: canoe_car_speed
+          value: "${canoe_car_speed}"
+    postconditions:
+      - canoe.measurement.stop:
+          timeout_ms: 5000

@@ -1,0 +1,81 @@
+tool_profile: tool-profiles/lab-serial.tools.yaml
+
+testcases:
+  - name: psu_vupower_smoke
+    description: VuPower K USB power supply smoke test. Confirm COM port and output channel before running.
+    tags: [sample, psu, vupower]
+    on_step_failure: stop
+    preconditions:
+      - log.text:
+          text: "Starting VuPower PSU smoke test"
+      - power_supply.command:
+          device: psu
+          action: identify
+          timeout_ms: 1000
+          save_as: psu_id
+      - log.value:
+          name: psu_id
+          value: "${psu_id}"
+    steps:
+      - power_supply.command:
+          device: psu
+          action: apply
+          channel: 1
+          voltage: 5.0
+          current: 0.5
+          timeout_ms: 1000
+      - power_supply.command:
+          device: psu
+          action: output
+          channel: 1
+          state: on
+          timeout_ms: 1000
+      - delay:
+          ms: 500
+      - power_supply.command:
+          device: psu
+          action: read_output
+          channel: 1
+          timeout_ms: 1000
+          save_as: psu_output_enabled
+      - assert.eq:
+          left: "${psu_output_enabled}"
+          right: true
+      - power_supply.command:
+          device: psu
+          action: measure_voltage
+          channel: 1
+          average: true
+          timeout_ms: 1000
+          save_as: psu_voltage
+      - log.value:
+          name: psu_voltage
+          value: "${psu_voltage}"
+      - assert.gt:
+          left: "${psu_voltage}"
+          right: 0
+      - power_supply.command:
+          device: psu
+          action: measure_current
+          channel: 1
+          average: true
+          timeout_ms: 1000
+          save_as: psu_current
+      - log.value:
+          name: psu_current
+          value: "${psu_current}"
+    postconditions:
+      - power_supply.command:
+          device: psu
+          action: output
+          channel: 1
+          state: off
+          timeout_ms: 1000
+      - power_supply.command:
+          device: psu
+          action: system_error
+          timeout_ms: 1000
+          save_as: psu_error
+      - log.value:
+          name: psu_error
+          value: "${psu_error}"

@@ -79,3 +79,17 @@ def test_sample_boot_smoke_compiles_without_diagnostics():
 
     assert package.diagnostics == []
     assert package.testcases[0].name == "boot_smoke"
+
+
+def test_hardware_smoke_samples_compile_without_diagnostics():
+    sample_files = [
+        Path("samples/psu-vupower-smoke.yaml"),
+        Path("samples/sent-usb-smoke.yaml"),
+        Path("samples/canoe-com-smoke.yaml"),
+        Path("samples/canalyzer-com-smoke.yaml"),
+    ]
+
+    for sample_file in sample_files:
+        package = compile_file(sample_file)
+
+        assert package.diagnostics == [], sample_file

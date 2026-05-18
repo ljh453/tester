@@ -1,0 +1,8 @@
+canoe:
+  helper:
+    enabled: true
+    application: canoe
+    command:
+      - python
+      - -m
+      - embsw_tester.adapters.canoe_com_helper

@@ -1,0 +1,67 @@
+tool_profile: tool-profiles/lab-serial.tools.yaml
+
+testcases:
+  - name: sent_usb_smoke
+    description: Mach Systems SENT-USB gateway smoke test for channel configuration, fast/slow transmit, and fast frame read.
+    tags: [sample, sent-usb, mach-systems]
+    on_step_failure: stop
+    preconditions:
+      - log.text:
+          text: "Configuring SENT-USB channel 1"
+      - sent_usb.command:
+          device: sent_usb
+          action: config
+          channel: 1
+          direction: tx
+          data_nibble_count: 6
+          unit_time_us: 3.0
+          pulse_pause_enabled: false
+          timeout_ms: 1000
+      - sent_usb.command:
+          device: sent_usb
+          action: start
+          channel: 1
+          timeout_ms: 1000
+    steps:
+      - sent_usb.command:
+          device: sent_usb
+          action: transmit_fast
+          channel: 1
+          status: 3
+          data_nibbles: [1, 2, 3, 4, 5, 6]
+          crc: 10
+          crc_calculated: 11
+          timeout_ms: 1000
+          save_as: sent_fast_tx
+      - log.value:
+          name: sent_fast_tx
+          value: "${sent_fast_tx}"
+      - sent_usb.command:
+          device: sent_usb
+          action: transmit_slow
+          channel: 1
+          slow_message_id: 18
+          data: 13398
+          slow_frame_type: enhanced_serial
+          enhanced_format: true
+          crc_received: 37
+          crc_calculated: 44
+          timeout_ms: 1000
+          save_as: sent_slow_tx
+      - log.value:
+          name: sent_slow_tx
+          value: "${sent_slow_tx}"
+      - sent_usb.read:
+          device: sent_usb
+          channel: 1
+          timeout_ms: 1000
+          save_as: sent_fast_frame
+      - log.value:
+          name: sent_fast_frame
+          value: "${sent_fast_frame}"
+    postconditions:
+      - sent_usb.command:
+          device: sent_usb
+          action: stop
+          channel: 1
+          timeout_ms: 1000

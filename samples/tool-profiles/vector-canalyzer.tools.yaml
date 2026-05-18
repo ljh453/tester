@@ -1,0 +1,8 @@
+canoe:
+  helper:
+    enabled: true
+    application: canalyzer
+    command:
+      - python
+      - -m
+      - embsw_tester.adapters.canoe_com_helper

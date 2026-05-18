@@ -1,0 +1,40 @@
+tool_profile: tool-profiles/vector-canalyzer.tools.yaml
+
+testcases:
+  - name: canalyzer_com_smoke
+    description: CANalyzer COM smoke test. Update configuration path, namespace, message, and signal names for the target setup.
+    tags: [sample, canalyzer, com]
+    on_step_failure: stop
+    preconditions:
+      - log.text:
+          text: "Starting CANalyzer measurement"
+      - canoe.measurement.start:
+          configuration: C:/Vector/Configs/sample.cfg
+          timeout_ms: 5000
+    steps:
+      - canoe.sysvar.set:
+          namespace: Vehicle
+          name: Ignition
+          value: true
+          timeout_ms: 1000
+      - canoe.sysvar.read:
+          namespace: Vehicle
+          name: Ignition
+          timeout_ms: 1000
+          save_as: canalyzer_ignition
+      - assert.eq:
+          left: "${canalyzer_ignition}"
+          right: true
+      - canoe.signal.read:
+          bus: CAN
+          channel: 1
+          message: ABSData
+          signal: CarSpeed
+          timeout_ms: 1000
+          save_as: canalyzer_car_speed
+      - log.value:
+          name: canalyzer_car_speed
+          value: "${canalyzer_car_speed}"
+    postconditions:
+      - canoe.measurement.stop:
+          timeout_ms: 5000
