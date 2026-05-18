@@ -237,6 +237,7 @@
                           IsEditable="True"
                           IsTextSearchEnabled="True"
                           IsEnabled="{Binding IsScalarEditable}"
+                          SelectionChanged="GuiCommandArgumentComboBox_SelectionChanged"
                           LostFocus="GuiCommandArgumentComboBox_LostFocus"
                           PreviewKeyDown="GuiCommandArgumentComboBox_PreviewKeyDown">
                     <ComboBox.Style>

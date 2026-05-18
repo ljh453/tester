@@ -122,7 +122,12 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ComboBox}">
                     <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="22" />
+                        </Grid.ColumnDefinitions>
                         <ToggleButton x:Name="ComboToggle"
+                                      Grid.ColumnSpan="2"
                                       Background="{TemplateBinding Background}"
                                       BorderBrush="{TemplateBinding BorderBrush}"
                                       Foreground="{TemplateBinding Foreground}"
@@ -136,14 +141,6 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="22" />
                                 </Grid.ColumnDefinitions>
-                                <ContentPresenter Margin="{TemplateBinding Padding}"
-                                                  VerticalAlignment="Center"
-                                                  HorizontalAlignment="Left"
-                                                  Content="{TemplateBinding SelectionBoxItem}"
-                                                  ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
-                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                                                  ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
-                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
                                 <Path Grid.Column="1"
                                       Width="8"
                                       Height="5"
@@ -153,7 +150,30 @@
                                       Data="M 0 0 L 8 0 L 4 5 Z" />
                             </Grid>
                         </ToggleButton>
+                        <ContentPresenter x:Name="ContentSite"
+                                          Grid.Column="0"
+                                          Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Left"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          IsHitTestVisible="False"
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                        <TextBox x:Name="PART_EditableTextBox"
+                                 Grid.Column="0"
+                                 Margin="{TemplateBinding Padding}"
+                                 VerticalAlignment="Center"
+                                 HorizontalAlignment="Stretch"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 Foreground="{TemplateBinding Foreground}"
+                                 CaretBrush="{TemplateBinding Foreground}"
+                                 IsReadOnly="{TemplateBinding IsReadOnly}"
+                                 Visibility="Hidden" />
                         <Popup x:Name="Popup"
+                               Grid.ColumnSpan="2"
                                AllowsTransparency="True"
                                Focusable="False"
                                IsOpen="{TemplateBinding IsDropDownOpen}"
@@ -178,6 +198,10 @@
                         <Trigger Property="IsDropDownOpen" Value="True">
                             <Setter TargetName="ComboToggle" Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
                             <Setter TargetName="ComboToggle" Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                        </Trigger>
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="ContentSite" Property="Visibility" Value="Hidden" />
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextMuted}" />

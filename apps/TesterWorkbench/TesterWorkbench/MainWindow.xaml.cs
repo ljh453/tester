@@ -298,6 +298,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void GuiCommandArgumentComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ComboBox comboBox
+            || comboBox.SelectedItem is null)
+        {
+            return;
+        }
+
+        var selectedText = comboBox.SelectedItem.ToString() ?? comboBox.Text;
+        comboBox.Text = selectedText;
+        ApplyGuiCommandArgumentEdit(comboBox, selectedText);
+    }
+
     private void GuiCommandArgumentComboBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key != Key.Enter || sender is not System.Windows.Controls.ComboBox comboBox)
@@ -920,9 +933,17 @@ public partial class MainWindow : Window
 
     private void ApplyGuiCommandArgumentEdit(FrameworkElement editor, string value)
     {
+        if (editor.Tag is not WorkbenchCommandArgument argument)
+        {
+            return;
+        }
+
+        var currentValue = _viewModel.SelectedGuiCommand?.Arguments
+            .FirstOrDefault(candidate => candidate.Name == argument.Name)
+            ?.Value;
         if (_isApplyingGuiCommandArgumentEdit
-            || editor.Tag is not WorkbenchCommandArgument argument
-            || value == argument.Value)
+            || value == argument.Value
+            || value == currentValue)
         {
             return;
         }
