@@ -55,6 +55,7 @@
                         Padding="8,7"
                         CornerRadius="4"
                         Cursor="Hand"
+                        Tag="GuiCommandBlock"
                         MouseEnter="GuiCommandBlock_MouseEnter"
                         MouseLeftButtonDown="GuiCommandBlock_MouseLeftButtonDown"
                         MouseLeftButtonUp="GuiCommandBlock_MouseLeftButtonUp"

@@ -641,6 +641,27 @@ public sealed class MainWorkbenchViewModel
         UpdateGuiSelectionMarkers();
     }
 
+    public void SelectGuiCommandsForBulkAction(IReadOnlyList<WorkbenchCommandBlock> commandBlocks)
+    {
+        var requestedLineNumbers = commandBlocks
+            .Select(commandBlock => commandBlock.SourceLineStart)
+            .ToHashSet();
+        var selectedBlocks = AllGuiCommandBlocks()
+            .Where(commandBlock => requestedLineNumbers.Contains(commandBlock.SourceLineStart))
+            .OrderBy(commandBlock => commandBlock.SourceLineStart)
+            .ToArray();
+
+        _selectedGuiCommandLineNumbers.Clear();
+        foreach (var commandBlock in selectedBlocks)
+        {
+            _selectedGuiCommandLineNumbers.Add(commandBlock.SourceLineStart);
+        }
+
+        _guiBulkSelectionAnchorLineNumber = selectedBlocks.FirstOrDefault()?.SourceLineStart;
+        SelectGuiCommand(selectedBlocks.LastOrDefault());
+        UpdateGuiSelectionMarkers();
+    }
+
     public void ClearGuiCommandBulkSelection()
     {
         _selectedGuiCommandLineNumbers.Clear();

@@ -56,6 +56,7 @@ await RunMainWorkbenchViewModelMovesGuiCommandTest();
 await RunMainWorkbenchViewModelMovesSelectedGuiCommandsTest();
 await RunMainWorkbenchViewModelDeletesGuiCommandTest();
 await RunMainWorkbenchViewModelSelectsGuiCommandRangeTest();
+await RunMainWorkbenchViewModelSelectsGuiCommandsByHitTestTest();
 await RunMainWorkbenchViewModelDeletesSelectedGuiCommandsTest();
 await RunMainWorkbenchViewModelShowsDragInsertionPreviewTest();
 
@@ -2825,6 +2826,43 @@ static Task RunMainWorkbenchViewModelSelectsGuiCommandRangeTest()
     AssertTrue(steps.Blocks[2].IsSelectedForBulkAction, "range selection includes middle command");
     AssertTrue(steps.Blocks[3].IsSelectedForBulkAction, "range selection includes target command");
     AssertEqual("assert.eq", viewModel.SelectedGuiCommand?.CommandType, "range selection focuses target command");
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelSelectsGuiCommandsByHitTestTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: gui_hit_test_select_case
+            steps:
+              - set:
+                  var: rpm
+                  value: 700
+              - delay:
+                  ms: 1000
+              - log.text:
+                  text: "done"
+              - assert.eq:
+                  left: "${rpm}"
+                  right: 700
+        """);
+    var steps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+
+    viewModel.SelectGuiCommandsForBulkAction(new[] { steps.Blocks[0], steps.Blocks[2] });
+
+    AssertEqual(2, viewModel.SelectedGuiCommandCount, "hit-test selection only includes intersected commands");
+    AssertTrue(steps.Blocks[0].IsSelectedForBulkAction, "hit-test selection includes first intersected command");
+    AssertFalse(steps.Blocks[1].IsSelectedForBulkAction, "hit-test selection excludes non-intersected command between selected blocks");
+    AssertTrue(steps.Blocks[2].IsSelectedForBulkAction, "hit-test selection includes second intersected command");
+    AssertFalse(steps.Blocks[3].IsSelectedForBulkAction, "hit-test selection excludes command outside rectangle");
+    AssertEqual("log.text", viewModel.SelectedGuiCommand?.CommandType, "hit-test selection focuses last selected command");
     return Task.CompletedTask;
 }
 

@@ -444,17 +444,13 @@ public partial class MainWindow : Window
 
     private void GuiCommandBlock_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (!_isGuiBulkSelectingWithLeftButton
-            || e.LeftButton != MouseButtonState.Pressed
-            || sender is not FrameworkElement { DataContext: WorkbenchCommandBlock commandBlock })
+        if (!_isGuiBulkSelectingWithLeftButton || e.LeftButton != MouseButtonState.Pressed)
         {
             return;
         }
 
-        _viewModel.SelectGuiCommandRangeForBulkAction(commandBlock);
-        RefreshGuiCommandProperties();
-        CurrentLineText.Text = _viewModel.CurrentLocationText;
-        UpdateCurrentExecutionLineMarker();
+        UpdateGuiBulkSelection(e.GetPosition(GuiSelectionHost));
+        e.Handled = true;
     }
 
     private void GuiCommandBlock_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -503,19 +499,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        UpdateGuiDragSelectionRectangle(e.GetPosition(GuiSelectionHost));
-        var commandBlock =
-            FindDataContext<WorkbenchCommandBlock>(Mouse.DirectlyOver as DependencyObject)
-            ?? FindDataContext<WorkbenchCommandBlock>(e.OriginalSource as DependencyObject);
-        if (commandBlock is null)
-        {
-            return;
-        }
-
-        _viewModel.SelectGuiCommandRangeForBulkAction(commandBlock);
-        RefreshGuiCommandProperties();
-        CurrentLineText.Text = _viewModel.CurrentLocationText;
-        UpdateCurrentExecutionLineMarker();
+        UpdateGuiBulkSelection(e.GetPosition(GuiSelectionHost));
         e.Handled = true;
     }
 
@@ -576,11 +560,25 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateGuiDragSelectionRectangle(System.Windows.Point currentPoint)
+    private void UpdateGuiBulkSelection(System.Windows.Point currentPoint)
+    {
+        var selectionBounds = UpdateGuiDragSelectionRectangle(currentPoint);
+        if (selectionBounds is null)
+        {
+            return;
+        }
+
+        _viewModel.SelectGuiCommandsForBulkAction(GetGuiCommandBlocksIntersecting(selectionBounds.Value));
+        RefreshGuiCommandProperties();
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
+        UpdateCurrentExecutionLineMarker();
+    }
+
+    private System.Windows.Rect? UpdateGuiDragSelectionRectangle(System.Windows.Point currentPoint)
     {
         if (_guiSelectionDragStartPoint is null)
         {
-            return;
+            return null;
         }
 
         var startPoint = _guiSelectionDragStartPoint.Value;
@@ -593,6 +591,44 @@ public partial class MainWindow : Window
         GuiDragSelectionRectangle.Width = width;
         GuiDragSelectionRectangle.Height = height;
         GuiDragSelectionRectangle.Visibility = Visibility.Visible;
+        return new System.Windows.Rect(left, top, width, height);
+    }
+
+    private IReadOnlyList<WorkbenchCommandBlock> GetGuiCommandBlocksIntersecting(
+        System.Windows.Rect selectionBounds)
+    {
+        return FindVisualDescendants<FrameworkElement>(GuiSelectionHost)
+            .Where(element =>
+                element is
+                {
+                    IsVisible: true,
+                    Tag: "GuiCommandBlock",
+                    DataContext: WorkbenchCommandBlock
+                }
+                && element.ActualWidth > 0
+                && element.ActualHeight > 0
+                && selectionBounds.IntersectsWith(GetBoundsRelativeToGuiSelectionHost(element)))
+            .Select(element => (WorkbenchCommandBlock)element.DataContext)
+            .GroupBy(commandBlock => commandBlock.SourceLineStart)
+            .Select(group => group.First())
+            .OrderBy(commandBlock => commandBlock.SourceLineStart)
+            .ToArray();
+    }
+
+    private System.Windows.Rect GetBoundsRelativeToGuiSelectionHost(FrameworkElement element)
+    {
+        try
+        {
+            var topLeft = element.TransformToAncestor(GuiSelectionHost)
+                .Transform(new System.Windows.Point(0, 0));
+            return new System.Windows.Rect(
+                topLeft,
+                new System.Windows.Size(element.ActualWidth, element.ActualHeight));
+        }
+        catch (InvalidOperationException)
+        {
+            return System.Windows.Rect.Empty;
+        }
     }
 
     private void GuiDeleteSelectedCommands_Click(object sender, RoutedEventArgs e)
@@ -1487,6 +1523,29 @@ public partial class MainWindow : Window
         }
 
         return null;
+    }
+
+    private static IEnumerable<T> FindVisualDescendants<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        var stack = new Stack<DependencyObject>();
+        stack.Push(root);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            var childCount = VisualTreeHelper.GetChildrenCount(current);
+            for (var index = childCount - 1; index >= 0; index--)
+            {
+                var child = VisualTreeHelper.GetChild(current, index);
+                if (child is T matchedChild)
+                {
+                    yield return matchedChild;
+                }
+
+                stack.Push(child);
+            }
+        }
     }
 
     private static DependencyObject? GetParent(DependencyObject current)

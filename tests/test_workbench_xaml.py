@@ -136,3 +136,19 @@ def test_gui_command_block_header_wraps_long_command_text():
         if column.attrib.get("Width") == "82"
     ]
     assert fixed_command_columns == []
+
+
+def test_gui_command_block_is_tagged_for_drag_selection_hit_testing():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    command_block_border = next(
+        (
+            element
+            for element in root.iter(f"{PRESENTATION}Border")
+            if element.attrib.get("MouseLeftButtonDown") == "GuiCommandBlock_MouseLeftButtonDown"
+        ),
+        None,
+    )
+
+    assert command_block_border is not None
+    assert command_block_border.attrib["Tag"] == "GuiCommandBlock"
