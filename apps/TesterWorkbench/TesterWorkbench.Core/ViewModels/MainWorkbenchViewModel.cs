@@ -17,6 +17,7 @@ public sealed class MainWorkbenchViewModel
     private readonly TesterEngineBridge _engineBridge;
     private readonly SortedSet<int> _breakpointLineNumbers = new();
     private readonly SortedSet<int> _selectedGuiCommandLineNumbers = new();
+    private readonly HashSet<string> _selectedGuiTestcaseRunNames = new(StringComparer.Ordinal);
     private IReadOnlyList<EngineVariableValue> _runVariables = Array.Empty<EngineVariableValue>();
     private string? _activeRunControlFile;
     private bool _isRunInProgress;
@@ -82,6 +83,24 @@ public sealed class MainWorkbenchViewModel
 
     public WorkbenchCommandBlock? SelectedGuiCommand { get; private set; }
 
+    public IReadOnlyList<string> SelectedGuiTestcaseRunNames => SelectedGuiTestcaseRunNamesInFileOrder();
+
+    public int SelectedGuiTestcaseRunCount => SelectedGuiTestcaseRunNames.Count;
+
+    public string SelectedGuiTestcaseRunText
+    {
+        get
+        {
+            var selectedNames = SelectedGuiTestcaseRunNames;
+            return selectedNames.Count switch
+            {
+                0 => "Run target: all testcases",
+                1 => $"Run target: {selectedNames[0]}",
+                _ => $"Run target: {selectedNames.Count} testcases"
+            };
+        }
+    }
+
     public int SelectedGuiCommandCount => _selectedGuiCommandLineNumbers.Count;
 
     public string CurrentSourceFile { get; private set; } = string.Empty;
@@ -116,6 +135,7 @@ public sealed class MainWorkbenchViewModel
         SelectedFilePath = Path.GetFullPath(yamlFilePath);
         _breakpointLineNumbers.Clear();
         _selectedGuiCommandLineNumbers.Clear();
+        _selectedGuiTestcaseRunNames.Clear();
         _guiBulkSelectionAnchorLineNumber = null;
         UpdateBreakpointsText();
         var editorText = await File.ReadAllTextAsync(SelectedFilePath, cancellationToken);
@@ -181,7 +201,10 @@ public sealed class MainWorkbenchViewModel
         ExecutionTrace = Array.Empty<EngineRunEvent>();
         _runVariables = Array.Empty<EngineVariableValue>();
         Variables = Array.Empty<EngineVariableValue>();
-        ConsoleText = $"Run '{effectiveRunId}' started.";
+        var selectedTestcaseNames = SelectedGuiTestcaseRunNames;
+        ConsoleText = selectedTestcaseNames.Count == 0
+            ? $"Run '{effectiveRunId}' started."
+            : $"Run '{effectiveRunId}' started for {selectedTestcaseNames.Count} selected testcase(s): {string.Join(", ", selectedTestcaseNames)}.";
         ClearCurrentExecutionLocation();
         NotifyExecutionChanged(onExecutionChanged);
 
@@ -206,7 +229,8 @@ public sealed class MainWorkbenchViewModel
                         });
                 },
                 runControlFile,
-                _breakpointLineNumbers.ToArray());
+                _breakpointLineNumbers.ToArray(),
+                selectedTestcaseNames);
         }
         finally
         {
@@ -333,6 +357,7 @@ public sealed class MainWorkbenchViewModel
             BuildExternalGuiSuggestionContext(editorText));
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase => testcase.Name == previousTestcaseName)
             ?? GuiModel.Testcases.FirstOrDefault();
+        PruneSelectedGuiTestcaseRunNames();
         SelectedGuiCommand = FindCommandByLineAndType(
                 SelectedGuiTestcase,
                 previousCommandLineNumber,
@@ -677,6 +702,20 @@ public sealed class MainWorkbenchViewModel
             .SelectMany(phase => FlattenCommands(phase.Blocks))
             .FirstOrDefault();
         UpdateGuiCurrentExecutionBlock();
+    }
+
+    public void SetSelectedGuiTestcasesForRun(IEnumerable<WorkbenchGuiTestcase> testcases)
+    {
+        _selectedGuiTestcaseRunNames.Clear();
+        foreach (var testcase in testcases)
+        {
+            if (!string.IsNullOrWhiteSpace(testcase.Name))
+            {
+                _selectedGuiTestcaseRunNames.Add(testcase.Name);
+            }
+        }
+
+        PruneSelectedGuiTestcaseRunNames();
     }
 
     public bool SelectGuiCommandAtLine(int lineNumber)
@@ -1282,6 +1321,22 @@ public sealed class MainWorkbenchViewModel
         return SelectedGuiTestcase is null
             ? Array.Empty<WorkbenchCommandBlock>()
             : SelectedGuiTestcase.Phases.SelectMany(phase => FlattenCommands(phase.Blocks));
+    }
+
+    private IReadOnlyList<string> SelectedGuiTestcaseRunNamesInFileOrder()
+    {
+        return GuiModel.Testcases
+            .Where(testcase => _selectedGuiTestcaseRunNames.Contains(testcase.Name))
+            .Select(testcase => testcase.Name)
+            .ToArray();
+    }
+
+    private void PruneSelectedGuiTestcaseRunNames()
+    {
+        var validNames = GuiModel.Testcases
+            .Select(testcase => testcase.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        _selectedGuiTestcaseRunNames.RemoveWhere(name => !validNames.Contains(name));
     }
 
     private static IReadOnlyList<WorkbenchCommandBlock> TopLevelSelectedCommandBlocks(

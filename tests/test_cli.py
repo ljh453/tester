@@ -59,6 +59,61 @@ def test_cli_run_outputs_run_result_json():
     assert payload["testcase_results"][0]["variables"] == {"power_ready": True}
 
 
+def test_cli_run_accepts_multiple_testcase_filters(tmp_path: Path):
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path("src").resolve())
+    test_file = tmp_path / "filtered.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: first_case
+    steps:
+      - set:
+          var: ran
+          value: first
+  - name: second_case
+    steps:
+      - set:
+          var: ran
+          value: second
+  - name: third_case
+    steps:
+      - set:
+          var: ran
+          value: third
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            str(test_file),
+            "--json",
+            "--testcase",
+            "third_case",
+            "--testcase",
+            "first_case",
+        ],
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "passed"
+    assert [testcase["name"] for testcase in payload["testcase_results"]] == [
+        "first_case",
+        "third_case",
+    ]
+
+
 def test_cli_run_streams_event_json_lines_without_breaking_final_json(tmp_path: Path):
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path("src").resolve())

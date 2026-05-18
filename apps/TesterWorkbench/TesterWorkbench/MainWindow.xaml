@@ -509,6 +509,33 @@
                                        Foreground="{DynamicResource Workbench.Brush.TextMuted}"
                                        TextWrapping="Wrap"
                                        Margin="0,0,0,8" />
+                            <Grid Margin="0,0,0,8">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="GuiRunTestcaseSelectionText"
+                                           Grid.ColumnSpan="2"
+                                           Foreground="{DynamicResource Workbench.Brush.TextMuted}"
+                                           Margin="0,0,0,4" />
+                                <ListBox x:Name="GuiRunTestcaseListBox"
+                                         Grid.Row="1"
+                                         Height="72"
+                                         DisplayMemberPath="Name"
+                                         SelectionMode="Extended"
+                                         SelectionChanged="GuiRunTestcaseListBox_SelectionChanged" />
+                                <Button Grid.Row="1"
+                                        Grid.Column="1"
+                                        Content="▶"
+                                        Click="RunSelectedTestcases_Click"
+                                        Margin="8,0,0,0"
+                                        Style="{StaticResource IdeToolbarButtonStyle}"
+                                        ToolTip="Run selected testcases" />
+                            </Grid>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <TextBlock Text="Fold"
                                            Foreground="{DynamicResource Workbench.Brush.TextMuted}"

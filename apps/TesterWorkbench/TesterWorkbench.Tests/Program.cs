@@ -8,8 +8,10 @@ await RunWorkspaceScannerTest();
 await RunEngineBridgeTest();
 await RunEngineBridgeParsesExecutionTraceDetailsTest();
 await RunEngineBridgePassesDebugControlArgumentsTest();
+await RunEngineBridgePassesSelectedTestcaseArgumentsTest();
 await RunEngineBridgeDoesNotRequirePumpedSynchronizationContextTest();
 await RunMainWorkbenchViewModelTest();
+await RunMainWorkbenchViewModelRunsSelectedGuiTestcasesTest();
 await RunMainWorkbenchViewModelIgnoresRunWhileActiveTest();
 await RunMainWorkbenchViewModelStopRunAsyncTest();
 await RunMainWorkbenchViewModelStreamingTest();
@@ -240,6 +242,50 @@ static async Task RunEngineBridgePassesDebugControlArgumentsTest()
         "debug run args");
 }
 
+static async Task RunEngineBridgePassesSelectedTestcaseArgumentsTest()
+{
+    var runner = new FakeEngineProcessRunner(
+        new EngineProcessResult(
+            0,
+            """
+            {
+              "run_id": "gui-run",
+              "status": "passed",
+              "testcase_results": [],
+              "report": {"report_dir": "reports/gui-run"}
+            }
+            """,
+            ""));
+    var bridge = new TesterEngineBridge("python", "/repo", runner);
+
+    await bridge.RunAsync(
+        "/repo/tests/multi.yaml",
+        "gui-run",
+        "/repo/reports",
+        testcaseNames: new[] { "case_b", "case_a" });
+
+    AssertSequence(
+        new[]
+        {
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            "/repo/tests/multi.yaml",
+            "--json",
+            "--run-id",
+            "gui-run",
+            "--reports-root",
+            "/repo/reports",
+            "--use-tool-profile-adapters",
+            "--testcase",
+            "case_b",
+            "--testcase",
+            "case_a"
+        },
+        runner.Calls[0].Arguments,
+        "selected testcase run args");
+}
+
 static async Task RunEngineBridgeParsesExecutionTraceDetailsTest()
 {
     var runner = new FakeEngineProcessRunner(
@@ -443,6 +489,95 @@ static async Task RunMainWorkbenchViewModelTest()
     AssertEqual(1, viewModel.Variables.Count, "selected trace variable count");
     AssertEqual("rpm", viewModel.Variables[0].Name, "selected trace variable name");
     AssertEqual("900", viewModel.Variables[0].Value, "selected trace variable value");
+}
+
+static async Task RunMainWorkbenchViewModelRunsSelectedGuiTestcasesTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/multi.yaml",
+            """
+            testcases:
+              - name: case_a
+                steps:
+                  - set:
+                      var: ran
+                      value: a
+              - name: case_b
+                steps:
+                  - set:
+                      var: ran
+                      value: b
+              - name: case_c
+                steps:
+                  - set:
+                      var: ran
+                      value: c
+            """));
+    var yamlPath = Path.Combine(root, "tests", "multi.yaml");
+    var runner = new FakeEngineProcessRunner(
+        new EngineProcessResult(
+            0,
+            """
+            {
+              "run_id": "gui-run",
+              "status": "passed",
+              "testcase_results": [
+                {"name": "case_b", "status": "passed", "variables": {"ran": "b"}, "events": []},
+                {"name": "case_c", "status": "passed", "variables": {"ran": "c"}, "events": []}
+              ],
+              "report": {"report_dir": "reports/gui-run"}
+            }
+            """,
+            ""));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+
+    await viewModel.OpenWorkspaceAsync(root);
+    await viewModel.OpenFileAsync(yamlPath);
+    viewModel.SetSelectedGuiTestcasesForRun(new[]
+    {
+        viewModel.GuiModel.Testcases[2],
+        viewModel.GuiModel.Testcases[1]
+    });
+
+    await viewModel.RunAsync("gui-run");
+
+    AssertEqual(2, viewModel.SelectedGuiTestcaseRunCount, "selected testcase run count");
+    AssertSequence(
+        new[]
+        {
+            "case_b",
+            "case_c"
+        },
+        viewModel.SelectedGuiTestcaseRunNames,
+        "selected testcase run names are stored in YAML order");
+    AssertTrue(
+        runner.Calls[0].Arguments.Contains("--testcase"),
+        "selected testcase run passes testcase filter");
+    AssertSequence(
+        new[]
+        {
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            yamlPath,
+            "--json",
+            "--run-id",
+            "gui-run",
+            "--reports-root",
+            Path.Combine(root, "reports"),
+            "--use-tool-profile-adapters",
+            "--events-jsonl",
+            "--testcase",
+            "case_b",
+            "--testcase",
+            "case_c",
+            "--control-file",
+            Path.Combine(root, "reports", "gui-run", "control.json")
+        },
+        runner.Calls[0].Arguments,
+        "view model selected testcase run args");
 }
 
 static async Task RunMainWorkbenchViewModelIgnoresRunWhileActiveTest()

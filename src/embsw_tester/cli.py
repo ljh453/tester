@@ -31,6 +31,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser.add_argument("--events-jsonl", action="store_true")
     run_parser.add_argument("--control-file", type=Path)
     run_parser.add_argument(
+        "--testcase",
+        action="append",
+        default=[],
+        dest="testcase_names",
+        help="Run only the named testcase. Can be provided multiple times.",
+    )
+    run_parser.add_argument(
         "--breakpoint-line",
         type=int,
         action="append",
@@ -76,6 +83,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             adapter_registry=adapter_registry,
             event_callback=_event_jsonl_callback if args.events_jsonl else None,
             run_control=_runtime_control(args),
+            testcase_names=args.testcase_names,
         )
         payload = result.to_dict()
         if args.reports_root is not None:

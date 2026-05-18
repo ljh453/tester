@@ -152,3 +152,20 @@ def test_gui_command_block_is_tagged_for_drag_selection_hit_testing():
 
     assert command_block_border is not None
     assert command_block_border.attrib["Tag"] == "GuiCommandBlock"
+
+
+def test_gui_exposes_extended_testcase_run_selection_list():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    testcase_list = next(
+        (
+            element
+            for element in root.iter(f"{PRESENTATION}ListBox")
+            if element.attrib.get(f"{XAML}Name") == "GuiRunTestcaseListBox"
+        ),
+        None,
+    )
+
+    assert testcase_list is not None
+    assert testcase_list.attrib["SelectionMode"] == "Extended"
+    assert testcase_list.attrib["SelectionChanged"] == "GuiRunTestcaseListBox_SelectionChanged"

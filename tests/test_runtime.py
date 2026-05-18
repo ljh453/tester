@@ -503,6 +503,47 @@ testcases:
     assert testcase.events[-1].local_variables["channel_sum"] == 6
 
 
+def test_runtime_runs_selected_testcases_in_package_order(tmp_path: Path):
+    test_file = tmp_path / "selected-testcases.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: first_case
+    steps:
+      - set:
+          var: ran
+          value: first
+  - name: second_case
+    steps:
+      - set:
+          var: ran
+          value: second
+  - name: third_case
+    steps:
+      - set:
+          var: ran
+          value: third
+""".strip(),
+        encoding="utf-8",
+    )
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="selected-testcases-run",
+        testcase_names=["third_case", "first_case"],
+    )
+
+    assert result.status == "passed"
+    assert [testcase.name for testcase in result.testcase_results] == [
+        "first_case",
+        "third_case",
+    ]
+    assert [testcase.variables["ran"] for testcase in result.testcase_results] == [
+        "first",
+        "third",
+    ]
+
+
 def test_runtime_marks_assert_failure_and_stops_remaining_steps(tmp_path: Path):
     test_file = tmp_path / "failure.yaml"
     test_file.write_text(

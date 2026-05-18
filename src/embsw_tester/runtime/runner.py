@@ -137,6 +137,7 @@ def run_package(
     adapter_registry: Optional[AdapterRegistry] = None,
     event_callback: Optional[Callable[[CommandEvent], None]] = None,
     run_control: Optional[RuntimeControl] = None,
+    testcase_names: Optional[Sequence[str]] = None,
 ) -> RunResult:
     try:
         asyncio.get_running_loop()
@@ -149,6 +150,7 @@ def run_package(
                 adapter_registry=adapter_registry,
                 event_callback=event_callback,
                 run_control=run_control,
+                testcase_names=testcase_names,
             )
         )
     raise RuntimeError("run_package cannot be called from a running event loop; use run_package_async.")
@@ -161,6 +163,7 @@ async def run_package_async(
     adapter_registry: Optional[AdapterRegistry] = None,
     event_callback: Optional[Callable[[CommandEvent], Any]] = None,
     run_control: Optional[RuntimeControl] = None,
+    testcase_names: Optional[Sequence[str]] = None,
 ) -> RunResult:
     resolved_run_id = run_id or str(uuid.uuid4())
     diagnostics = [diagnostic.to_dict() for diagnostic in package.diagnostics]
@@ -180,8 +183,17 @@ async def run_package_async(
         event_callback=event_callback,
         run_control=run_control,
     )
+    testcases, testcase_filter_diagnostics = _select_testcases(package.testcases, testcase_names)
+    if testcase_filter_diagnostics:
+        return RunResult(
+            run_id=resolved_run_id,
+            status="failed",
+            testcase_results=[],
+            diagnostics=testcase_filter_diagnostics,
+        )
+
     testcase_results = []
-    for testcase in package.testcases:
+    for testcase in testcases:
         testcase_result = await _run_testcase_async(context, testcase)
         testcase_results.append(testcase_result)
         if testcase_result.status == "aborted":
@@ -198,6 +210,42 @@ async def run_package_async(
         status=run_status,
         testcase_results=testcase_results,
     )
+
+
+def _select_testcases(
+    testcases: Sequence[TestcaseDef],
+    testcase_names: Optional[Sequence[str]],
+) -> tuple[Sequence[TestcaseDef], List[Dict[str, Any]]]:
+    requested_names = [
+        str(name)
+        for name in testcase_names or []
+        if str(name).strip()
+    ]
+    if not requested_names:
+        return testcases, []
+
+    requested_name_set = set(requested_names)
+    selected = [
+        testcase
+        for testcase in testcases
+        if testcase.name in requested_name_set
+    ]
+    selected_name_set = {testcase.name for testcase in selected}
+    missing_names = [
+        name
+        for name in dict.fromkeys(requested_names)
+        if name not in selected_name_set
+    ]
+    if missing_names:
+        return [], [
+            {
+                "severity": "error",
+                "code": "TESTCASE_NOT_FOUND",
+                "message": "Requested testcase(s) not found: "
+                + ", ".join(missing_names),
+            }
+        ]
+    return selected, []
 
 
 async def _run_testcase_async(context: RuntimeContext, testcase: TestcaseDef) -> TestcaseResult:

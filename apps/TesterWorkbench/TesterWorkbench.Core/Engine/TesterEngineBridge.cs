@@ -51,7 +51,8 @@ public sealed class TesterEngineBridge
         CancellationToken cancellationToken = default,
         Action<EngineRunEvent>? onEvent = null,
         string? controlFile = null,
-        IReadOnlyCollection<int>? breakpointLines = null)
+        IReadOnlyCollection<int>? breakpointLines = null,
+        IReadOnlyCollection<string>? testcaseNames = null)
     {
         var arguments = new List<string>
         {
@@ -69,6 +70,14 @@ public sealed class TesterEngineBridge
         if (onEvent is not null)
         {
             arguments.Add("--events-jsonl");
+        }
+        foreach (var testcaseName in (testcaseNames ?? Array.Empty<string>())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct()
+            .ToArray())
+        {
+            arguments.Add("--testcase");
+            arguments.Add(testcaseName);
         }
         if (!string.IsNullOrWhiteSpace(controlFile))
         {

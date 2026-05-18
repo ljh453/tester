@@ -105,6 +105,13 @@ public partial class MainWindow : Window
             dispatchExecutionUpdate: DispatchRuntimeViewModelUpdate));
     }
 
+    private async void RunSelectedTestcases_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiAction(() => _viewModel.RunAsync(
+            onExecutionChanged: QueueRuntimeRefresh,
+            dispatchExecutionUpdate: DispatchRuntimeViewModelUpdate));
+    }
+
     private async void Pause_Click(object sender, RoutedEventArgs e)
     {
         await RunUiAction(() => _viewModel.PauseRunAsync());
@@ -231,6 +238,20 @@ public partial class MainWindow : Window
 
         _viewModel.SelectGuiTestcase(GuiTestcaseComboBox.SelectedItem as WorkbenchGuiTestcase);
         RefreshGuiEditor();
+    }
+
+    private void GuiRunTestcaseListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRefreshingGuiTestcaseSelection)
+        {
+            return;
+        }
+
+        _viewModel.SetSelectedGuiTestcasesForRun(
+            GuiRunTestcaseListBox.SelectedItems
+                .OfType<WorkbenchGuiTestcase>()
+                .ToArray());
+        RefreshGuiRunSelectionText();
     }
 
     private void GuiBlockTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -930,6 +951,16 @@ public partial class MainWindow : Window
         {
             GuiTestcaseComboBox.ItemsSource = _viewModel.GuiModel.Testcases;
             GuiTestcaseComboBox.SelectedItem = _viewModel.SelectedGuiTestcase;
+            GuiRunTestcaseListBox.ItemsSource = _viewModel.GuiModel.Testcases;
+            GuiRunTestcaseListBox.SelectedItems.Clear();
+            var selectedRunNames = _viewModel.SelectedGuiTestcaseRunNames.ToHashSet(StringComparer.Ordinal);
+            foreach (var testcase in _viewModel.GuiModel.Testcases)
+            {
+                if (selectedRunNames.Contains(testcase.Name))
+                {
+                    GuiRunTestcaseListBox.SelectedItems.Add(testcase);
+                }
+            }
         }
         finally
         {
@@ -943,7 +974,13 @@ public partial class MainWindow : Window
             : $"description: {EmptyToDash(selectedTestcase.Description)}  |  tags: {EmptyToDash(selectedTestcase.TagsText)}  |  failure: {selectedTestcase.FailurePolicy}";
         GuiPhaseItems.ItemsSource = null;
         GuiPhaseItems.ItemsSource = selectedTestcase?.Phases ?? Array.Empty<WorkbenchGuiPhase>();
+        RefreshGuiRunSelectionText();
         RefreshGuiCommandProperties();
+    }
+
+    private void RefreshGuiRunSelectionText()
+    {
+        GuiRunTestcaseSelectionText.Text = _viewModel.SelectedGuiTestcaseRunText;
     }
 
     private void RefreshGuiCommandProperties()
