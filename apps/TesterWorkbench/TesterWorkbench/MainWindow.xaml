@@ -296,6 +296,10 @@
                     Click="Resume_Click"
                     Style="{StaticResource IdeToolbarButtonStyle}"
                     ToolTip="Resume" />
+            <Button Content="■"
+                    Click="Stop_Click"
+                    Style="{StaticResource IdeToolbarButtonStyle}"
+                    ToolTip="Stop" />
             <Button Content="●"
                     Click="ToggleBreakpoint_Click"
                     Style="{StaticResource IdeToolbarButtonStyle}"

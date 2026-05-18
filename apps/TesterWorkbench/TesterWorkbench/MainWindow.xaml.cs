@@ -115,6 +115,11 @@ public partial class MainWindow : Window
         await RunUiAction(() => _viewModel.ResumeRunAsync());
     }
 
+    private async void Stop_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiAction(() => _viewModel.StopRunAsync());
+    }
+
     private void OpenReportSummary_Click(object sender, RoutedEventArgs e)
     {
         var summaryPath = _viewModel.ReportSummaryPath;

@@ -341,6 +341,115 @@ testcases:
     assert paused_event.outputs["reason"] == "pause_requested"
 
 
+def test_runtime_stops_from_control_file_before_next_command(tmp_path: Path):
+    test_file = tmp_path / "stop-before-next-command.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: stop_case
+    steps:
+      - set:
+          var: first
+          value: true
+      - set:
+          var: second
+          value: true
+""".strip(),
+        encoding="utf-8",
+    )
+    control_file = tmp_path / "control.json"
+    control_file.write_text('{"state": "running", "breakpoint_lines": []}', encoding="utf-8")
+    streamed_events = []
+
+    def request_stop_after_first_command(event):
+        streamed_events.append(event)
+        if (
+            event.command_type == "set"
+            and event.status == "passed"
+            and event.outputs.get("var") == "first"
+        ):
+            control_file.write_text(
+                '{"state": "stopping", "reason": "user_stop", "breakpoint_lines": []}',
+                encoding="utf-8",
+            )
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="stop-before-next-command-run",
+        event_callback=request_stop_after_first_command,
+        run_control=RuntimeControl(control_file=control_file, poll_interval_s=0),
+    )
+
+    testcase = result.testcase_results[0]
+    aborted_event = next(event for event in streamed_events if event.status == "aborted")
+    assert result.status == "aborted"
+    assert testcase.status == "aborted"
+    assert testcase.variables == {"first": True}
+    assert aborted_event.command_type == "set"
+    assert aborted_event.source_line == 7
+    assert aborted_event.outputs["reason"] == "user_stop"
+    assert all(
+        not (
+            event.status == "passed"
+            and event.outputs.get("var") == "second"
+        )
+        for event in streamed_events
+    )
+
+
+def test_runtime_stop_interrupts_long_delay(tmp_path: Path):
+    test_file = tmp_path / "stop-delay.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: stop_delay_case
+    steps:
+      - delay:
+          ms: 500
+      - set:
+          var: after_delay
+          value: true
+""".strip(),
+        encoding="utf-8",
+    )
+    control_file = tmp_path / "control.json"
+    control_file.write_text('{"state": "running", "breakpoint_lines": []}', encoding="utf-8")
+    streamed_events = []
+    sleep_calls = []
+
+    async def sleep_fn(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        if len(sleep_calls) == 1:
+            control_file.write_text(
+                '{"state": "stopping", "breakpoint_lines": []}',
+                encoding="utf-8",
+            )
+        await asyncio.sleep(0)
+
+    result = asyncio.run(
+        run_package_async(
+            compile_file(test_file),
+            run_id="stop-delay-run",
+            sleep_fn=sleep_fn,
+            event_callback=streamed_events.append,
+            run_control=RuntimeControl(control_file=control_file, poll_interval_s=0.05),
+        )
+    )
+
+    testcase = result.testcase_results[0]
+    delay_aborted_event = next(
+        event
+        for event in streamed_events
+        if event.command_type == "delay" and event.status == "aborted"
+    )
+    assert result.status == "aborted"
+    assert testcase.status == "aborted"
+    assert testcase.variables == {}
+    assert sleep_calls == [0.05]
+    assert delay_aborted_event.outputs["reason"] == "stop_requested"
+    assert all(event.command_type != "set" for event in streamed_events)
+
+
 def test_runtime_runs_for_loop_and_nested_call_with_shared_frame(tmp_path: Path):
     test_file = tmp_path / "for-loop.yaml"
     test_file.write_text(

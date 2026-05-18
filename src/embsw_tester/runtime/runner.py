@@ -22,6 +22,14 @@ class CommandFailed(RuntimeError):
     """Raised for expected DSL command failures such as failed assertions."""
 
 
+class CommandAborted(RuntimeError):
+    """Raised when the active run control requests a user stop."""
+
+    def __init__(self, reason: str = "stop_requested") -> None:
+        self.reason = reason
+        super().__init__("Run stopped by user.")
+
+
 @dataclass
 class Frame:
     variables: Dict[str, Any] = field(default_factory=dict)
@@ -47,12 +55,23 @@ class RuntimeControl:
         if self.control_file is None:
             return None
         payload = self.read_payload()
+        if self.stop_reason(payload) is not None:
+            return None
         if command.source_line in self.active_breakpoint_lines(payload):
             self.write_state("paused", reason="breakpoint")
             return "breakpoint"
         if self.read_state(payload) == "paused":
             return "pause_requested"
         return None
+
+    def stop_reason(self, payload: Optional[Mapping[str, Any]] = None) -> Optional[str]:
+        if self.control_file is None:
+            return None
+        current_payload = self.read_payload() if payload is None else payload
+        if self.read_state(current_payload) not in {"stopping", "stop_requested", "aborted"}:
+            return None
+        reason = current_payload.get("reason")
+        return str(reason) if reason else "stop_requested"
 
     def wait_until_resumed(self, sleep_fn: Callable[[float], None]) -> None:
         if self.control_file is None:
@@ -161,11 +180,19 @@ async def run_package_async(
         event_callback=event_callback,
         run_control=run_control,
     )
-    testcase_results = [
-        await _run_testcase_async(context, testcase)
-        for testcase in package.testcases
-    ]
-    run_status = "failed" if any(result.status == "failed" for result in testcase_results) else "passed"
+    testcase_results = []
+    for testcase in package.testcases:
+        testcase_result = await _run_testcase_async(context, testcase)
+        testcase_results.append(testcase_result)
+        if testcase_result.status == "aborted":
+            break
+
+    if any(result.status == "aborted" for result in testcase_results):
+        run_status = "aborted"
+    elif any(result.status == "failed" for result in testcase_results):
+        run_status = "failed"
+    else:
+        run_status = "passed"
     return RunResult(
         run_id=resolved_run_id,
         status=run_status,
@@ -192,12 +219,12 @@ async def _run_testcase_async(context: RuntimeContext, testcase: TestcaseDef) ->
             frame,
             events,
         )
-        if phase_status == "failed":
-            status = "failed"
+        if phase_status in {"failed", "aborted"}:
+            status = phase_status
             error = phase_error
             break
 
-    if testcase.cleanup:
+    if testcase.cleanup and status != "aborted":
         cleanup_status, cleanup_error = await _run_commands_async(
             context,
             testcase.name,
@@ -206,7 +233,10 @@ async def _run_testcase_async(context: RuntimeContext, testcase: TestcaseDef) ->
             frame,
             events,
         )
-        if cleanup_status == "failed" and status == "passed":
+        if cleanup_status == "aborted":
+            status = "aborted"
+            error = cleanup_error
+        elif cleanup_status == "failed" and status == "passed":
             status = "failed"
             error = cleanup_error
 
@@ -228,16 +258,31 @@ async def _run_commands_async(
     events: List[CommandEvent],
 ) -> tuple[str, Optional[str]]:
     for command in commands:
+        abort_event = _abort_event_if_needed(context, testcase_name, phase, command, frame)
+        if abort_event is not None:
+            events.append(abort_event)
+            await _emit_event_async(context, abort_event)
+            return "aborted", abort_event.error
+
         pause_event = _pause_event_if_needed(context, testcase_name, phase, command, frame)
         if pause_event is not None:
             events.append(pause_event)
             await _emit_event_async(context, pause_event)
             if context.run_control is not None:
                 await context.run_control.wait_until_resumed_async(context.sleep_fn)
+
+            abort_event = _abort_event_if_needed(context, testcase_name, phase, command, frame)
+            if abort_event is not None:
+                events.append(abort_event)
+                await _emit_event_async(context, abort_event)
+                return "aborted", abort_event.error
+
         await _emit_event_async(context, _running_event(context, testcase_name, phase, command, frame))
         event = await _execute_command_async(context, testcase_name, phase, command, frame, events)
         events.append(event)
         await _emit_event_async(context, event)
+        if event.status == "aborted":
+            return "aborted", event.error
         if event.status == "failed":
             return "failed", event.error
     return "passed", None
@@ -275,6 +320,31 @@ def _pause_event_if_needed(
         "paused",
         {},
         {"reason": reason},
+        local_variables=deepcopy(frame.variables),
+    )
+
+
+def _abort_event_if_needed(
+    context: RuntimeContext,
+    testcase_name: str,
+    phase: str,
+    command: NormalizedCommand,
+    frame: Frame,
+) -> Optional[CommandEvent]:
+    if context.run_control is None:
+        return None
+    reason = context.run_control.stop_reason()
+    if reason is None:
+        return None
+    return _event(
+        context,
+        testcase_name,
+        phase,
+        command,
+        "aborted",
+        {},
+        {"reason": reason},
+        "Run stopped by user.",
         local_variables=deepcopy(frame.variables),
     )
 
@@ -323,6 +393,18 @@ async def _execute_command_async(
             "passed",
             resolved_inputs,
             outputs,
+            local_variables=deepcopy(frame.variables),
+        )
+    except CommandAborted as exc:
+        return _event(
+            context,
+            testcase_name,
+            phase,
+            command,
+            "aborted",
+            {},
+            {"reason": exc.reason},
+            str(exc),
             local_variables=deepcopy(frame.variables),
         )
     except (CommandFailed, DeviceCommandError, ExpressionError, KeyError) as exc:
@@ -382,7 +464,7 @@ async def _dispatch_command_async(
 
     if command.type == "delay":
         ms = int(evaluate_value(command.args["ms"], frame.variables))
-        await _maybe_await(context.sleep_fn(ms / 1000))
+        await _sleep_with_control_async(context, ms / 1000)
         return {"ms": ms}, {"slept_ms": ms}
 
     if command.type == "call":
@@ -505,6 +587,9 @@ async def _execute_call_async(
         function_frame,
         events,
     )
+    if function_status == "aborted":
+        reason = context.run_control.stop_reason() if context.run_control is not None else None
+        raise CommandAborted(reason or "stop_requested")
     if function_status == "failed":
         raise CommandFailed(function_error or f"Function '{function_name}' failed.")
 
@@ -561,6 +646,9 @@ async def _execute_for_async(
             events,
         )
         iteration_count += 1
+        if iteration_status == "aborted":
+            reason = context.run_control.stop_reason() if context.run_control is not None else None
+            raise CommandAborted(reason or "stop_requested")
         if iteration_status == "failed":
             raise CommandFailed(iteration_error or "for loop body failed.")
 
@@ -575,6 +663,33 @@ async def _execute_for_async(
 
 def _is_loop_iterable(value: Any) -> bool:
     return isinstance(value, Iterable) and not isinstance(value, (str, bytes, Mapping))
+
+
+async def _sleep_with_control_async(context: RuntimeContext, seconds: float) -> None:
+    if context.run_control is None:
+        await _maybe_await(context.sleep_fn(seconds))
+        return
+
+    remaining = max(0.0, seconds)
+    poll_interval_s = max(context.run_control.poll_interval_s, 0.001)
+    while remaining > 0:
+        reason = context.run_control.stop_reason()
+        if reason is not None:
+            raise CommandAborted(reason)
+
+        if context.run_control.read_state() == "paused":
+            await context.run_control.wait_until_resumed_async(context.sleep_fn)
+            reason = context.run_control.stop_reason()
+            if reason is not None:
+                raise CommandAborted(reason)
+
+        chunk = min(remaining, poll_interval_s)
+        await _maybe_await(context.sleep_fn(chunk))
+        remaining -= chunk
+
+    reason = context.run_control.stop_reason()
+    if reason is not None:
+        raise CommandAborted(reason)
 
 
 def _event(

@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 25: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, CANoe/CANalyzer COM helper RPC schema와 JSON line process transport, CANoe tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton, GUI run trace/variables table에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 27: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP + Runtime IPC Hardening**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, CANoe/CANalyzer COM helper RPC schema와 JSON line process transport, CANoe tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton, GUI run trace/variables/detail viewer, subprocess event streaming, breakpoint/pause/stop control에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -16,6 +16,8 @@
 - `set`, `call`, `assert.eq`, `assert.gt`, `assert.fail`, `log.*`, `delay` 실행
 - testcase/function frame과 local variable scope
 - command event와 testcase result JSON 출력
+- subprocess event streaming과 `control.json` 기반 breakpoint/pause/stop
+- 장기 `delay` 실행 중 cooperative stop/pause polling
 - 공통 adapter interface와 adapter registry
 - adapter-category 명령의 registry 기반 dispatch
 - Serial/Trace32/CANoe/INCA용 기본 mock adapter 등록
@@ -788,11 +790,13 @@ testcases:
 - Phase 22 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase22-mach-sent-slow-frame.md`
 - Phase 23 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase23-gui-workbench-mvp.md`
 - Phase 24 구현 계획: `docs/superpowers/plans/2026-05-15-embedded-sw-tester-phase24-gui-trace-variables.md`
+- Phase 27 구현 계획: `docs/superpowers/plans/2026-05-19-embedded-sw-tester-phase27-runtime-ipc.md`
 
 ## 다음 구현 단계
 
-다음 단계는 Windows 장비 smoke 경로와 실제 장비별 추가 명령을 좁혀가는 쪽이 좋습니다.
+다음 단계는 실제 장비 smoke workspace와 helper 실행 경로를 좁혀가는 쪽이 좋습니다.
 
-- GUI Report HTML viewer 연결
-- GUI 실행 이벤트 선택 시 resolved input/output detail 표시
-- Mach Systems SENT Gateway slow message multiplex buffer 명령 추가
+- `samples/real-tools-smoke.yaml` 작성
+- `tool-profiles/lab.tools.yaml` 템플릿 작성
+- Serial, Trace32, INCA helper 실행 경로를 profile로 묶기
+- 실제 장비 없는 환경에서는 실행 차단/명확한 진단 제공

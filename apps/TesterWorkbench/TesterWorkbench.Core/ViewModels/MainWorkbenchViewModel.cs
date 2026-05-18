@@ -270,6 +270,23 @@ public sealed class MainWorkbenchViewModel
         AppendConsoleLine("Resume requested.");
     }
 
+    public async Task StopRunAsync(CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_activeRunControlFile))
+        {
+            AppendConsoleLine("No active run to stop.");
+            return;
+        }
+
+        await WriteRunControlStateAsync(
+            _activeRunControlFile,
+            "stopping",
+            _breakpointLineNumbers,
+            cancellationToken);
+        RunStatus = "Stop Requested";
+        AppendConsoleLine("Stop requested.");
+    }
+
     public void ToggleBreakpointAtCurrentLine()
     {
         ToggleBreakpointAtLine(CurrentLineNumber);
@@ -1101,6 +1118,10 @@ public sealed class MainWorkbenchViewModel
         else if (runEvent.Status == "running")
         {
             RunStatus = "Running";
+        }
+        else if (runEvent.Status == "aborted")
+        {
+            RunStatus = "Aborted";
         }
 
         var events = ExecutionTrace.ToList();

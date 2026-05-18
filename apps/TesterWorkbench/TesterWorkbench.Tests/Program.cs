@@ -1,6 +1,7 @@
 using TesterWorkbench.Core.Engine;
 using TesterWorkbench.Core.ViewModels;
 using TesterWorkbench.Core.Workspace;
+using System.Text.Json;
 using System.Xml.Linq;
 
 await RunWorkspaceScannerTest();
@@ -10,6 +11,7 @@ await RunEngineBridgePassesDebugControlArgumentsTest();
 await RunEngineBridgeDoesNotRequirePumpedSynchronizationContextTest();
 await RunMainWorkbenchViewModelTest();
 await RunMainWorkbenchViewModelIgnoresRunWhileActiveTest();
+await RunMainWorkbenchViewModelStopRunAsyncTest();
 await RunMainWorkbenchViewModelStreamingTest();
 await RunMainWorkbenchViewModelDispatchesStreamingEventUpdatesTest();
 await RunMainWorkbenchViewModelDebugControlTest();
@@ -468,6 +470,71 @@ static async Task RunMainWorkbenchViewModelIgnoresRunWhileActiveTest()
     await firstRun;
 
     AssertEqual("passed", viewModel.RunStatus, "active run first execution completes");
+}
+
+static async Task RunMainWorkbenchViewModelStopRunAsyncTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/stop-run.yaml",
+            """
+            testcases:
+              - name: stop_case
+                steps:
+                  - set:
+                      var: rpm
+                      value: 700
+            """));
+    var yamlPath = Path.Combine(root, "tests", "stop-run.yaml");
+    var runner = new BlockingRunEngineProcessRunner();
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+
+    await viewModel.OpenWorkspaceAsync(root);
+    await viewModel.OpenFileAsync(yamlPath);
+    await viewModel.CompileAsync();
+    viewModel.ToggleBreakpointAtLine(4);
+
+    var runTask = viewModel.RunAsync("stop-run");
+    await runner.WaitForRunStartedAsync();
+
+    await viewModel.StopRunAsync();
+
+    var controlFile = Path.Combine(root, "reports", "stop-run", "control.json");
+    using var controlDocument = JsonDocument.Parse(await File.ReadAllTextAsync(controlFile));
+    var controlRoot = controlDocument.RootElement;
+    AssertEqual("stopping", controlRoot.GetProperty("state").GetString(), "stop run control state");
+    AssertEqual(
+        4,
+        controlRoot.GetProperty("breakpoint_lines").EnumerateArray().Single().GetInt32(),
+        "stop run keeps active breakpoints");
+    AssertEqual("Stop Requested", viewModel.RunStatus, "stop requested status");
+    AssertTrue(
+        viewModel.ConsoleText.Contains("Stop requested.", StringComparison.Ordinal),
+        "stop request is logged");
+
+    runner.CompleteRun(
+        new EngineProcessResult(
+            0,
+            """
+            {
+              "run_id": "stop-run",
+              "status": "aborted",
+              "testcase_results": [
+                {
+                  "name": "stop_case",
+                  "status": "aborted",
+                  "variables": {},
+                  "events": []
+                }
+              ],
+              "report": {"report_dir": "reports/stop-run"}
+            }
+            """,
+            ""));
+    await runTask;
+
+    AssertEqual("aborted", viewModel.RunStatus, "stop final status");
 }
 
 static async Task RunMainWorkbenchViewModelStreamingTest()
@@ -1497,6 +1564,12 @@ static Task RunWorkbenchThemeStyleResourceTest()
         mainWindow.Descendants(presentation + "MenuItem")
             .Any(item => item.Attribute("Header")?.Value == "_Settings..."),
         "main window exposes settings from the menu");
+    AssertTrue(
+        mainWindow.Descendants(presentation + "Button")
+            .Any(item =>
+                item.Attribute("Click")?.Value == "Stop_Click"
+                && item.Attribute("ToolTip")?.Value == "Stop"),
+        "main window exposes stop from the toolbar");
     AssertTrue(
         settingsWindow.Descendants(presentation + "ComboBox")
             .Any(item => item.Attribute(xaml + "Name")?.Value == "ThemeModeComboBox"),
@@ -2847,7 +2920,8 @@ sealed class BlockingRunEngineProcessRunner : IEngineProcessRunner
 
     public Task WaitForRunStartedAsync() => _runStarted.Task;
 
-    public void CompleteRun() => _runResult.TrySetResult(PassedRunResult("first-run"));
+    public void CompleteRun(EngineProcessResult? result = null) =>
+        _runResult.TrySetResult(result ?? PassedRunResult("first-run"));
 
     public Task<EngineProcessResult> RunAsync(
         string fileName,

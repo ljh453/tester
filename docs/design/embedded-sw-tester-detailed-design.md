@@ -113,7 +113,15 @@
 
 ### 6.2 IPC 결정
 
-1차 릴리스의 IDE와 Python 실행 엔진 사이 IPC는 JSON-RPC over stdio를 기본으로 한다.
+1차 릴리스의 IDE와 Python 실행 엔진 사이 IPC는 IDE가 소유하는 CLI subprocess 기반 계약을 기본으로 한다.
+
+계약:
+
+- Compile: Python CLI stdout에 최종 compile JSON을 1회 출력한다.
+- Run: Python CLI stdout에 최종 run JSON을 1회 출력한다.
+- Event streaming: stderr의 `__EMBSW_EVENT__ ` prefix 뒤에 command event JSON을 JSONL로 출력한다.
+- Standard error: prefix가 없는 stderr line은 일반 오류/로그로 유지한다.
+- Debug control: IDE가 run별 `control.json` 파일을 만들고 Python runtime이 cooperative 방식으로 poll한다.
 
 이유:
 
@@ -122,7 +130,9 @@
 - 개발 중 로그와 raw message를 재현하기 쉽다.
 - 단일 PC, 단일 active run 제약과 잘 맞는다.
 
-이벤트 스트리밍은 JSON-RPC notification으로 처리한다. 실행 엔진은 compile diagnostics, run state, command event, variable snapshot, log line, report completed event를 순차적으로 내보낸다.
+`control.json` 상태는 `running`, `paused`, `stopping`을 사용한다. `breakpoint_lines`는 실행 중에도 최신 파일 내용을 기준으로 적용한다. IDE는 한 번에 하나의 active run만 허용하며, 중복 Run 요청은 새 subprocess를 만들지 않는다.
+
+이벤트 스트리밍은 command event 단위로 처리한다. 실행 엔진은 `running`, `paused`, `passed`, `failed`, `aborted` 상태 이벤트를 순차적으로 내보내고, IDE는 이를 Console, Execution Trace, Variables, YAML 현재 line 표시의 단일 근거로 사용한다.
 
 ### 6.3 INCA 브리지 IPC
 
@@ -374,7 +384,7 @@ Serial framing 설정은 `baudrate`, `parity`, `stop_bits`, `byte_size`, `timeou
 - Failed
 - Aborted
 
-Pause는 명령 경계에서만 보장한다. Stop은 cooperative cancellation과 adapter timeout으로 처리한다.
+Pause는 명령 경계에서 보장한다. Breakpoint도 명령 line에서만 pause를 발생시킨다. Stop은 `stopping` control state를 통해 다음 명령 경계에서 `aborted` 이벤트로 종료한다. 장기 `delay` 명령은 control state를 짧은 interval로 poll하여 delay 중 stop/pause에도 UI가 응답성을 유지하도록 한다. 외부 adapter 호출 중인 작업은 adapter timeout과 helper process 경계로 격리한다.
 
 ### 12.2 실행 프레임
 
@@ -393,7 +403,7 @@ testcase와 function call마다 독립 프레임을 생성한다.
 - Preconditions 실패: 현재 testcase 실패 처리, steps 미실행
 - Steps 실패: 기본 즉시 중단, `on_step_failure: continue`인 경우 계속 수행
 - Postconditions: 검증 단계로 실행
-- Cleanup: 가능한 경우 실패/중단 이후에도 실행 시도
+- Cleanup: 가능한 경우 실패 이후에는 실행 시도한다. 사용자가 Stop을 요청한 경우에는 새 DSL cleanup command를 시작하지 않고, 장비 정리는 adapter/helper timeout 및 추후 adapter cleanup 경계에서 처리한다.
 
 ### 12.4 실행 이벤트
 
@@ -406,13 +416,22 @@ testcase와 function call마다 독립 프레임을 생성한다.
 - phase
 - command_path
 - command_type
-- start_time
-- end_time
 - status
 - resolved_inputs
 - outputs
+- local_variables
 - error
+- source_file
+- source_line
 - attachments
+
+status 의미:
+
+- `running`: 해당 명령 실행 시작
+- `paused`: breakpoint 또는 pause 요청으로 명령 실행 전에 정지
+- `passed`: 명령 성공
+- `failed`: assertion failure, command error, adapter error
+- `aborted`: 사용자의 stop 요청으로 실행 중단
 
 ## 13. 외부 툴 어댑터 설계
 
