@@ -56,10 +56,9 @@
                         CornerRadius="4"
                         Cursor="Hand"
                         MouseEnter="GuiCommandBlock_MouseEnter"
-                        PreviewMouseLeftButtonDown="GuiCommandBlock_MouseLeftButtonDown"
-                        PreviewMouseLeftButtonUp="GuiCommandBlock_PreviewMouseLeftButtonUp"
-                        PreviewMouseRightButtonDown="GuiCommandBlock_PreviewMouseRightButtonDown"
-                        PreviewMouseRightButtonUp="GuiCommandBlock_PreviewMouseRightButtonUp">
+                        MouseLeftButtonDown="GuiCommandBlock_MouseLeftButtonDown"
+                        MouseLeftButtonUp="GuiCommandBlock_MouseLeftButtonUp"
+                        MouseRightButtonDown="GuiCommandBlock_MouseRightButtonDown">
                     <Border.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="Delete"

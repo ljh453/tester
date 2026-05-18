@@ -1867,8 +1867,15 @@ static Task RunMainWorkbenchViewModelSelectsGuiCommandFromYamlLineTest()
                   ms: 250
         """);
 
+    var steps = viewModel.SelectedGuiTestcase!.Phases.Single(phase => phase.YamlName == "steps");
+    viewModel.SelectGuiCommandForBulkAction(steps.Blocks[0], replaceSelection: true);
+    AssertTrue(steps.Blocks[0].IsSelectedForBulkAction, "starts with first GUI command selected");
+
     AssertTrue(viewModel.SelectGuiCommandAtLine(7), "selects GUI command from YAML argument line");
     AssertEqual("delay", viewModel.SelectedGuiCommand?.CommandType, "selected GUI command from YAML line");
+    AssertFalse(steps.Blocks[0].IsSelectedForBulkAction, "YAML line selection clears previous GUI command selection");
+    AssertTrue(steps.Blocks[1].IsSelectedForBulkAction, "YAML line selection marks matching GUI command");
+    AssertEqual(1, viewModel.SelectedGuiCommandCount, "YAML line selection leaves one GUI command selected");
     AssertEqual(7, viewModel.CurrentLineNumber, "current line follows YAML caret line");
     AssertEqual("Line 7 - delay", viewModel.CurrentLocationText, "current location follows YAML command");
 

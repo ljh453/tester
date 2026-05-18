@@ -673,7 +673,7 @@ public sealed class MainWorkbenchViewModel
             return false;
         }
 
-        SelectGuiCommand(commandBlock);
+        SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
         CurrentSourceFile = SelectedFilePath ?? string.Empty;
         CurrentLineNumber = lineNumber;
         CurrentLocationText = $"Line {lineNumber} - {commandBlock.CommandType}";

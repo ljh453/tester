@@ -401,10 +401,12 @@ public partial class MainWindow : Window
         _viewModel.SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
         RefreshGuiCommandProperties();
         CurrentLineText.Text = _viewModel.CurrentLocationText;
+        FocusYamlLine(commandBlock.SourceLineStart);
+        UpdateCurrentExecutionLineMarker();
         e.Handled = true;
     }
 
-    private void GuiCommandBlock_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    private void GuiCommandBlock_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         EndGuiBulkSelection();
     }
@@ -448,7 +450,7 @@ public partial class MainWindow : Window
         UpdateCurrentExecutionLineMarker();
     }
 
-    private void GuiCommandBlock_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    private void GuiCommandBlock_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: WorkbenchCommandBlock commandBlock })
         {
@@ -467,10 +469,7 @@ public partial class MainWindow : Window
         RefreshGuiCommandProperties();
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         UpdateCurrentExecutionLineMarker();
-    }
-
-    private void GuiCommandBlock_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
-    {
+        e.Handled = true;
     }
 
     private void GuiSelectionSurface_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
