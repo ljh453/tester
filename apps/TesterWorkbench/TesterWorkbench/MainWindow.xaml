@@ -72,18 +72,30 @@
                             <Setter Property="BorderBrush" Value="{Binding AccentColor}" />
                             <Setter Property="BorderThickness" Value="4,1,1,1" />
                             <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSubtleGuiBlock}" Value="True">
+                                    <Setter Property="Margin" Value="12,1,0,2" />
+                                    <Setter Property="Padding" Value="6,3" />
+                                    <Setter Property="CornerRadius" Value="0" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.TextMuted}" />
+                                    <Setter Property="BorderThickness" Value="0,0,0,1" />
+                                    <Setter Property="Opacity" Value="0.72" />
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding IsSelectedForBulkAction}" Value="True">
                                     <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
                                     <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
                                     <Setter Property="BorderThickness" Value="4,2,2,2" />
+                                    <Setter Property="Opacity" Value="1" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsCurrentExecution}" Value="True">
                                     <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
                                     <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                    <Setter Property="Opacity" Value="1" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsDragInsertionTarget}" Value="True">
                                     <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
                                     <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                    <Setter Property="Opacity" Value="1" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>

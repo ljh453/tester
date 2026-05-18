@@ -329,6 +329,8 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
 
     public bool CanInsertInside => CommandType == "for";
 
+    public bool IsSubtleGuiBlock => CommandType == "delay";
+
     public string LineRangeText => SourceLineStart == SourceLineEnd
         ? $"L{SourceLineStart}"
         : $"L{SourceLineStart}-L{SourceLineEnd}";

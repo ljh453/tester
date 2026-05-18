@@ -202,6 +202,28 @@ def test_gui_command_block_header_wraps_long_command_text():
     assert fixed_command_columns == []
 
 
+def test_delay_gui_blocks_use_subtle_card_style():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    delay_trigger = next(
+        (
+            trigger
+            for trigger in root.iter(f"{PRESENTATION}DataTrigger")
+            if trigger.attrib.get("Binding") == "{Binding IsSubtleGuiBlock}"
+        ),
+        None,
+    )
+
+    assert delay_trigger is not None
+    setters = {
+        setter.attrib["Property"]: setter.attrib["Value"]
+        for setter in delay_trigger.findall(f"{PRESENTATION}Setter")
+    }
+    assert setters["Background"] == "Transparent"
+    assert setters["BorderThickness"] == "0,0,0,1"
+    assert setters["Opacity"] == "0.72"
+
+
 def test_gui_command_block_is_tagged_for_drag_selection_hit_testing():
     root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
 

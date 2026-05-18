@@ -25,6 +25,7 @@ await RunMainWorkbenchViewModelStreamsLogEventsInConsoleTest();
 await RunMainWorkbenchLineNumbersTest();
 await RunMainWorkbenchBreakpointEligibilityTest();
 await RunWorkbenchCommandBlockNotifiesRuntimeStateChangesTest();
+await RunWorkbenchCommandBlockMarksDelayAsSubtleTest();
 await RunYamlExecutionBlockRangeTest();
 await RunMainWorkbenchAutoFocusSettingTest();
 await RunMainWorkbenchEditorZoomSettingTest();
@@ -1367,6 +1368,38 @@ static Task RunWorkbenchCommandBlockNotifiesRuntimeStateChangesTest()
         MainWorkbenchViewModel.ActiveBreakpointMarker,
         commandBlock.BreakpointMarker,
         "breakpoint marker text");
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchCommandBlockMarksDelayAsSubtleTest()
+{
+    var delayBlock = new WorkbenchCommandBlock(
+        "1",
+        "delay",
+        "delay",
+        "1000 ms",
+        1,
+        2,
+        0,
+        "- delay:\n    ms: 1000",
+        "#999999",
+        Array.Empty<WorkbenchCommandArgument>(),
+        Array.Empty<WorkbenchCommandBlock>());
+    var setBlock = new WorkbenchCommandBlock(
+        "2",
+        "set",
+        "set",
+        "rpm=700",
+        3,
+        5,
+        0,
+        "- set:\n    var: rpm\n    value: 700",
+        "#999999",
+        Array.Empty<WorkbenchCommandArgument>(),
+        Array.Empty<WorkbenchCommandBlock>());
+
+    AssertTrue(delayBlock.IsSubtleGuiBlock, "delay block is rendered as a subtle GUI row");
+    AssertFalse(setBlock.IsSubtleGuiBlock, "non-delay command keeps normal block weight");
     return Task.CompletedTask;
 }
 
