@@ -67,3 +67,37 @@ def test_settings_window_exposes_command_defaults_grid():
     )
 
     assert grid is not None
+
+
+def test_gui_command_tree_suppresses_default_tree_selection_chrome():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    tree_view = next(
+        (
+            element
+            for element in root.iter(f"{PRESENTATION}TreeView")
+            if element.attrib.get("SelectedItemChanged") == "GuiBlockTree_SelectedItemChanged"
+        ),
+        None,
+    )
+    assert tree_view is not None
+
+    item_style = tree_view.find(f"{PRESENTATION}TreeView.ItemContainerStyle/{PRESENTATION}Style")
+    assert item_style is not None
+
+    template_setter = next(
+        (
+            setter
+            for setter in item_style.findall(f"{PRESENTATION}Setter")
+            if setter.attrib.get("Property") == "Template"
+        ),
+        None,
+    )
+    assert template_setter is not None
+
+    selected_triggers = [
+        trigger
+        for trigger in item_style.iter(f"{PRESENTATION}Trigger")
+        if trigger.attrib.get("Property") == "IsSelected"
+    ]
+    assert selected_triggers == []

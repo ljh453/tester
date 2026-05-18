@@ -602,6 +602,68 @@
                                                         <Style TargetType="{x:Type TreeViewItem}">
                                                             <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
                                                             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                                            <Setter Property="Focusable" Value="False" />
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="{x:Type TreeViewItem}">
+                                                                        <StackPanel>
+                                                                            <Grid>
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="16" />
+                                                                                    <ColumnDefinition Width="*" />
+                                                                                </Grid.ColumnDefinitions>
+                                                                                <ToggleButton x:Name="Expander"
+                                                                                              Width="14"
+                                                                                              Height="18"
+                                                                                              ClickMode="Press"
+                                                                                              Focusable="False"
+                                                                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+                                                                                    <ToggleButton.Template>
+                                                                                        <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                                                                            <Grid Background="Transparent">
+                                                                                                <Path x:Name="Arrow"
+                                                                                                      Width="6"
+                                                                                                      Height="8"
+                                                                                                      Data="M 0 0 L 6 4 L 0 8 Z"
+                                                                                                      Fill="{DynamicResource Workbench.Brush.TextMuted}"
+                                                                                                      Stretch="Fill"
+                                                                                                      RenderTransformOrigin="0.5,0.5">
+                                                                                                    <Path.RenderTransform>
+                                                                                                        <RotateTransform Angle="0" />
+                                                                                                    </Path.RenderTransform>
+                                                                                                </Path>
+                                                                                            </Grid>
+                                                                                            <ControlTemplate.Triggers>
+                                                                                                <Trigger Property="IsChecked" Value="True">
+                                                                                                    <Setter TargetName="Arrow" Property="RenderTransform">
+                                                                                                        <Setter.Value>
+                                                                                                            <RotateTransform Angle="90" />
+                                                                                                        </Setter.Value>
+                                                                                                    </Setter>
+                                                                                                </Trigger>
+                                                                                            </ControlTemplate.Triggers>
+                                                                                        </ControlTemplate>
+                                                                                    </ToggleButton.Template>
+                                                                                </ToggleButton>
+                                                                                <ContentPresenter Grid.Column="1"
+                                                                                                  ContentSource="Header"
+                                                                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                                                            </Grid>
+                                                                            <ItemsPresenter x:Name="ItemsHost"
+                                                                                            Margin="16,0,0,0" />
+                                                                        </StackPanel>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <Trigger Property="IsExpanded" Value="False">
+                                                                                <Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed" />
+                                                                            </Trigger>
+                                                                            <Trigger Property="HasItems" Value="False">
+                                                                                <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
+                                                                            </Trigger>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
                                                         </Style>
                                                     </TreeView.ItemContainerStyle>
                                                 </TreeView>
