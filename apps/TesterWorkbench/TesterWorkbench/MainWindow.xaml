@@ -301,7 +301,7 @@
                     Click="Pause_Click"
                     Style="{StaticResource IdeToolbarButtonStyle}"
                     ToolTip="Pause" />
-            <Button Content="▶"
+            <Button Content="▌▶"
                     Click="Resume_Click"
                     Style="{StaticResource IdeToolbarButtonStyle}"
                     ToolTip="Resume" />

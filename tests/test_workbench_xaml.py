@@ -54,6 +54,25 @@ def test_combo_box_template_supports_editable_text_display():
     assert editable_text_box.attrib["Visibility"] == "Hidden"
 
 
+def test_resume_toolbar_icon_is_distinct_from_run_icon():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    run_button = next(
+        element
+        for element in root.iter(f"{PRESENTATION}Button")
+        if element.attrib.get("Click") == "Run_Click"
+    )
+    resume_button = next(
+        element
+        for element in root.iter(f"{PRESENTATION}Button")
+        if element.attrib.get("Click") == "Resume_Click"
+    )
+
+    assert run_button.attrib["Content"] == "▶"
+    assert resume_button.attrib["Content"] == "▌▶"
+    assert resume_button.attrib["Content"] != run_button.attrib["Content"]
+
+
 def test_properties_pane_can_show_optional_arguments_on_demand():
     root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
 
