@@ -168,7 +168,19 @@ static async Task RunEngineBridgeTest()
     AssertEqual("rpm", run.Variables[1].Name, "second variable name");
     AssertEqual("1200", run.Variables[1].Value, "second variable value");
     AssertSequence(
-        new[] { "-m", "embsw_tester.cli", "run", "/repo/samples/boot-smoke.yaml", "--json", "--run-id", "gui-run", "--reports-root", "/repo/reports" },
+        new[]
+        {
+            "-m",
+            "embsw_tester.cli",
+            "run",
+            "/repo/samples/boot-smoke.yaml",
+            "--json",
+            "--run-id",
+            "gui-run",
+            "--reports-root",
+            "/repo/reports",
+            "--use-tool-profile-adapters"
+        },
         runner.Calls[1].Arguments,
         "run args");
 }
@@ -208,6 +220,7 @@ static async Task RunEngineBridgePassesDebugControlArgumentsTest()
             "gui-run",
             "--reports-root",
             "/repo/reports",
+            "--use-tool-profile-adapters",
             "--control-file",
             "/repo/reports/gui-run/control.json",
             "--breakpoint-line",
@@ -501,6 +514,7 @@ static async Task RunMainWorkbenchViewModelStreamingTest()
             "gui-run",
             "--reports-root",
             Path.Combine(root, "reports"),
+            "--use-tool-profile-adapters",
             "--events-jsonl",
             "--control-file",
             Path.Combine(root, "reports", "gui-run", "control.json")

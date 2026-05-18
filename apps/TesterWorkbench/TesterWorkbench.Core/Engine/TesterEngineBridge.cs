@@ -58,7 +58,8 @@ public sealed class TesterEngineBridge
             "--run-id",
             runId,
             "--reports-root",
-            reportsRoot
+            reportsRoot,
+            "--use-tool-profile-adapters"
         };
         if (onEvent is not null)
         {
