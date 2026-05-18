@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional
 
+from embsw_tester.adapters.canoe_factory import (
+    create_canoe_adapter_from_profile,
+    has_canoe_profile,
+)
 from embsw_tester.adapters.inca_factory import (
     PopenFactory,
     RequestIdFactory,
@@ -42,6 +46,8 @@ def create_adapter_registry_from_tool_profile(
     trace32_udp_socket_factory: Optional[UdpSocketFactory] = None,
     inca_popen_factory: Optional[PopenFactory] = None,
     inca_request_id_factory: Optional[RequestIdFactory] = None,
+    canoe_popen_factory: Optional[PopenFactory] = None,
+    canoe_request_id_factory: Optional[RequestIdFactory] = None,
 ) -> AdapterRegistry:
     registry = create_default_adapter_registry()
     if _has_serial_devices(tool_profile_snapshot):
@@ -69,6 +75,15 @@ def create_adapter_registry_from_tool_profile(
                 tool_profile_snapshot,
                 popen_factory=inca_popen_factory,
                 request_id_factory=inca_request_id_factory,
+            ),
+        )
+    if has_canoe_profile(tool_profile_snapshot):
+        registry.register(
+            "canoe",
+            create_canoe_adapter_from_profile(
+                tool_profile_snapshot,
+                popen_factory=canoe_popen_factory,
+                request_id_factory=canoe_request_id_factory,
             ),
         )
     return registry

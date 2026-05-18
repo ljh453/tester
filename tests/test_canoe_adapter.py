@@ -1,4 +1,5 @@
 from embsw_tester.adapters import AdapterContext
+from embsw_tester.adapters.base import AdapterResult
 from embsw_tester.adapters.canoe import CanoeAdapter
 
 
@@ -41,3 +42,50 @@ def test_canoe_adapter_reads_configured_signal():
     assert result.success is True
     assert result.values["signal"] == "EngineSpeed"
     assert result.values["value"] == 850
+
+
+class FakeCanoeBridgeTransport:
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, command_type, args, timeout_ms):
+        self.calls.append((command_type, dict(args), timeout_ms))
+        return AdapterResult(
+            success=True,
+            status="passed",
+            message="bridge ok",
+            values={"value": 1234},
+        )
+
+
+def test_canoe_adapter_delegates_to_bridge_transport_when_configured():
+    transport = FakeCanoeBridgeTransport()
+    adapter = CanoeAdapter(bridge_transport=transport)
+    context = AdapterContext(run_id="canoe-run", testcase="case", phase="steps")
+
+    result = adapter.execute(
+        "canoe.signal.read",
+        {
+            "bus": "CAN",
+            "channel": 1,
+            "message": "ABSData",
+            "signal": "CarSpeed",
+            "timeout_ms": 2500,
+        },
+        context,
+    )
+
+    assert result.success is True
+    assert result.values["value"] == 1234
+    assert transport.calls == [
+        (
+            "canoe.signal.read",
+            {
+                "bus": "CAN",
+                "channel": 1,
+                "message": "ABSData",
+                "signal": "CarSpeed",
+            },
+            2500,
+        )
+    ]

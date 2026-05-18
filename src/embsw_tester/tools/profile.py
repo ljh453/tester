@@ -24,8 +24,11 @@ def normalize_tool_profile(document: Mapping[str, Any]) -> Dict[str, Any]:
     inca_section = document.get("inca")
     if inca_section is not None:
         normalized["inca"] = _normalize_inca_section(inca_section)
+    canoe_section = document.get("canoe")
+    if canoe_section is not None:
+        normalized["canoe"] = _normalize_canoe_section(canoe_section)
     for key, value in document.items():
-        if key in {"serial", "trace32", "inca"}:
+        if key in {"serial", "trace32", "inca", "canoe"}:
             continue
         normalized[str(key)] = value
     return normalized
@@ -164,11 +167,46 @@ def _normalize_inca_helper(config: Any) -> Dict[str, Any]:
     return normalized
 
 
-def _normalize_command_sequence(value: Any) -> list[str]:
+def _normalize_canoe_section(section: Any) -> Dict[str, Any]:
+    if not isinstance(section, Mapping):
+        raise ValueError("'canoe' profile section must be a mapping.")
+    normalized: Dict[str, Any] = {}
+    if "helper" in section:
+        normalized["helper"] = _normalize_canoe_helper(section["helper"])
+    for key, value in section.items():
+        if key == "helper":
+            continue
+        normalized[str(key)] = value
+    return normalized
+
+
+def _normalize_canoe_helper(config: Any) -> Dict[str, Any]:
+    if not isinstance(config, Mapping):
+        raise ValueError("'canoe.helper' profile section must be a mapping.")
+    normalized = {
+        key: value
+        for key, value in config.items()
+        if key != "command"
+    }
+    normalized["enabled"] = _as_bool(normalized.get("enabled", True))
+    if "application" in normalized:
+        normalized["application"] = str(normalized["application"]).strip().lower()
+    if "prog_id" in normalized:
+        normalized["prog_id"] = str(normalized["prog_id"])
+    if normalized["enabled"]:
+        if "command" not in config:
+            raise ValueError("'canoe.helper' requires 'command' when enabled.")
+        normalized["command"] = _normalize_command_sequence(config["command"], "canoe.helper")
+    elif "command" in config:
+        normalized["command"] = _normalize_command_sequence(config["command"], "canoe.helper")
+    return normalized
+
+
+def _normalize_command_sequence(value: Any, path: str = "inca.helper") -> list[str]:
     if isinstance(value, (str, bytes)) or not isinstance(value, list):
-        raise ValueError("'inca.helper.command' must be a YAML sequence.")
+        raise ValueError(f"'{path}.command' must be a YAML sequence.")
     if not value:
-        raise ValueError("'inca.helper.command' must not be empty.")
+        raise ValueError(f"'{path}.command' must not be empty.")
     return [str(item) for item in value]
 
 

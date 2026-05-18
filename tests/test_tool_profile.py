@@ -90,6 +90,35 @@ inca:
     ]
 
 
+def test_load_tool_profile_normalizes_canoe_helper_settings(tmp_path: Path):
+    profile_file = tmp_path / "vehicle-a.tools.yaml"
+    profile_file.write_text(
+        """
+canoe:
+  helper:
+    enabled: yes
+    application: canalyzer
+    prog_id: CANalyzer.Application
+    command:
+      - C:/Python311/python.exe
+      - -m
+      - embsw_tester.adapters.canoe_com_helper
+""",
+        encoding="utf-8",
+    )
+
+    profile = load_tool_profile(profile_file)
+
+    assert profile["canoe"]["helper"]["enabled"] is True
+    assert profile["canoe"]["helper"]["application"] == "canalyzer"
+    assert profile["canoe"]["helper"]["prog_id"] == "CANalyzer.Application"
+    assert profile["canoe"]["helper"]["command"] == [
+        "C:/Python311/python.exe",
+        "-m",
+        "embsw_tester.adapters.canoe_com_helper",
+    ]
+
+
 def test_compile_file_includes_tool_profile_snapshot(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(

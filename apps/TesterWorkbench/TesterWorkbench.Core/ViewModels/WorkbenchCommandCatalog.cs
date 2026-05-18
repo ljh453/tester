@@ -395,24 +395,30 @@ public static class WorkbenchCommandCatalog
                 """
                 configuration: null
                 """),
-            Command("canoe.measurement.stop", "adapter", "Stop a CANoe/CANalyzer measurement.", Array.Empty<string>(), Array.Empty<string>(),
+            Command("canoe.measurement.stop", "adapter", "Stop a CANoe/CANalyzer measurement.", Array.Empty<string>(), new[] { "timeout_ms" },
                 "{}"),
-            Command("canoe.signal.read", "adapter", "Read a CANoe/CANalyzer signal.", new[] { "signal" }, new[] { "bus", "channel", "save_as" },
+            Command("canoe.signal.read", "adapter", "Read a CANoe/CANalyzer signal.", new[] { "signal" }, new[] { "bus", "channel", "message", "save_as", "timeout_ms" },
                 """
+                bus: CAN
+                channel: 1
+                message: MessageName
                 signal: SignalName
                 save_as: signal_value
+                timeout_ms: 1000
                 """),
-            Command("canoe.sysvar.read", "adapter", "Read a CANoe/CANalyzer system variable.", new[] { "namespace", "name" }, new[] { "save_as" },
+            Command("canoe.sysvar.read", "adapter", "Read a CANoe/CANalyzer system variable.", new[] { "namespace", "name" }, new[] { "save_as", "timeout_ms" },
                 """
                 namespace: Namespace
                 name: VariableName
                 save_as: sysvar_value
+                timeout_ms: 1000
                 """),
-            Command("canoe.sysvar.set", "adapter", "Set a CANoe/CANalyzer system variable.", new[] { "namespace", "name", "value" }, Array.Empty<string>(),
+            Command("canoe.sysvar.set", "adapter", "Set a CANoe/CANalyzer system variable.", new[] { "namespace", "name", "value" }, new[] { "timeout_ms" },
                 """
                 namespace: Namespace
                 name: VariableName
                 value: null
+                timeout_ms: 1000
                 """)),
         Group(
             "INCA",

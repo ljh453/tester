@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 24: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton, GUI run trace/variables table에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 25: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, CANoe/CANalyzer COM helper RPC schema와 JSON line process transport, CANoe tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton, GUI run trace/variables table에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -23,6 +23,8 @@
 - 테스트 가능한 `Trace32Adapter`, `RclTrace32Transport`, `UdpTrace32Transport`, `FakeTrace32Transport`
 - 테스트 가능한 `CanoeAdapter`
 - 테스트 가능한 `IncaAdapter`
+- CANoe/CANalyzer COM helper request/response schema와 JSON line process transport
+- tool profile snapshot에서 `CanoeAdapter` 구성
 - INCA 32bit helper request/response schema와 JSON line process transport
 - tool profile snapshot에서 `IncaAdapter` 구성
 - `serial.write`, `serial.read`, `serial.write_bytes`, `serial.read_bytes`, `serial.read.save_as` 지원
@@ -85,7 +87,11 @@ src/
     adapters/
       base.py
       canoe.py
+      canoe_bridge.py
+      canoe_com_helper.py
+      canoe_factory.py
       inca.py
+      inca_com_helper.py
       inca_bridge.py
       inca_factory.py
       mock.py
@@ -241,7 +247,7 @@ Windows PowerShell:
 .venv/bin/embsw-tester run samples/boot-smoke.yaml --use-tool-profile-adapters --run-id real-tools-run --reports-root reports --json
 ```
 
-이 모드에서는 resolved `tool_profile_snapshot`에서 Serial, Trace32, INCA adapter를 구성합니다. `--reports-root`와 `--run-id`가 함께 있으면 adapter raw evidence root도 같은 report run directory를 사용합니다.
+이 모드에서는 resolved `tool_profile_snapshot`에서 Serial, Trace32, CANoe/CANalyzer, INCA adapter를 구성합니다. `--reports-root`와 `--run-id`가 함께 있으면 adapter raw evidence root도 같은 report run directory를 사용합니다.
 
 ## Adapter Framework
 
@@ -325,7 +331,7 @@ trace32:
 
 ## CANoe/CANalyzer Adapter
 
-`CanoeAdapter`는 Windows 전용 Vector COM 연동 전에 DSL과 runtime 계약을 고정하기 위한 in-memory adapter입니다. 현재 지원 명령은 measurement start/stop, system variable set/read, signal read입니다.
+`CanoeAdapter`는 장비 없는 개발/테스트에서는 in-memory adapter로 동작하고, 실제 Windows 실행에서는 CANoe/CANalyzer COM helper를 붙일 수 있는 adapter입니다. 현재 지원 명령은 measurement start/stop, system variable set/read, signal read입니다.
 
 YAML 예시:
 
@@ -341,6 +347,9 @@ steps:
       name: Ignition
       save_as: ignition_state
   - canoe.signal.read:
+      bus: CAN
+      channel: 1
+      message: ABSData
       signal: EngineSpeed
       save_as: rpm
   - canoe.measurement.stop: {}
@@ -360,7 +369,50 @@ package = compile_file("tests/canoe.yaml")
 result = run_package(package, adapter_registry=registry)
 ```
 
-실제 CANoe/CANalyzer COM API 호출은 이후 같은 `execute(command_type, args, context)` 경계 뒤에 붙입니다.
+실제 Vector COM 실행은 helper 프로세스로 격리합니다. Vector CANoe 14 COM 도움말 기준으로 helper는 `CANoe.Application` 또는 `CANalyzer.Application` ProgID를 열고, `Application.Measurement.Start/Stop`, `Application.System.Namespaces(...).Variables(...).Value`, `Application.Bus("CAN").GetSignal(channel, message, signal).Value` 경로를 사용합니다.
+
+```python
+from pathlib import Path
+
+from embsw_tester.adapters import (
+    AdapterRegistry,
+    CanoeAdapter,
+    create_canoe_bridge_process_transport,
+)
+from embsw_tester.dsl.compiler import compile_file
+from embsw_tester.runtime import run_package
+
+transport = create_canoe_bridge_process_transport(
+    [
+        "C:/Python311/python.exe",
+        "-m",
+        "embsw_tester.adapters.canoe_com_helper",
+        "--application",
+        "canalyzer",
+    ]
+)
+
+registry = AdapterRegistry()
+registry.register("canoe", CanoeAdapter(bridge_transport=transport))
+
+package = compile_file(Path("tests/canoe.yaml"))
+result = run_package(package, adapter_registry=registry)
+```
+
+tool profile에서 CANoe/CANalyzer helper process command를 선언할 수도 있습니다.
+
+```yaml
+canoe:
+  helper:
+    enabled: true
+    application: canalyzer
+    command:
+      - C:/Python311/python.exe
+      - -m
+      - embsw_tester.adapters.canoe_com_helper
+```
+
+`application`은 `canoe` 또는 `canalyzer`를 받으며, 필요하면 `prog_id: CANoe.Application`처럼 명시 ProgID로 override할 수 있습니다. profile snapshot 기반 registry factory는 `canoe.helper.command`가 있으면 `CanoeAdapter`를 helper-backed adapter로 등록합니다. 실제 helper 실행 PC에는 Vector CANoe/CANalyzer COM registration과 Python용 `pywin32`가 필요합니다.
 
 ## INCA Adapter
 
@@ -557,7 +609,7 @@ command_profiles:
 
 `psu`는 VuPower K Series power supply를 뜻하며, [VuPower K USB Manual Korea Ver3.2](http://www.vupower.com/download/K_USB_Manual_Korea_Ver3.2.pdf)의 USB-to-Serial SCPI 스타일 명령을 사용합니다. `sent_usb`는 Mach Systems의 SENT-USB interface를 뜻하고, [Mach Systems SENT Gateway Communication Protocol Specification](https://www.machsystems.cz/support/SENT%20Gateway-Communication%20Protocol%20Specification_latest.pdf)의 `STX LEN ID DATA CHKSUM ETX` frame을 기준으로 수신 프레임을 파싱합니다. compiler는 이 설정을 실행 직전 `tool_profile_snapshot`으로 고정해서 report의 `resolved-package.yaml`에도 남깁니다.
 
-profile snapshot으로 실제 serial/Trace32 adapter registry를 구성할 수 있습니다. CLI 기본 실행은 장비 없이 동작하도록 mock adapter를 유지하며, 실제 장비 실행 경로에서는 아래 factory를 사용합니다.
+profile snapshot으로 실제 serial/Trace32/CANoe/INCA adapter registry를 구성할 수 있습니다. CLI 기본 실행은 장비 없이 동작하도록 mock adapter를 유지하며, 실제 장비 실행 경로에서는 아래 factory를 사용합니다.
 
 ```python
 from pathlib import Path
@@ -575,7 +627,7 @@ registry = create_adapter_registry_from_tool_profile(
 result = run_package(package, run_id="real-serial-run", adapter_registry=registry)
 ```
 
-`create_adapter_registry_from_tool_profile`는 profile의 논리 장비 이름을 `SerialAdapter` port 이름으로 사용합니다. 예를 들어 YAML의 `port: psu`는 profile의 `serial.devices.psu.port: COM3`로 연결됩니다. profile에 `trace32` 섹션이 있으면 `Trace32Adapter`도 함께 등록합니다.
+`create_adapter_registry_from_tool_profile`는 profile의 논리 장비 이름을 `SerialAdapter` port 이름으로 사용합니다. 예를 들어 YAML의 `port: psu`는 profile의 `serial.devices.psu.port: COM3`로 연결됩니다. profile에 `trace32`, `canoe`, `inca` 섹션이 있으면 각 실제 adapter도 함께 등록합니다.
 
 CLI에서는 같은 경로를 `--use-tool-profile-adapters`로 사용할 수 있습니다. 이 옵션을 주지 않으면 `tool_profile`이 있어도 mock adapter registry를 사용합니다.
 

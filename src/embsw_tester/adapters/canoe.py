@@ -3,6 +3,16 @@ from __future__ import annotations
 from typing import Any, Dict, Mapping, Optional
 
 from embsw_tester.adapters.base import AdapterContext, AdapterResult
+from embsw_tester.adapters.canoe_bridge import CanoeBridgeTransport
+
+
+SUPPORTED_CANOE_COMMANDS = {
+    "canoe.measurement.start",
+    "canoe.measurement.stop",
+    "canoe.sysvar.set",
+    "canoe.sysvar.read",
+    "canoe.signal.read",
+}
 
 
 class CanoeAdapter:
@@ -12,10 +22,12 @@ class CanoeAdapter:
         self,
         system_variables: Optional[Mapping[str, Any]] = None,
         signals: Optional[Mapping[str, Any]] = None,
+        bridge_transport: Optional[CanoeBridgeTransport] = None,
     ):
         self.measurement_running = False
         self.system_variables: Dict[str, Any] = dict(system_variables or {})
         self.signals: Dict[str, Any] = dict(signals or {})
+        self._bridge_transport = bridge_transport
 
     def execute(
         self,
@@ -23,6 +35,8 @@ class CanoeAdapter:
         args: Dict[str, Any],
         context: AdapterContext,
     ) -> AdapterResult:
+        if self._bridge_transport is not None:
+            return self._execute_bridge(command_type, args)
         if command_type == "canoe.measurement.start":
             return self._start_measurement(args)
         if command_type == "canoe.measurement.stop":
@@ -38,6 +52,17 @@ class CanoeAdapter:
             status="failed",
             message=f"Unsupported CANoe command '{command_type}'.",
         )
+
+    def _execute_bridge(self, command_type: str, args: Mapping[str, Any]) -> AdapterResult:
+        if command_type not in SUPPORTED_CANOE_COMMANDS:
+            return AdapterResult(
+                success=False,
+                status="failed",
+                message=f"Unsupported CANoe command '{command_type}'.",
+            )
+        bridge_args = dict(args)
+        timeout_ms = int(bridge_args.pop("timeout_ms", 1000))
+        return self._bridge_transport.execute(command_type, bridge_args, timeout_ms)
 
     def _start_measurement(self, args: Mapping[str, Any]) -> AdapterResult:
         self.measurement_running = True

@@ -2,6 +2,13 @@
 
 from embsw_tester.adapters.base import Adapter, AdapterContext, AdapterResult
 from embsw_tester.adapters.canoe import CanoeAdapter
+from embsw_tester.adapters.canoe_bridge import (
+    CanoeBridgeRequest,
+    CanoeBridgeResponse,
+    JsonLineCanoeBridgeTransport,
+    create_canoe_bridge_process_transport,
+)
+from embsw_tester.adapters.canoe_factory import create_canoe_adapter_from_profile
 from embsw_tester.adapters.inca import IncaAdapter
 from embsw_tester.adapters.inca_bridge import (
     IncaBridgeRequest,
@@ -33,6 +40,11 @@ __all__ = [
     "AdapterRegistry",
     "AdapterResult",
     "CanoeAdapter",
+    "CanoeBridgeRequest",
+    "CanoeBridgeResponse",
+    "JsonLineCanoeBridgeTransport",
+    "create_canoe_bridge_process_transport",
+    "create_canoe_adapter_from_profile",
     "IncaAdapter",
     "IncaBridgeRequest",
     "IncaBridgeResponse",
