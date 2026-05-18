@@ -5,6 +5,7 @@ from embsw_tester.devices.mach_sent_gateway import (
     build_sent_channel_config,
     build_sent_fast_frame_payload,
     build_sent_gateway_command,
+    build_sent_slow_buffer_payload,
     build_sent_slow_frame_payload,
     encode_gateway_frame,
     parse_gateway_ack,
@@ -86,6 +87,31 @@ def test_build_sent_slow_frame_payload_matches_data_frame_layout():
     assert payload.hex().upper() == "125634E52C"
 
 
+def test_build_sent_slow_buffer_payload_matches_multiplex_layout():
+    payload = build_sent_slow_buffer_payload(
+        {
+            "buffer_index": 3,
+            "enabled": True,
+            "enhanced_format": True,
+            "slow_message_id": 0x12,
+            "data": 0x3456,
+        }
+    )
+
+    assert payload.hex().upper() == "63125634"
+
+
+def test_build_sent_slow_buffer_payload_can_disable_buffer_without_message():
+    payload = build_sent_slow_buffer_payload(
+        {
+            "buffer_index": 31,
+            "enabled": False,
+        }
+    )
+
+    assert payload.hex().upper() == "1F000000"
+
+
 def test_build_sent_gateway_start_and_transmit_commands():
     assert build_sent_gateway_command("start", {"channel": 2}).hex().upper() == "02011F2003"
     assert build_sent_gateway_command(
@@ -110,6 +136,17 @@ def test_build_sent_gateway_start_and_transmit_commands():
             "crc_calculated": 0x2C,
         },
     ).hex().upper() == "020634125634E52CE703"
+    assert build_sent_gateway_command(
+        "transmit_slow_buffer",
+        {
+            "channel": 1,
+            "buffer_index": 3,
+            "enabled": True,
+            "enhanced_format": True,
+            "slow_message_id": 0x12,
+            "data": 0x3456,
+        },
+    ).hex().upper() == "02052B631256342F03"
 
 
 def test_parse_gateway_ack_requires_ok_status_and_expected_message_id():

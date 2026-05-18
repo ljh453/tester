@@ -260,7 +260,8 @@ def _execute_mach_sent_gateway_control(
         "frame": frame.to_dict(),
         "serial": serial_steps,
     }
-    if action.replace("-", "_").startswith("transmit_"):
+    normalized_action = action.strip().lower().replace("-", "_")
+    if normalized_action.startswith(("transmit_", "write_slow")):
         outputs["payload_hex"] = frame.data.hex().upper()
     if ack_value is not None:
         outputs["ack"] = ack_value

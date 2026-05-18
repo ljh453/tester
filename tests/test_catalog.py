@@ -38,3 +38,20 @@ def test_canoe_commands_allow_com_helper_arguments_in_catalog():
         "canoe.sysvar.read"
     ].optional_args
     assert "timeout_ms" in COMMAND_SPECS["canoe.sysvar.set"].optional_args
+
+
+def test_sent_usb_command_allows_slow_buffer_arguments_in_catalog():
+    assert {
+        "buffer_index",
+        "enabled",
+        "buffer_enabled",
+        "slow_buffer_index",
+    } <= COMMAND_SPECS["sent_usb.command"].optional_args
+
+
+def test_trace32_command_sequence_is_available_in_catalog():
+    spec = COMMAND_SPECS["trace32.command_sequence"]
+
+    assert spec.required_args == frozenset({"commands"})
+    assert {"timeout_ms", "transport", "fallback", "save_as"} <= spec.optional_args
+    assert spec.adapter == "trace32"

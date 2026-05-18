@@ -33,6 +33,7 @@ testcases:
           channel: 1
           direction: tx
           data_nibble_count: 6
+          slow_channel_mode: enhanced_serial
           unit_time_us: 3.0
           pulse_pause_enabled: false
           timeout_ms: 1000

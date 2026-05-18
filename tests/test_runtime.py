@@ -736,3 +736,46 @@ testcases:
     assert testcase.variables["trace32_response"] == "STATE:HALTED"
     assert event.outputs["values"]["transport"] == "udp"
     assert event.outputs["values"]["fallback_used"] is True
+
+
+def test_runtime_runs_trace32_command_sequence(tmp_path: Path):
+    test_file = tmp_path / "trace32-sequence.yaml"
+    test_file.write_text(
+        """
+testcases:
+  - name: trace32_sequence_case
+    steps:
+      - trace32.command_sequence:
+          commands:
+            - "SYStem.Up"
+            - "Data.List D:0x1000++0x10"
+          save_as: trace32_responses
+      - assert.eq:
+          left: "${trace32_responses}"
+          right: ["OK", "OK"]
+""".strip(),
+        encoding="utf-8",
+    )
+    rcl = FakeTrace32Transport(
+        name="rcl",
+        result=AdapterResult(
+            success=True,
+            status="passed",
+            message="rcl ok",
+            values={"value": "OK"},
+        ),
+    )
+    registry = AdapterRegistry()
+    registry.register("trace32", Trace32Adapter(rcl_transport=rcl))
+
+    result = run_package(
+        compile_file(test_file),
+        run_id="trace32-sequence-runtime",
+        adapter_registry=registry,
+    )
+
+    testcase = result.testcase_results[0]
+    event = testcase.events[0]
+    assert result.status == "passed"
+    assert testcase.variables["trace32_responses"] == ["OK", "OK"]
+    assert event.outputs["values"]["commands"] == ["SYStem.Up", "Data.List D:0x1000++0x10"]

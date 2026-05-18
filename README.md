@@ -2,7 +2,7 @@
 
 임베디드 SW 테스트케이스를 YAML로 작성하고, 이를 실행 가능한 resolved package로 컴파일하고 mock runtime으로 실행한 뒤 로컬 리포트를 생성하기 위한 프로토타입입니다.
 
-현재 저장소의 구현 범위는 **Phase 29: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP + Runtime IPC Hardening + CANoe/CANalyzer COM Helper**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 tool profile factory, CANoe/CANalyzer COM helper RPC schema와 JSON line process transport, CANoe tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton, GUI run trace/variables/detail viewer, subprocess event streaming, breakpoint/pause/stop control, 실장비 guarded smoke workspace에 집중되어 있습니다.
+현재 저장소의 구현 범위는 **Phase 30: Python DSL Compiler + Runtime Core + Report Pipeline + Adapter Framework + Serial/Trace32/CANoe/INCA Adapter Contracts + Tool Profile + Device Command Profiles + Mach/VuPower Serial Protocols + GUI Workbench MVP + Runtime IPC Hardening + CANoe/CANalyzer COM Helper + Device Command Expansion**입니다. 전체 제품 설계는 C#/.NET Windows IDE, Python 실행 엔진, Trace32/CANoe/INCA/Serial 어댑터를 목표로 하지만, 이 커밋의 실행 가능한 코드는 YAML DSL 컴파일러, 순수 Python runtime, 리포트 생성, adapter framework, 테스트 가능한 Serial/Trace32/CANoe/INCA adapter contract, Trace32 RCL wrapper와 UDP socket transport, Trace32 command sequence 실행, Trace32 tool profile factory, CANoe/CANalyzer COM helper RPC schema와 JSON line process transport, CANoe tool profile factory, INCA 32bit helper RPC schema와 JSON line process transport, INCA tool profile factory, profile-backed CLI run mode, tool profile snapshot, 장비 의미 명령 profile, Mach Systems SENT Gateway binary receive/transmit/control/slow-frame/slow-buffer protocol, VuPower K USB-to-Serial power supply protocol, CLI, WPF GUI workbench skeleton, GUI run trace/variables/detail viewer, subprocess event streaming, breakpoint/pause/stop control, 실장비 guarded smoke workspace에 집중되어 있습니다.
 
 ## 현재 지원 범위
 
@@ -32,7 +32,7 @@
 - tool profile snapshot에서 `IncaAdapter` 구성
 - `serial.write`, `serial.read`, `serial.write_bytes`, `serial.read_bytes`, `serial.read.save_as` 지원
 - `serial.read.match` regex 기반 응답 판정
-- `trace32.command` 지원
+- `trace32.command`, `trace32.command_sequence` 지원
 - Trace32 RCL 기본 실행 및 UDP command fallback
 - tool profile snapshot에서 `Trace32Adapter` 구성
 - `canoe.measurement.start`, `canoe.measurement.stop` 지원
@@ -46,11 +46,11 @@
 - CLI `run --use-tool-profile-adapters` profile-backed 실행 모드
 - 확정 serial 대상: power supply, Mach Systems SENT-USB interface
 - `sent_usb.read` 장비 의미 명령을 profile 정의 기반 serial TX/RX 또는 Mach Systems SENT Gateway binary protocol로 실행
-- `sent_usb.command` 장비 의미 명령으로 Mach SENT channel config/start/stop/fast/slow transmit 실행
+- `sent_usb.command` 장비 의미 명령으로 Mach SENT channel config/start/stop/fast/single slow/slow multiplex buffer transmit 실행
 - `power_supply.command` 장비 의미 명령을 VuPower K USB-to-Serial protocol로 실행
 - 장비 profile의 `read.match` regex로 응답 pass/fail 판정
 - 장비 profile의 `read.extract` regex로 raw 응답에서 저장 값을 추출
-- Mach Systems SENT Gateway frame encode/decode, SENT channel 1/2 fast frame 수신, fast/slow frame 송신, ACK 파싱
+- Mach Systems SENT Gateway frame encode/decode, SENT channel 1/2 fast frame 수신, fast/single slow/slow multiplex buffer frame 송신, ACK 파싱
 - VuPower K `APPL`, `OUTP:STAT`, `MEAS:*?`, `*IDN?`, `*RST`, `SYST:ERR?` 초기 명령 지원
 - 미구현 장비가 `pending` profile을 사용할 경우 compile error로 차단
 - `run.json`, `resolved-package.yaml`, testcase result JSON, `summary.html` 리포트 생성
@@ -305,6 +305,12 @@ steps:
       command: "STATE()"
       timeout_ms: 2500
       save_as: trace32_response
+  - trace32.command_sequence:
+      commands:
+        - "SYStem.Up"
+        - "Data.List D:0x1000++0x10"
+      timeout_ms: 2500
+      save_as: trace32_sequence_responses
 ```
 
 테스트나 장비 없는 개발에서는 transport를 직접 주입합니다.
@@ -327,6 +333,8 @@ result = run_package(package, adapter_registry=registry)
 ```
 
 `transport: udp`를 명시하면 UDP만 사용합니다. 기본값은 RCL 우선이며, `fallback: false`를 지정하면 RCL 실패 시 UDP fallback을 시도하지 않습니다. `RclTrace32Transport`는 주입된 RCL client의 `cmd(command)` 메서드를 호출하는 wrapper입니다. 사용하는 RCL 패키지의 메서드명이 다르면 `command_method`로 바꿀 수 있습니다. `UdpTrace32Transport`는 stdlib UDP socket으로 command와 terminator를 전송하고 한 번의 응답 datagram을 읽습니다.
+
+`trace32.command_sequence`는 같은 transport/fallback 정책으로 여러 Trace32 raw command를 순서대로 실행합니다. flash, memory, symbol 계열은 TRACE32 프로젝트 설정과 PRACTICE script 관례가 현장마다 달라서 아직 별도 DSL command로 고정하지 않고, 우선 `trace32.command_sequence`와 후보 문서에서 검증합니다.
 
 tool profile에서 Trace32 adapter를 구성할 수도 있습니다.
 
@@ -710,6 +718,15 @@ steps:
       enhanced_format: true
       crc_received: 37
       crc_calculated: 44
+  - sent_usb.command:
+      device: sent_usb
+      action: transmit_slow_buffer
+      channel: 1
+      buffer_index: 0
+      enabled: true
+      slow_message_id: 19
+      data: 17767
+      enhanced_format: true
   - sent_usb.read:
       device: sent_usb
       channel: 1
@@ -719,7 +736,7 @@ steps:
 
 `power_supply.command`는 `protocol: vupower_k_usb`일 때 VuPower K manual의 line protocol을 사용합니다. 명령은 LF로 종료되며 현재 action은 `apply`, `set_voltage`, `set_current`, `output`, `read_output`, `measure_voltage`, `measure_current`, `read_voltage`, `read_current`, `mode`, `identify`, `reset`, `system_error`, `raw`를 지원합니다. 예를 들어 `apply`는 `APPL P1,12.000,1.234`, `output`은 `OUTP:STAT P1,ON`, 평균 전압 측정은 `MEAS:VOLTA? P1`로 변환됩니다. 측정/조회 action은 serial read 응답을 float, bool, mode 문자열 등으로 파싱해 `save_as`에 저장합니다.
 
-`sent_usb.command`는 `protocol: mach_sent_gateway`일 때 Mach Systems SENT Gateway binary frame을 `serial.write_bytes`로 전송합니다. 현재 action은 `config`, `start`, `stop`, `transmit_fast`, `transmit_slow`를 지원합니다. channel 1/2 message id는 config `2/12`, start `21/31`, stop `22/32`, fast transmit `41/51`, slow transmit `42/52`입니다. 기본값으로 ACK frame을 읽어 one-byte status `1`을 OK로 처리하고, `0`이면 실패로 보고합니다. SENT channel configuration은 7-byte payload로 직렬화하며, fast transmit payload는 status nibble, data nibble count, data nibbles, CRC nibble layout을 사용합니다. 단일 slow transmit payload는 slow message id, 16-bit data little-endian, 6-bit CRC received, slow/enhanced type bit, enhanced format bit, 6-bit calculated CRC layout을 사용합니다. Slow message multiplex buffer message id `43/53`은 아직 별도 구현 대상입니다.
+`sent_usb.command`는 `protocol: mach_sent_gateway`일 때 Mach Systems SENT Gateway binary frame을 `serial.write_bytes`로 전송합니다. 현재 action은 `config`, `start`, `stop`, `transmit_fast`, `transmit_slow`, `transmit_slow_buffer`를 지원합니다. channel 1/2 message id는 config `2/12`, start `21/31`, stop `22/32`, fast transmit `41/51`, single slow transmit `42/52`, slow multiplex buffer transmit `43/53`입니다. 기본값으로 ACK frame을 읽어 one-byte status `1`을 OK로 처리하고, `0`이면 실패로 보고합니다. SENT channel configuration은 7-byte payload로 직렬화하며, fast transmit payload는 status nibble, data nibble count, data nibbles, CRC nibble layout을 사용합니다. 단일 slow transmit payload는 slow message id, 16-bit data little-endian, 6-bit CRC received, slow/enhanced type bit, enhanced format bit, 6-bit calculated CRC layout을 사용합니다. Slow message multiplex buffer payload는 5-bit buffer index, enable bit, enhanced config bit, 8-bit slow message id, 16-bit little-endian data layout을 사용합니다. 버퍼를 disable할 때는 `enabled: false`와 `buffer_index`만으로 payload를 만들 수 있습니다.
 
 `sent_usb.read`는 `sent_usb` 장비의 `command_profile`을 찾아 `sent_usb.read` mapping을 실행합니다. `protocol: mach_sent_gateway`이면 Mach Systems SENT Gateway binary frame을 `serial.read_bytes`로 읽고, channel 1은 message id `100`, channel 2는 message id `200`인 SENT fast frame으로 해석합니다. 저장 값은 status nibble, data nibble count, data nibbles, received CRC, calculated CRC를 포함한 dict입니다.
 
@@ -808,11 +825,13 @@ testcases:
 - Phase 27 구현 계획: `docs/superpowers/plans/2026-05-19-embedded-sw-tester-phase27-runtime-ipc.md`
 - Phase 28 구현 계획: `docs/superpowers/plans/2026-05-19-embedded-sw-tester-phase28-real-tools-smoke.md`
 - Phase 29 구현 계획: `docs/superpowers/plans/2026-05-19-embedded-sw-tester-phase29-canoe-helper.md`
+- Phase 30 구현 계획: `docs/superpowers/plans/2026-05-19-embedded-sw-tester-phase30-device-command-expansion.md`
 
 ## 다음 구현 단계
 
-다음 단계는 장비별 명령 확장을 좁혀가는 쪽이 좋습니다.
+다음 단계는 실장비 smoke 실행 결과를 보고 장비별 DSL을 확정해가는 쪽이 좋습니다.
 
-- Mach SENT slow message multiplex buffer 명령
-- VuPower power supply 입력 포맷 실장비 확인 후 command profile 보강
-- Trace32 flash/memory/symbol 계열 명령 후보 정리
+- VuPower power supply line ending, echo, 응답 포맷 실장비 확인
+- Trace32 flash/memory/symbol 후보 command를 lab PRACTICE script 기준으로 검증
+- Mach SENT slow multiplex buffer ACK와 실제 cyclic transmit 동작 확인
+- 검증된 장비 명령을 GUI Properties template/autocomplete에 반영

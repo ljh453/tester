@@ -14,6 +14,7 @@ testcases:
           channel: 1
           direction: tx
           data_nibble_count: 6
+          slow_channel_mode: enhanced_serial
           unit_time_us: 3.0
           pulse_pause_enabled: false
           timeout_ms: 1000
@@ -51,6 +52,20 @@ testcases:
       - log.value:
           name: sent_slow_tx
           value: "${sent_slow_tx}"
+      - sent_usb.command:
+          device: sent_usb
+          action: transmit_slow_buffer
+          channel: 1
+          buffer_index: 0
+          enabled: true
+          slow_message_id: 19
+          data: 17767
+          enhanced_format: true
+          timeout_ms: 1000
+          save_as: sent_slow_buffer_tx
+      - log.value:
+          name: sent_slow_buffer_tx
+          value: "${sent_slow_buffer_tx}"
       - sent_usb.read:
           device: sent_usb
           channel: 1

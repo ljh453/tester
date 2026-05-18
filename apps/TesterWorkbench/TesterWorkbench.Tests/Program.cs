@@ -1881,7 +1881,7 @@ static Task RunWorkbenchCommandCatalogTest()
         .Select(command => command.CommandType)
         .ToArray();
 
-    AssertEqual(26, commandTypes.Length, "GUI command catalog command count");
+    AssertEqual(27, commandTypes.Length, "GUI command catalog command count");
     AssertTrue(commandTypes.Contains("set"), "GUI command catalog includes set");
     AssertTrue(commandTypes.Contains("assert.eq"), "GUI command catalog includes assert.eq");
     AssertTrue(commandTypes.Contains("serial.write_bytes"), "GUI command catalog includes serial.write_bytes");
@@ -1890,6 +1890,17 @@ static Task RunWorkbenchCommandCatalogTest()
     AssertTrue(commandTypes.Contains("inca.measure.read"), "GUI command catalog includes inca.measure.read");
     AssertTrue(commandTypes.Contains("canoe.sysvar.set"), "GUI command catalog includes canoe.sysvar.set");
     AssertTrue(commandTypes.Contains("trace32.command"), "GUI command catalog includes trace32.command");
+    AssertTrue(commandTypes.Contains("trace32.command_sequence"), "GUI command catalog includes trace32.command_sequence");
+    AssertEqual(
+        WorkbenchCommandArgumentKind.Number,
+        WorkbenchCommandCatalog.Find("sent_usb.command")!
+            .Arguments.Single(argument => argument.Name == "buffer_index").Kind,
+        "SENT slow buffer index is numeric");
+    AssertEqual(
+        WorkbenchCommandArgumentKind.List,
+        WorkbenchCommandCatalog.Find("trace32.command_sequence")!
+            .Arguments.Single(argument => argument.Name == "commands").Kind,
+        "Trace32 command sequence commands are list-edited");
     AssertTrue(
         WorkbenchCommandCatalog.Groups.All(group => group.Commands.Count > 0),
         "GUI command catalog groups are populated");

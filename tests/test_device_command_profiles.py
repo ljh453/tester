@@ -456,6 +456,70 @@ testcases:
     assert transmit_event.outputs["serial"][0]["command_type"] == "serial.write_bytes"
 
 
+def test_runtime_transmits_mach_sent_gateway_slow_buffer(tmp_path: Path):
+    profile_file = tmp_path / "lab.tools.yaml"
+    profile_file.write_text(
+        """
+serial:
+  devices:
+    sent_usb:
+      device_type: mach_systems_sent_usb
+      port: COM4
+      baudrate: 115200
+      command_profile: mach_sent_gateway
+command_profiles:
+  mach_sent_gateway:
+    commands:
+      sent_usb.command:
+        protocol: mach_sent_gateway
+""".strip(),
+        encoding="utf-8",
+    )
+    test_file = tmp_path / "sent-transmit-slow-buffer.yaml"
+    test_file.write_text(
+        """
+tool_profile: lab.tools.yaml
+testcases:
+  - name: sent_transmit_slow_buffer_case
+    steps:
+      - sent_usb.command:
+          device: sent_usb
+          action: transmit_slow_buffer
+          channel: 1
+          buffer_index: 3
+          enabled: true
+          enhanced_format: true
+          slow_message_id: 18
+          data: 13398
+""".strip(),
+        encoding="utf-8",
+    )
+    package = compile_file(test_file)
+    assert package.diagnostics == []
+    registry = create_adapter_registry_from_tool_profile(
+        package.tool_profile_snapshot,
+        evidence_root=tmp_path / "reports" / "sent-transmit-slow-buffer",
+        serial_port_factory=lambda settings: FakeSerialPort(
+            rx_lines=[],
+            rx_bytes=[encode_gateway_frame(43, b"\x01")],
+        ),
+    )
+
+    result = run_package(
+        package,
+        run_id="sent-transmit-slow-buffer-run",
+        adapter_registry=registry,
+    )
+
+    transmit_event = result.testcase_results[0].events[0]
+    assert result.status == "passed"
+    assert transmit_event.outputs["frame"]["raw_hex"] == "02052B631256342F03"
+    assert transmit_event.outputs["payload_hex"] == "63125634"
+    assert transmit_event.outputs["message_id"] == 43
+    assert transmit_event.outputs["ack"] is True
+    assert transmit_event.outputs["serial"][0]["command_type"] == "serial.write_bytes"
+
+
 def test_runtime_executes_vupower_apply_and_output_commands(tmp_path: Path):
     profile_file = tmp_path / "lab.tools.yaml"
     profile_file.write_text(

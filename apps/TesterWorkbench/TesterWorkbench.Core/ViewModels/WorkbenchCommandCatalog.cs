@@ -97,7 +97,7 @@ public sealed class WorkbenchCommandArgumentDefinition
             return WorkbenchCommandArgumentKind.Map;
         }
 
-        if (name is "data_nibbles" or "data")
+        if (name is "data_nibbles" or "commands")
         {
             return WorkbenchCommandArgumentKind.List;
         }
@@ -106,7 +106,8 @@ public sealed class WorkbenchCommandArgumentDefinition
             or "voltage" or "current"
             or "unit_time_us" or "pulse_pause_frame_period_us" or "message_id"
             or "slow_message_id" or "status_nibble" or "crc_received" or "crc_calculated"
-            or "data_nibble_count")
+            or "data_nibble_count" or "buffer_index" or "slow_buffer_index" or "index"
+            or "data")
         {
             return WorkbenchCommandArgumentKind.Number;
         }
@@ -119,7 +120,7 @@ public sealed class WorkbenchCommandArgumentDefinition
         if (name is "state" or "autostart" or "auto_start" or "crc"
             or "pulse_pause_enabled" or "enhanced_format" or "enhanced_config_bit"
             or "enhanced_serial_format" or "slow_channel_tx_crc_fault"
-            or "swap_fast_data_nibbles" or "read_ack")
+            or "swap_fast_data_nibbles" or "read_ack" or "enabled" or "buffer_enabled")
         {
             return WorkbenchCommandArgumentKind.Boolean;
         }
@@ -202,7 +203,15 @@ public sealed class WorkbenchCommandArgumentDefinition
 
         if (name == "action" && commandType == "sent_usb.command")
         {
-            return new[] { "start", "stop", "read", "write", "configure" };
+            return new[]
+            {
+                "config",
+                "start",
+                "stop",
+                "transmit_fast",
+                "transmit_slow",
+                "transmit_slow_buffer"
+            };
         }
 
         if (name == "action" && commandType == "power_supply.command")
@@ -374,7 +383,7 @@ public static class WorkbenchCommandCatalog
                 timeout_ms: 1000
                 save_as: sent_frame
                 """),
-            Command("sent_usb.command", "device", "Control or transmit with a Mach Systems SENT-USB gateway command.", new[] { "device", "action" }, new[] { "channel", "data_nibbles", "slow_data", "timeout_ms", "save_as" },
+            Command("sent_usb.command", "device", "Control or transmit with a Mach Systems SENT-USB gateway command.", new[] { "device", "action" }, new[] { "channel", "data_nibbles", "slow_message_id", "data", "buffer_index", "enabled", "enhanced_format", "timeout_ms", "save_as" },
                 """
                 device: sent_usb
                 action: start
@@ -455,6 +464,14 @@ public static class WorkbenchCommandCatalog
             Command("trace32.command", "adapter", "Execute a Trace32 command using RCL with optional UDP fallback.", new[] { "command" }, new[] { "timeout_ms", "transport", "fallback", "save_as" },
                 """
                 command: "PRINT"
+                fallback: udp
+                timeout_ms: 1000
+                """),
+            Command("trace32.command_sequence", "adapter", "Execute several Trace32 commands in order using the same transport policy.", new[] { "commands" }, new[] { "timeout_ms", "transport", "fallback", "save_as" },
+                """
+                commands:
+                  - "SYStem.Up"
+                  - "Data.List D:0x1000++0x10"
                 fallback: udp
                 timeout_ms: 1000
                 """))

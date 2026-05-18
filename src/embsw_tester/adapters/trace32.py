@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import socket
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
 
 from embsw_tester.adapters.base import AdapterContext, AdapterResult
 
@@ -129,6 +129,8 @@ class Trace32Adapter:
         args: Dict[str, Any],
         context: AdapterContext,
     ) -> AdapterResult:
+        if command_type == "trace32.command_sequence":
+            return self._execute_command_sequence(args)
         if command_type != "trace32.command":
             return AdapterResult(
                 success=False,
@@ -136,6 +138,55 @@ class Trace32Adapter:
                 message=f"Unsupported Trace32 command '{command_type}'.",
             )
         return self._execute_command(args)
+
+    def _execute_command_sequence(self, args: Dict[str, Any]) -> AdapterResult:
+        commands = _required_commands(args, "commands")
+        results: List[Dict[str, Any]] = []
+        values: List[Any] = []
+
+        for index, command in enumerate(commands):
+            command_args = dict(args)
+            command_args.pop("commands", None)
+            command_args["command"] = command
+            result = self._execute_command(command_args)
+            result_entry = {
+                "command": command,
+                "success": result.success,
+                "status": result.status,
+                "message": result.message,
+                "values": result.values,
+                "duration_ms": result.duration_ms,
+            }
+            if result.raw_evidence_ref is not None:
+                result_entry["raw_evidence_ref"] = result.raw_evidence_ref
+            results.append(result_entry)
+
+            if not result.success:
+                return AdapterResult(
+                    success=False,
+                    status=result.status,
+                    message=(
+                        "Trace32 command sequence failed at "
+                        f"index {index}: {result.message}"
+                    ),
+                    values={
+                        "commands": commands,
+                        "failed_index": index,
+                        "results": results,
+                    },
+                )
+            values.append(result.values.get("value", dict(result.values)))
+
+        return AdapterResult(
+            success=True,
+            status="passed",
+            message="Trace32 command sequence executed.",
+            values={
+                "commands": commands,
+                "results": results,
+                "value": values,
+            },
+        )
 
     def _execute_command(self, args: Dict[str, Any]) -> AdapterResult:
         command = _required_text(args, "command")
@@ -324,3 +375,15 @@ def _required_text(args: Dict[str, Any], name: str) -> str:
     if value is None:
         raise KeyError(f"Missing required Trace32 argument '{name}'.")
     return str(value)
+
+
+def _required_commands(args: Dict[str, Any], name: str) -> List[str]:
+    value = args.get(name)
+    if value is None:
+        raise KeyError(f"Missing required Trace32 argument '{name}'.")
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise ValueError(f"Trace32 '{name}' must be a non-empty list of commands.")
+    commands = [str(command) for command in value]
+    if not commands or any(not command.strip() for command in commands):
+        raise ValueError(f"Trace32 '{name}' must be a non-empty list of commands.")
+    return commands

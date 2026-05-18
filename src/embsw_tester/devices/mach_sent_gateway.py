@@ -17,6 +17,8 @@ SENT_CHANNEL_1_FAST_TRANSMIT_ID = 41
 SENT_CHANNEL_2_FAST_TRANSMIT_ID = 51
 SENT_CHANNEL_1_SLOW_TRANSMIT_ID = 42
 SENT_CHANNEL_2_SLOW_TRANSMIT_ID = 52
+SENT_CHANNEL_1_SLOW_BUFFER_TRANSMIT_ID = 43
+SENT_CHANNEL_2_SLOW_BUFFER_TRANSMIT_ID = 53
 
 
 class MachSentGatewayError(ValueError):
@@ -135,6 +137,8 @@ def build_sent_gateway_command(action: str, args: Mapping[str, Any]) -> bytes:
         payload = build_sent_fast_frame_payload(args)
     elif normalized_action == "transmit_slow":
         payload = build_sent_slow_frame_payload(args)
+    elif normalized_action == "transmit_slow_buffer":
+        payload = build_sent_slow_buffer_payload(args)
     elif normalized_action in {"start", "stop"}:
         payload = b""
     else:
@@ -239,6 +243,43 @@ def build_sent_slow_frame_payload(args: Mapping[str, Any]) -> bytes:
     ])
 
 
+def build_sent_slow_buffer_payload(args: Mapping[str, Any]) -> bytes:
+    index_value = args.get(
+        "buffer_index",
+        args.get("slow_buffer_index", args.get("index")),
+    )
+    if index_value is None:
+        raise MachSentGatewayError("SENT transmit_slow_buffer requires buffer_index.")
+    buffer_index = _five_bit(index_value, "buffer_index")
+    enabled = _truthy(args.get("enabled", args.get("buffer_enabled", True)))
+
+    message_id_value = args.get("slow_message_id", args.get("message_id"))
+    data_value = args.get("data", args.get("slow_data"))
+    if enabled and message_id_value is None:
+        raise MachSentGatewayError("SENT transmit_slow_buffer requires slow_message_id.")
+    if enabled and data_value is None:
+        raise MachSentGatewayError("SENT transmit_slow_buffer requires data.")
+
+    slow_message_id = (
+        0 if message_id_value is None else _byte(message_id_value, "slow_message_id")
+    )
+    data = 0 if data_value is None else _uint16(data_value, "data")
+    enhanced_format = 1 if _truthy(
+        args.get(
+            "enhanced_format",
+            args.get("enhanced_config_bit", args.get("enhanced_serial_format", False)),
+        )
+    ) else 0
+
+    control = buffer_index | ((1 if enabled else 0) << 5) | (enhanced_format << 6)
+    return bytes([
+        control,
+        slow_message_id,
+        data & 0xFF,
+        (data >> 8) & 0xFF,
+    ])
+
+
 def parse_gateway_ack(frame: GatewayFrame, expected_message_id: int) -> bool:
     if frame.message_id != expected_message_id:
         raise MachSentGatewayError(
@@ -300,6 +341,10 @@ def _command_message_id(action: str, channel: int) -> int:
             1: SENT_CHANNEL_1_SLOW_TRANSMIT_ID,
             2: SENT_CHANNEL_2_SLOW_TRANSMIT_ID,
         },
+        "transmit_slow_buffer": {
+            1: SENT_CHANNEL_1_SLOW_BUFFER_TRANSMIT_ID,
+            2: SENT_CHANNEL_2_SLOW_BUFFER_TRANSMIT_ID,
+        },
     }
     try:
         return ids[action][channel]
@@ -310,7 +355,17 @@ def _command_message_id(action: str, channel: int) -> int:
 
 
 def _normalize_action(action: str) -> str:
-    return str(action).strip().lower().replace("-", "_")
+    text = str(action).strip().lower().replace("-", "_")
+    aliases = {
+        "slow_buffer": "transmit_slow_buffer",
+        "slow_buffers": "transmit_slow_buffer",
+        "write_slow_buffer": "transmit_slow_buffer",
+        "write_slow_buffers": "transmit_slow_buffer",
+        "transmit_slow_buffers": "transmit_slow_buffer",
+        "transmit_slow_multiplex": "transmit_slow_buffer",
+        "transmit_slow_multiplex_buffer": "transmit_slow_buffer",
+    }
+    return aliases.get(text, text)
 
 
 def _channel(value: Any) -> int:
@@ -398,6 +453,13 @@ def _byte(value: Any, name: str) -> int:
     numeric = _integer(value, name)
     if numeric < 0 or numeric > 0xFF:
         raise MachSentGatewayError(f"{name} must fit in one byte.")
+    return numeric
+
+
+def _five_bit(value: Any, name: str) -> int:
+    numeric = _integer(value, name)
+    if numeric < 0 or numeric > 0x1F:
+        raise MachSentGatewayError(f"{name} must fit in 5 bits.")
     return numeric
 
 
