@@ -239,8 +239,12 @@
                           Text="{Binding Value, Mode=OneWay}"
                           Tag="{Binding}"
                           IsEditable="True"
-                          IsTextSearchEnabled="True"
+                          IsTextSearchEnabled="False"
+                          StaysOpenOnEdit="True"
                           IsEnabled="{Binding IsScalarEditable}"
+                          GotKeyboardFocus="GuiCommandArgumentComboBox_GotKeyboardFocus"
+                          PreviewTextInput="GuiCommandArgumentComboBox_PreviewTextInput"
+                          KeyUp="GuiCommandArgumentComboBox_KeyUp"
                           SelectionChanged="GuiCommandArgumentComboBox_SelectionChanged"
                           LostFocus="GuiCommandArgumentComboBox_LostFocus"
                           PreviewKeyDown="GuiCommandArgumentComboBox_PreviewKeyDown">

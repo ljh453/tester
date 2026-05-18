@@ -315,8 +315,36 @@ public partial class MainWindow : Window
     {
         if (sender is System.Windows.Controls.ComboBox comboBox)
         {
+            comboBox.Items.Filter = null;
             ApplyGuiCommandArgumentEdit(comboBox, comboBox.Text);
         }
+    }
+
+    private void GuiCommandArgumentComboBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox comboBox)
+        {
+            RefreshGuiCommandArgumentAutocomplete(comboBox);
+        }
+    }
+
+    private void GuiCommandArgumentComboBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ComboBox comboBox)
+        {
+            comboBox.IsDropDownOpen = true;
+        }
+    }
+
+    private void GuiCommandArgumentComboBox_KeyUp(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ComboBox comboBox
+            || IsAutocompleteNavigationKey(e.Key))
+        {
+            return;
+        }
+
+        RefreshGuiCommandArgumentAutocomplete(comboBox);
     }
 
     private void GuiCommandArgumentComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -341,6 +369,60 @@ public partial class MainWindow : Window
 
         comboBox.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
         e.Handled = true;
+    }
+
+    private static void RefreshGuiCommandArgumentAutocomplete(System.Windows.Controls.ComboBox comboBox)
+    {
+        if (!comboBox.IsEditable || !comboBox.IsEnabled)
+        {
+            return;
+        }
+
+        var query = comboBox.Text ?? string.Empty;
+        comboBox.Items.Filter = value => MatchesAutocompleteSuggestion(value?.ToString(), query);
+        comboBox.Items.Refresh();
+        comboBox.IsDropDownOpen = comboBox.Items.Count > 0 && comboBox.IsKeyboardFocusWithin;
+    }
+
+    private static bool MatchesAutocompleteSuggestion(string? suggestion, string query)
+    {
+        if (string.IsNullOrWhiteSpace(suggestion))
+        {
+            return false;
+        }
+
+        var trimmedQuery = query.Trim();
+        if (trimmedQuery.Length == 0)
+        {
+            return true;
+        }
+
+        return suggestion.Contains(trimmedQuery, StringComparison.OrdinalIgnoreCase)
+            || NormalizeAutocompleteToken(suggestion)
+                .Contains(trimmedQuery, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeAutocompleteToken(string value)
+    {
+        return value
+            .Replace("${", string.Empty, StringComparison.Ordinal)
+            .Replace("{{", string.Empty, StringComparison.Ordinal)
+            .Replace("}", string.Empty, StringComparison.Ordinal);
+    }
+
+    private static bool IsAutocompleteNavigationKey(Key key)
+    {
+        return key is Key.Enter
+            or Key.Escape
+            or Key.Tab
+            or Key.Up
+            or Key.Down
+            or Key.Left
+            or Key.Right
+            or Key.PageUp
+            or Key.PageDown
+            or Key.Home
+            or Key.End;
     }
 
     private void ShowOptionalArgumentsCheckBox_Click(object sender, RoutedEventArgs e)

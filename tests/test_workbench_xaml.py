@@ -22,6 +22,22 @@ def test_gui_argument_combo_applies_selection_immediately():
     assert combo.attrib["SelectionChanged"] == "GuiCommandArgumentComboBox_SelectionChanged"
 
 
+def test_gui_argument_combo_opens_autocomplete_while_typing():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    combo = next(
+        element
+        for element in root.iter(f"{PRESENTATION}ComboBox")
+        if element.attrib.get("LostFocus") == "GuiCommandArgumentComboBox_LostFocus"
+    )
+
+    assert combo.attrib["GotKeyboardFocus"] == "GuiCommandArgumentComboBox_GotKeyboardFocus"
+    assert combo.attrib["PreviewTextInput"] == "GuiCommandArgumentComboBox_PreviewTextInput"
+    assert combo.attrib["KeyUp"] == "GuiCommandArgumentComboBox_KeyUp"
+    assert combo.attrib["StaysOpenOnEdit"] == "True"
+    assert combo.attrib["IsTextSearchEnabled"] == "False"
+
+
 def test_combo_box_template_supports_editable_text_display():
     root = _load("apps/TesterWorkbench/TesterWorkbench/Themes/BaseWorkbenchStyles.xaml")
 
