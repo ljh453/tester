@@ -72,6 +72,10 @@ public partial class MainWindow : Window
             selectedPath = dialog.SelectedPath;
             WorkspacePathBox.Text = selectedPath;
         }
+        else
+        {
+            return;
+        }
 
         await RunUiAction(() => _viewModel.OpenWorkspaceAsync(selectedPath));
     }

@@ -73,6 +73,35 @@ def test_resume_toolbar_icon_is_distinct_from_run_icon():
     assert resume_button.attrib["Content"] != run_button.attrib["Content"]
 
 
+def test_file_open_is_available_from_menu_not_toolbar_ellipsis():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    file_menu = next(
+        element
+        for element in root.iter(f"{PRESENTATION}MenuItem")
+        if element.attrib.get("Header") == "_File"
+    )
+    open_menu = next(
+        (
+            element
+            for element in file_menu.iter(f"{PRESENTATION}MenuItem")
+            if element.attrib.get("Click") == "OpenWorkspace_Click"
+        ),
+        None,
+    )
+    toolbar_ellipsis_open = [
+        element
+        for element in root.iter(f"{PRESENTATION}Button")
+        if element.attrib.get("Click") == "OpenWorkspace_Click"
+        and element.attrib.get("Content") == "..."
+    ]
+
+    assert open_menu is not None
+    assert open_menu.attrib["Header"] == "_Open"
+    assert open_menu.attrib["InputGestureText"] == "Ctrl+O"
+    assert toolbar_ellipsis_open == []
+
+
 def test_properties_pane_can_show_optional_arguments_on_demand():
     root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
 

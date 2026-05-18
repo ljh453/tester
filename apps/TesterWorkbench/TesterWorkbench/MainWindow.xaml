@@ -266,6 +266,9 @@
     <DockPanel Background="{DynamicResource Workbench.Brush.AppBackground}">
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
+                <MenuItem Header="_Open"
+                          InputGestureText="Ctrl+O"
+                          Click="OpenWorkspace_Click" />
                 <MenuItem Header="_Save"
                           InputGestureText="Ctrl+S"
                           Click="Save_Click" />
@@ -278,11 +281,6 @@
         <ToolBar DockPanel.Dock="Top">
             <TextBlock Text="Workspace" VerticalAlignment="Center" Margin="8,0,4,0" />
             <TextBox x:Name="WorkspacePathBox" Width="420" />
-            <Button Content="..."
-                    Click="OpenWorkspace_Click"
-                    Margin="6,0,0,0"
-                    Style="{StaticResource IdeToolbarButtonStyle}"
-                    ToolTip="Open workspace" />
             <Separator />
             <Button Content="💾"
                     Click="Save_Click"
