@@ -199,6 +199,24 @@ public partial class MainWindow : Window
         RefreshSelectedTraceDetails();
     }
 
+    private void EditorBox_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        if (!EditorBox.IsKeyboardFocusWithin)
+        {
+            return;
+        }
+
+        var lineNumber = EditorBox.GetLineIndexFromCharacterIndex(EditorBox.CaretIndex) + 1;
+        if (!_viewModel.SelectGuiCommandAtLine(lineNumber))
+        {
+            return;
+        }
+
+        CurrentLineText.Text = _viewModel.CurrentLocationText;
+        RefreshGuiCommandProperties();
+        UpdateCurrentExecutionLineMarker();
+    }
+
     private void GuiTestcaseComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_isRefreshingGuiTestcaseSelection)
@@ -881,6 +899,11 @@ public partial class MainWindow : Window
         GuiCommandTypeBox.Text = command?.CommandType ?? "";
         GuiCommandSummaryBox.Text = command?.Summary ?? "";
         GuiCommandLineBox.Text = command?.LineRangeText ?? "";
+        GuiCommandValidationText.Text = command?.ValidationSummary ?? "";
+        GuiCommandValidationText.Foreground = command?.HasValidationIssues == true
+            ? System.Windows.Media.Brushes.DarkOrange
+            : TryFindResource("Workbench.Brush.TextSecondary") as System.Windows.Media.Brush
+                ?? System.Windows.Media.Brushes.Gray;
         GuiCommandArgumentsControl.ItemsSource = command?.Arguments
             .Where(argument => argument.IsScalarEditable)
             .ToArray() ?? Array.Empty<WorkbenchCommandArgument>();

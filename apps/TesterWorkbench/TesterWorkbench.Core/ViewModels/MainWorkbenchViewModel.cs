@@ -130,10 +130,14 @@ public sealed class MainWorkbenchViewModel
     public async Task SaveAsync(CancellationToken cancellationToken = default)
     {
         EnsureFileSelected();
+        var diagnostics = await CompileEditorTextForSaveAsync(cancellationToken);
+        Problems = diagnostics;
         await File.WriteAllTextAsync(SelectedFilePath!, EditorText, cancellationToken);
         _lastSavedEditorText = EditorText;
         IsDirty = false;
-        SaveStatusText = $"Saved {Path.GetFileName(SelectedFilePath)} at {DateTime.Now:HH:mm:ss}.";
+        SaveStatusText = diagnostics.Count == 0
+            ? $"Saved {Path.GetFileName(SelectedFilePath)} at {DateTime.Now:HH:mm:ss}."
+            : $"Saved with {diagnostics.Count} diagnostic(s): {Path.GetFileName(SelectedFilePath)} at {DateTime.Now:HH:mm:ss}.";
         AppendConsoleLine(SaveStatusText);
     }
 
@@ -297,6 +301,8 @@ public sealed class MainWorkbenchViewModel
 
     public void UpdateEditorText(string editorText, bool markDirty = true)
     {
+        var previousCommandLineNumber = SelectedGuiCommand?.SourceLineStart;
+        var previousCommandType = SelectedGuiCommand?.CommandType;
         EditorText = editorText;
         if (markDirty)
         {
@@ -310,9 +316,13 @@ public sealed class MainWorkbenchViewModel
             BuildExternalGuiSuggestionContext(editorText));
         SelectedGuiTestcase = GuiModel.Testcases.FirstOrDefault(testcase => testcase.Name == previousTestcaseName)
             ?? GuiModel.Testcases.FirstOrDefault();
-        SelectedGuiCommand = SelectedGuiTestcase?.Phases
-            .SelectMany(phase => FlattenCommands(phase.Blocks))
-            .FirstOrDefault();
+        SelectedGuiCommand = FindCommandByLineAndType(
+                SelectedGuiTestcase,
+                previousCommandLineNumber,
+                previousCommandType)
+            ?? SelectedGuiTestcase?.Phases
+                .SelectMany(phase => FlattenCommands(phase.Blocks))
+                .FirstOrDefault();
         PruneBreakpointsOutsideEditor();
         PruneBreakpointsOutsideCommandLines();
         EditorLineNumbersText = BuildLineNumbersText(
@@ -408,6 +418,52 @@ public sealed class MainWorkbenchViewModel
         catch
         {
             return WorkbenchGuiSuggestionContext.Empty;
+        }
+    }
+
+    private async Task<IReadOnlyList<EngineDiagnostic>> CompileEditorTextForSaveAsync(
+        CancellationToken cancellationToken)
+    {
+        var selectedFile = SelectedFilePath!;
+        var selectedDirectory = Path.GetDirectoryName(selectedFile)!;
+        var fileName = Path.GetFileName(selectedFile);
+        var tempFile = Path.Combine(
+            selectedDirectory,
+            $".{fileName}.{Guid.NewGuid():N}.save-check.yaml");
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, EditorText, cancellationToken);
+            var result = await _engineBridge.CompileAsync(tempFile, cancellationToken);
+            return result.Diagnostics;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new[]
+            {
+                new EngineDiagnostic(
+                    "error",
+                    "SAVE_COMPILE_FAILED",
+                    $"Save diagnostics could not run: {ex.Message}")
+            };
+        }
+        finally
+        {
+            TryDeleteFile(tempFile);
+        }
+    }
+
+    private static void TryDeleteFile(string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+        catch
+        {
+            // Temporary save-diagnostic files should not block the user from saving.
         }
     }
 
@@ -578,6 +634,34 @@ public sealed class MainWorkbenchViewModel
             .SelectMany(phase => FlattenCommands(phase.Blocks))
             .FirstOrDefault();
         UpdateGuiCurrentExecutionBlock();
+    }
+
+    public bool SelectGuiCommandAtLine(int lineNumber)
+    {
+        if (lineNumber <= 0 || SelectedGuiTestcase is null)
+        {
+            return false;
+        }
+
+        var commandBlock = SelectedGuiTestcase.Phases
+            .SelectMany(phase => FlattenCommands(phase.Blocks))
+            .Where(candidate =>
+                lineNumber >= candidate.SourceLineStart
+                && lineNumber <= candidate.SourceLineEnd)
+            .OrderByDescending(candidate => candidate.Depth)
+            .ThenByDescending(candidate => candidate.SourceLineStart)
+            .FirstOrDefault();
+        if (commandBlock is null)
+        {
+            return false;
+        }
+
+        SelectGuiCommand(commandBlock);
+        CurrentSourceFile = SelectedFilePath ?? string.Empty;
+        CurrentLineNumber = lineNumber;
+        CurrentLocationText = $"Line {lineNumber} - {commandBlock.CommandType}";
+        UpdateGuiCurrentExecutionBlock();
+        return true;
     }
 
     public void InsertGuiCommand(
@@ -1235,6 +1319,23 @@ public sealed class MainWorkbenchViewModel
                 yield return childCommandBlock;
             }
         }
+    }
+
+    private static WorkbenchCommandBlock? FindCommandByLineAndType(
+        WorkbenchGuiTestcase? testcase,
+        int? sourceLineStart,
+        string? commandType)
+    {
+        if (testcase is null || sourceLineStart is null || string.IsNullOrWhiteSpace(commandType))
+        {
+            return null;
+        }
+
+        return testcase.Phases
+            .SelectMany(phase => FlattenCommands(phase.Blocks))
+            .FirstOrDefault(commandBlock =>
+                commandBlock.SourceLineStart == sourceLineStart
+                && commandBlock.CommandType == commandType);
     }
 
     private void RefreshBreakpointViews()

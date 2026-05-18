@@ -199,7 +199,11 @@ public sealed class WorkbenchCommandArgument
 
     public bool HasSuggestions => Suggestions.Count > 0;
 
-    public string RequirementText => Definition.RequirementText;
+    public bool IsMissingRequired => IsRequired && string.IsNullOrWhiteSpace(Value);
+
+    public string RequirementText => IsMissingRequired
+        ? "missing required"
+        : Definition.RequirementText;
 
     public string Value { get; }
 
@@ -297,6 +301,12 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
     public string BreakpointMarker => IsBreakpoint ? MainWorkbenchViewModel.ActiveBreakpointMarker : string.Empty;
 
     public bool IsFoldable => Children.Count > 0;
+
+    public bool HasValidationIssues => Arguments.Any(argument => argument.IsMissingRequired);
+
+    public string ValidationSummary => HasValidationIssues
+        ? $"Missing required: {string.Join(", ", Arguments.Where(argument => argument.IsMissingRequired).Select(argument => argument.Name))}"
+        : "Ready";
 
     public bool CanInsertInside => CommandType == "for";
 

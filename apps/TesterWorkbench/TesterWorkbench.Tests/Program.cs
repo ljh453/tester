@@ -27,13 +27,16 @@ await RunMainWorkbenchThemeModeSettingTest();
 await RunWorkbenchToolProfileSettingsEditorTest();
 await RunMainWorkbenchViewModelSettingsSnapshotTest();
 await RunMainWorkbenchViewModelSavesSelectedFileTest();
+await RunMainWorkbenchViewModelSaveRunsCompileDiagnosticsTest();
 await RunWorkbenchThemeResolverTest();
 await RunWorkbenchThemeStyleResourceTest();
 await RunWorkbenchGuiModelBuilderTest();
 await RunWorkbenchGuiModelBuilderCommandArgumentTest();
+await RunWorkbenchGuiModelBuilderValidationTest();
 await RunWorkbenchGuiModelBuilderAutocompleteSuggestionTest();
 await RunWorkbenchGuiModelBuilderComplexArgumentTest();
 await RunMainWorkbenchViewModelRefreshesGuiModelTest();
+await RunMainWorkbenchViewModelSelectsGuiCommandFromYamlLineTest();
 await RunMainWorkbenchViewModelLoadsToolProfileArgumentSuggestionsTest();
 await RunWorkbenchCommandCatalogTest();
 await RunWorkbenchYamlCommandArgumentUpdaterTest();
@@ -1289,7 +1292,16 @@ static async Task RunMainWorkbenchViewModelSavesSelectedFileTest()
         new TesterEngineBridge(
             "python",
             root,
-            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+            new FakeEngineProcessRunner(
+                new EngineProcessResult(
+                    0,
+                    """
+                    {
+                      "diagnostics": [],
+                      "testcases": []
+                    }
+                    """,
+                    ""))));
 
     await viewModel.OpenFileAsync(yamlPath);
 
@@ -1312,8 +1324,52 @@ static async Task RunMainWorkbenchViewModelSavesSelectedFileTest()
 
     AssertFalse(viewModel.IsDirty, "saved file is clean");
     AssertEqual(viewModel.EditorText, await File.ReadAllTextAsync(yamlPath), "save writes editor text to disk");
+    AssertEqual(0, viewModel.Problems.Count, "clean save has no diagnostics");
     AssertTrue(viewModel.SaveStatusText.StartsWith("Saved ", StringComparison.Ordinal), "save status reports saved file");
+    AssertFalse(viewModel.SaveStatusText.Contains("diagnostic", StringComparison.Ordinal), "clean save status omits diagnostics");
     AssertFalse(viewModel.SelectedFileDisplayText.EndsWith(" *", StringComparison.Ordinal), "clean file display removes marker");
+}
+
+static async Task RunMainWorkbenchViewModelSaveRunsCompileDiagnosticsTest()
+{
+    var root = TestPaths.CreateWorkspace(
+        ("tests/save-diagnostics.yaml", "testcases: []"));
+    var yamlPath = Path.Combine(root, "tests", "save-diagnostics.yaml");
+    var runner = new FakeEngineProcessRunner(
+        new EngineProcessResult(
+            1,
+            """
+            {
+              "diagnostics": [
+                {"severity": "error", "code": "MISSING_ARG", "message": "Missing required argument: ms"}
+              ],
+              "testcases": []
+            }
+            """,
+            ""));
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge("python", root, runner));
+
+    await viewModel.OpenFileAsync(yamlPath);
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: bad_save_case
+            steps:
+              - delay: {}
+        """);
+
+    await viewModel.SaveAsync();
+
+    AssertEqual(1, runner.Calls.Count, "save diagnostics compile call count");
+    AssertEqual("compile", runner.Calls[0].Arguments[2], "save diagnostics compile command");
+    AssertFalse(
+        string.Equals(yamlPath, runner.Calls[0].Arguments[3], StringComparison.Ordinal),
+        "save diagnostics compiles temporary YAML");
+    AssertEqual("MISSING_ARG", viewModel.Problems[0].Code, "save diagnostics updates problems");
+    AssertEqual(viewModel.EditorText, await File.ReadAllTextAsync(yamlPath), "save with diagnostics still writes editor text");
+    AssertContains("Saved with 1 diagnostic", viewModel.SaveStatusText, "save diagnostics status text");
 }
 
 static Task RunWorkbenchThemeResolverTest()
@@ -1458,6 +1514,10 @@ static Task RunWorkbenchThemeStyleResourceTest()
             .Any(item => item.Attribute(xaml + "Name")?.Value == "TraceOutputsBox"),
         "execution trace contains output details");
     AssertTrue(
+        mainWindow.Descendants(presentation + "TextBlock")
+            .Any(item => item.Attribute(xaml + "Name")?.Value == "GuiCommandValidationText"),
+        "properties pane contains command validation text");
+    AssertTrue(
         mainWindow.Descendants(presentation + "WebBrowser")
             .Any(item => item.Attribute(xaml + "Name")?.Value == "ReportBrowser"),
         "report tab contains an embedded HTML viewer");
@@ -1560,6 +1620,32 @@ static Task RunWorkbenchGuiModelBuilderCommandArgumentTest()
     AssertTrue(
         forBlock.Arguments.Any(argument => argument.Name == "do" && !argument.IsScalarEditable),
         "for do is not scalar editable");
+
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchGuiModelBuilderValidationTest()
+{
+    var model = WorkbenchGuiModelBuilder.Build(
+        """
+        testcases:
+          - name: validation_case
+            steps:
+              - delay: {}
+              - log.text:
+                  text: "ready"
+        """);
+    var steps = model.Testcases[0].Phases.Single(phase => phase.YamlName == "steps");
+    var delayBlock = steps.Blocks[0];
+    var logBlock = steps.Blocks[1];
+    var missingDelayArgument = delayBlock.Arguments.Single(argument => argument.Name == "ms");
+
+    AssertTrue(delayBlock.HasValidationIssues, "delay block reports validation issue");
+    AssertTrue(missingDelayArgument.IsMissingRequired, "delay ms argument is missing");
+    AssertEqual("missing required", missingDelayArgument.RequirementText, "missing argument requirement text");
+    AssertEqual("Missing required: ms", delayBlock.ValidationSummary, "delay validation summary");
+    AssertFalse(logBlock.HasValidationIssues, "log block has no validation issue");
+    AssertEqual("Ready", logBlock.ValidationSummary, "valid command validation summary");
 
     return Task.CompletedTask;
 }
@@ -1684,6 +1770,34 @@ static Task RunMainWorkbenchViewModelRefreshesGuiModelTest()
 
     AssertEqual("updated_case", viewModel.SelectedGuiTestcase?.Name, "updated GUI testcase name");
     AssertEqual("log.text", viewModel.SelectedGuiTestcase?.Phases[1].Blocks[0].CommandType, "updated GUI command type");
+
+    return Task.CompletedTask;
+}
+
+static Task RunMainWorkbenchViewModelSelectsGuiCommandFromYamlLineTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: yaml_focus_case
+            steps:
+              - log.text:
+                  text: "first"
+              - delay:
+                  ms: 250
+        """);
+
+    AssertTrue(viewModel.SelectGuiCommandAtLine(7), "selects GUI command from YAML argument line");
+    AssertEqual("delay", viewModel.SelectedGuiCommand?.CommandType, "selected GUI command from YAML line");
+    AssertEqual(7, viewModel.CurrentLineNumber, "current line follows YAML caret line");
+    AssertEqual("Line 7 - delay", viewModel.CurrentLocationText, "current location follows YAML command");
 
     return Task.CompletedTask;
 }

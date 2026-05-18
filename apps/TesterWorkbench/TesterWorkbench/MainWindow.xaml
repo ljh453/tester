@@ -421,6 +421,7 @@
                                          PreviewKeyDown="EditorBox_PreviewKeyDown"
                                          SelectionBrush="{DynamicResource Workbench.Brush.EditorSelection}"
                                          SelectionOpacity="0.8"
+                                         SelectionChanged="EditorBox_SelectionChanged"
                                          SizeChanged="EditorBox_SizeChanged"
                                          TextChanged="EditorBox_TextChanged"
                                          TextWrapping="NoWrap"
@@ -725,6 +726,10 @@
                                             <TextBox x:Name="GuiCommandLineBox"
                                                      IsReadOnly="True"
                                                      Margin="0,3,0,8" />
+                                            <TextBlock Text="Validation" Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                                            <TextBlock x:Name="GuiCommandValidationText"
+                                                       TextWrapping="Wrap"
+                                                       Margin="0,3,0,8" />
                                             <TextBlock Text="Arguments" Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
                                             <ItemsControl x:Name="GuiCommandArgumentsControl"
                                                           Margin="0,3,0,8" />
