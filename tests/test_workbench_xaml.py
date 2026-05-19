@@ -412,3 +412,20 @@ def test_a_shell_uses_shared_theme_styles():
     assert "WorkbenchPaneHeaderStyle" in style_keys
     assert "Workbench.Brush.LinkedHighlight" in dark_brushes
     assert "Workbench.Brush.LinkedHighlight" in light_brushes
+
+
+def test_primary_panes_have_docking_ready_headers():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    names = {
+        element.attrib.get(f"{XAML}Name")
+        for element in root.iter()
+    }
+
+    assert {
+        "ProjectExplorerPaneHeader",
+        "YamlEditorPaneHeader",
+        "GuiEditorPaneHeader",
+        "GuiPropertiesPaneHeader",
+        "BottomInspectorPaneHeader",
+    } <= names

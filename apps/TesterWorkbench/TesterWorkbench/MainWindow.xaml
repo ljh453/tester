@@ -412,11 +412,9 @@
                     Margin="6"
                     Style="{StaticResource DockPaneBorderStyle}">
                 <DockPanel>
-                    <Border DockPanel.Dock="Top"
-                            Padding="9,7"
-                            BorderBrush="{DynamicResource Workbench.Brush.Border}"
-                            BorderThickness="0,0,0,1"
-                            Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}">
+                    <Border x:Name="ProjectExplorerPaneHeader"
+                            DockPanel.Dock="Top"
+                            Style="{StaticResource WorkbenchPaneHeaderStyle}">
                         <Grid>
                             <TextBlock Text="Project / Test Explorer"
                                        Style="{StaticResource PaneHeaderTextStyle}" />
@@ -450,11 +448,9 @@
                         Grid.Column="0"
                         Style="{StaticResource DockPaneBorderStyle}">
                     <DockPanel>
-                        <Border DockPanel.Dock="Top"
-                                Padding="9,7"
-                                BorderBrush="{DynamicResource Workbench.Brush.Border}"
-                                BorderThickness="0,0,0,1"
-                                Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}">
+                        <Border x:Name="YamlEditorPaneHeader"
+                                DockPanel.Dock="Top"
+                                Style="{StaticResource WorkbenchPaneHeaderStyle}">
                             <Grid>
                                 <TextBlock Text="YAML Editor"
                                            Style="{StaticResource PaneHeaderTextStyle}" />
@@ -539,11 +535,9 @@
                         Grid.Column="2"
                         Style="{StaticResource DockPaneBorderStyle}">
                     <DockPanel>
-                        <Border DockPanel.Dock="Top"
-                                Padding="9,7"
-                                BorderBrush="{DynamicResource Workbench.Brush.Border}"
-                                BorderThickness="0,0,0,1"
-                                Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}">
+                        <Border x:Name="GuiEditorPaneHeader"
+                                DockPanel.Dock="Top"
+                                Style="{StaticResource WorkbenchPaneHeaderStyle}">
                             <Grid>
                                 <TextBlock Text="GUI Testcase Editor"
                                            Style="{StaticResource PaneHeaderTextStyle}" />
@@ -841,11 +835,9 @@
                         Grid.Column="4"
                         Style="{StaticResource DockPaneBorderStyle}">
                     <DockPanel>
-                        <Border DockPanel.Dock="Top"
-                                Padding="9,7"
-                                BorderBrush="{DynamicResource Workbench.Brush.Border}"
-                                BorderThickness="0,0,0,1"
-                                Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}">
+                        <Border x:Name="GuiPropertiesPaneHeader"
+                                DockPanel.Dock="Top"
+                                Style="{StaticResource WorkbenchPaneHeaderStyle}">
                             <Grid>
                                 <TextBlock Text="Properties"
                                            Style="{StaticResource PaneHeaderTextStyle}" />
@@ -985,10 +977,21 @@
                           Height="5"
                           HorizontalAlignment="Stretch" />
 
-            <TabControl x:Name="BottomPanelHost"
-                        Grid.Column="2"
-                        Grid.Row="2"
-                        Margin="6,3,6,6">
+            <DockPanel Grid.Column="2"
+                       Grid.Row="2"
+                       Margin="6,3,6,6">
+                <Border x:Name="BottomInspectorPaneHeader"
+                        DockPanel.Dock="Top"
+                        Style="{StaticResource WorkbenchPaneHeaderStyle}">
+                    <Grid>
+                        <TextBlock Text="Inspector"
+                                   Style="{StaticResource PaneHeaderTextStyle}" />
+                        <TextBlock Text="problems / console / trace / report"
+                                   HorizontalAlignment="Right"
+                                   Style="{StaticResource PaneSubtleTextStyle}" />
+                    </Grid>
+                </Border>
+                <TabControl x:Name="BottomPanelHost">
                 <TabItem Header="Problems">
                     <DataGrid x:Name="ProblemsGrid"
                               AutoGenerateColumns="False"
@@ -1232,7 +1235,8 @@
                                     Margin="6" />
                     </Grid>
                 </TabItem>
-            </TabControl>
+                </TabControl>
+            </DockPanel>
         </Grid>
     </DockPanel>
 </Window>
