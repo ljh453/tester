@@ -176,6 +176,14 @@ public partial class MainWindow : Window
         RefreshSelectedTraceDetails();
     }
 
+    private void TracePinSelectedButton_Click(object sender, RoutedEventArgs e)
+    {
+        _isTraceFollowLatestEnabled = false;
+        TraceFollowLatestCheckBox.IsChecked = false;
+        _selectedTraceEvent = ExecutionTraceGrid.SelectedItem as EngineRunEvent ?? _selectedTraceEvent;
+        RefreshSelectedTraceDetails();
+    }
+
     private void GuiEditorToggle_Click(object sender, RoutedEventArgs e)
     {
         if (GuiEditorToggleButton.IsChecked == true)
@@ -1024,6 +1032,15 @@ public partial class MainWindow : Window
                 new[] { selectedEvent.RawEvidenceRefs, selectedEvent.DurationDetail }
                     .Where(value => !string.IsNullOrWhiteSpace(value)));
         TraceErrorBox.Text = selectedEvent?.Error ?? string.Empty;
+        RefreshTraceSelectedEventText();
+    }
+
+    private void RefreshTraceSelectedEventText()
+    {
+        var selectedEvent = ExecutionTraceGrid.SelectedItem as EngineRunEvent ?? _selectedTraceEvent;
+        TraceSelectedEventText.Text = selectedEvent is null
+            ? "No trace event selected"
+            : $"{selectedEvent.Testcase} / {selectedEvent.Phase} / {selectedEvent.CommandType} / line {selectedEvent.SourceLine}";
     }
 
     private void SelectLatestTraceEvent()

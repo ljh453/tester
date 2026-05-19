@@ -1034,11 +1034,31 @@
                                 BorderBrush="{DynamicResource Workbench.Brush.Border}"
                                 BorderThickness="0,0,0,1"
                                 Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}">
-                            <CheckBox x:Name="TraceFollowLatestCheckBox"
-                                      Content="Follow latest"
-                                      IsChecked="True"
-                                      Click="TraceFollowLatestCheckBox_Click"
-                                      ToolTip="When enabled, the selected trace row and detail panes follow the latest event. Select a row or turn this off to keep details pinned." />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox x:Name="TraceFollowLatestCheckBox"
+                                          Content="Follow latest"
+                                          IsChecked="True"
+                                          Click="TraceFollowLatestCheckBox_Click"
+                                          ToolTip="Follow the latest streamed event while the run is active." />
+                                <Button x:Name="TracePinSelectedButton"
+                                        Grid.Column="1"
+                                        Content="Pin selected"
+                                        Margin="8,0,0,0"
+                                        Padding="8,2"
+                                        Click="TracePinSelectedButton_Click"
+                                        ToolTip="Keep the selected event visible while new events continue to stream." />
+                                <TextBlock x:Name="TraceSelectedEventText"
+                                           Grid.Column="2"
+                                           Margin="10,0,0,0"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                            </Grid>
                         </Border>
                         <DataGrid x:Name="ExecutionTraceGrid"
                                   Grid.Row="1"

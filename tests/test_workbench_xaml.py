@@ -374,3 +374,16 @@ def test_gui_blocks_have_distinct_active_and_linked_visual_states():
     assert "{Binding IsActiveSelection}" in data_triggers
     assert "{Binding IsLinkedSelection}" in data_triggers
     assert "{Binding IsCurrentExecution}" in data_triggers
+
+
+def test_execution_trace_has_inspector_controls_for_follow_and_pin():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    names = {
+        element.attrib.get(f"{XAML}Name")
+        for element in root.iter()
+    }
+
+    assert "TraceFollowLatestCheckBox" in names
+    assert "TracePinSelectedButton" in names
+    assert "TraceSelectedEventText" in names
