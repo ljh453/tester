@@ -41,7 +41,7 @@
 - `inca.recording.start`, `inca.recording.stop` 지원
 - Serial TX/RX raw evidence 파일 기록
 - tool profile 기반 serial device 선언과 resolved package snapshot
-- serial `parity`, `stop_bits`, `byte_size` framing 설정
+- serial `parity`, `stop_bits`, `byte_size`, `line_ending`, `write_flush`, `dtr`, `rts` framing 설정
 - tool profile snapshot에서 `SerialAdapter`/`AdapterRegistry` 구성
 - CLI `run --use-tool-profile-adapters` profile-backed 실행 모드
 - 확정 serial 대상: power supply, Mach Systems SENT-USB interface
@@ -590,7 +590,7 @@ steps:
 
 `serial.write_bytes`는 `payload_hex`를 받아 `TX_HEX` evidence를 남기고, `serial.read_bytes`는 지정한 byte 수를 읽어 `RX_HEX` evidence와 `data_hex` 값을 남깁니다.
 
-실제 COM 포트 사용은 `PySerialPort`가 담당하며, `pyserial` 설치 후 사용합니다. 테스트나 장비 없는 개발에서는 `FakeSerialPort`를 주입합니다. 실제 포트 framing은 tool profile의 `baudrate`, `parity`, `stop_bits`, `byte_size`, `timeout_ms`를 사용합니다.
+실제 COM 포트 사용은 `PySerialPort`가 담당하며, `pyserial` 설치 후 사용합니다. 테스트나 장비 없는 개발에서는 `FakeSerialPort`를 주입합니다. 실제 포트 framing은 tool profile의 `baudrate`, `parity`, `stop_bits`, `byte_size`, `timeout_ms`, `line_ending`, `encoding`, `write_flush`, 선택적 `dtr`, `rts`를 사용합니다. `serial.write` evidence는 사람이 읽는 `TX`와 실제 전송 바이트인 `TX_HEX`를 함께 남기므로, PSU가 수신하지 않을 때 terminator가 `0A`인지 `0D0A`인지 바로 확인할 수 있습니다.
 
 ## Tool Profile
 
@@ -612,6 +612,8 @@ serial:
       parity: none
       stop_bits: 1
       byte_size: 8
+      line_ending: lf
+      write_flush: true
       command_profile: vupower_k_usb
       notes: "VuPower K Series USB-to-Serial SCPI-style protocol."
     sent_usb:
@@ -640,7 +642,7 @@ command_profiles:
         read_ack: true
 ```
 
-GUI Workbench에서는 `Tools > Settings...`에서 현재 YAML이 참조하는 tool profile의 serial device framing 값을 편집할 수 있습니다. 같은 창에서 `Theme`도 선택합니다. `parity`는 `none`, `even`, `odd`, `mark`, `space`를 지원하고, `stop_bits`는 `1`, `1.5`, `2`, `byte_size`는 `5`부터 `8`까지 지원합니다.
+GUI Workbench에서는 `Tools > Settings...`에서 현재 YAML이 참조하는 tool profile의 serial device framing 값을 편집할 수 있습니다. 같은 창에서 `Theme`도 선택합니다. `parity`는 `none`, `even`, `odd`, `mark`, `space`를 지원하고, `stop_bits`는 `1`, `1.5`, `2`, `byte_size`는 `5`부터 `8`까지 지원합니다. `line_ending`은 `lf`, `crlf`, `cr`, `none`을 지원합니다. VuPower PSU가 여전히 수신하지 않으면 `line_ending: crlf`와 `dtr: true`, `rts: false` 조합을 실장비에서 확인할 수 있습니다.
 
 `psu`는 VuPower K Series power supply를 뜻하며, [VuPower K USB Manual Korea Ver3.2](http://www.vupower.com/download/K_USB_Manual_Korea_Ver3.2.pdf)의 USB-to-Serial SCPI 스타일 명령을 사용합니다. `sent_usb`는 Mach Systems의 SENT-USB interface를 뜻하고, [Mach Systems SENT Gateway Communication Protocol Specification](https://www.machsystems.cz/support/SENT%20Gateway-Communication%20Protocol%20Specification_latest.pdf)의 `STX LEN ID DATA CHKSUM ETX` frame을 기준으로 수신 프레임을 파싱합니다. compiler는 이 설정을 실행 직전 `tool_profile_snapshot`으로 고정해서 report의 `resolved-package.yaml`에도 남깁니다.
 

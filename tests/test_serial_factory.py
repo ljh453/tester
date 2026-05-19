@@ -95,6 +95,11 @@ def test_create_serial_adapter_from_profile_passes_framing_settings(tmp_path):
                     "parity": "odd",
                     "stop_bits": 1.5,
                     "byte_size": 7,
+                    "line_ending": "crlf",
+                    "encoding": "cp949",
+                    "write_flush": False,
+                    "dtr": True,
+                    "rts": False,
                     "command_profile": "sent_usb_line",
                 },
             }
@@ -115,3 +120,8 @@ def test_create_serial_adapter_from_profile_passes_framing_settings(tmp_path):
     assert created["sent_usb"].parity == "odd"
     assert created["sent_usb"].stop_bits == 1.5
     assert created["sent_usb"].byte_size == 7
+    assert created["sent_usb"].line_ending == "crlf"
+    assert created["sent_usb"].encoding == "cp949"
+    assert created["sent_usb"].write_flush is False
+    assert created["sent_usb"].dtr is True
+    assert created["sent_usb"].rts is False

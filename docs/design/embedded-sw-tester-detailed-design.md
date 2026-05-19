@@ -242,6 +242,8 @@ serial:
       parity: none
       stop_bits: 1
       byte_size: 8
+      line_ending: lf
+      write_flush: true
       command_profile: vupower_k_usb
     sent_usb:
       device_type: mach_systems_sent_usb
@@ -276,7 +278,7 @@ execution:
 
 `requires_real_hardware`가 true이면 CLI `run`은 기본적으로 실행을 차단하고 `REAL_HARDWARE_CONFIRMATION_REQUIRED` 진단을 반환한다. 사용자는 장비 연결, COM 포트, helper 실행 경로를 확인한 뒤 `--allow-real-hardware` 또는 `allow_env` 환경변수로 명시적으로 허용해야 한다. 이 guard는 mock registry로 실장비 smoke YAML이 false pass 되는 상황도 막는다.
 
-Serial framing 설정은 `baudrate`, `parity`, `stop_bits`, `byte_size`, `timeout_ms`를 기본 필드로 가진다. `parity`는 `none/even/odd/mark/space`, `stop_bits`는 `1/1.5/2`, `byte_size`는 `5/6/7/8`을 허용한다. GUI Workbench는 `Tools > Settings...` 창에서 현재 YAML의 `tool_profile`이 가리키는 serial device framing 값을 편집하고 저장할 수 있어야 한다. 같은 Settings 창에는 theme처럼 자주 바뀌지 않는 workbench 설정을 함께 둔다.
+Serial framing 설정은 `baudrate`, `parity`, `stop_bits`, `byte_size`, `timeout_ms`, `line_ending`, `encoding`, `write_flush`, 선택적 `dtr`, `rts`를 기본 필드로 가진다. `parity`는 `none/even/odd/mark/space`, `stop_bits`는 `1/1.5/2`, `byte_size`는 `5/6/7/8`을 허용한다. `line_ending`은 `lf`, `crlf`, `cr`, `none` alias를 지원하며 실제 `serial.write` evidence에는 `TX` 텍스트와 함께 `TX_HEX` 전송 바이트를 남긴다. GUI Workbench는 `Tools > Settings...` 창에서 현재 YAML의 `tool_profile`이 가리키는 serial device framing 값을 편집하고 저장할 수 있어야 한다. 같은 Settings 창에는 theme처럼 자주 바뀌지 않는 workbench 설정을 함께 둔다.
 
 `vupower_k_usb` protocol은 [VuPower K USB Manual Korea Ver3.2](http://www.vupower.com/download/K_USB_Manual_Korea_Ver3.2.pdf)를 따른다. 해당 장비는 USB-to-Serial 방식이며, 명령은 한 번에 하나씩 전송하고 LF로 종료한다. command와 첫 번째 parameter는 공백으로, parameter 사이는 쉼표로 구분한다. 1차 구현은 `APPL`, `SOUR:VOLT`, `SOUR:CURR`, `OUTP:STAT`, `OUTP:STAT?`, `MEAS:VOLT?`, `MEAS:VOLTA?`, `MEAS:CURR?`, `MEAS:CURRA?`, `*IDN?`, `*RST`, `SYST:ERR?`를 대상으로 한다. 측정/조회 응답은 float, bool, mode 문자열, error code 등 타입화된 값으로 변환해 `save_as`에 저장한다.
 
@@ -470,7 +472,7 @@ Serial adapter는 text line protocol과 binary protocol을 모두 지원한다.
 
 초기 명령:
 
-- `serial.write`: UTF-8 text line을 전송하고 `TX` evidence를 남긴다.
+- `serial.write`: 설정된 encoding과 line ending으로 text line을 전송하고 `TX`, `TX_HEX` evidence를 남긴다.
 - `serial.read`: line을 읽고 substring/regex matcher로 응답을 판정하며 `RX` evidence를 남긴다.
 - `serial.write_bytes`: hex string을 bytes로 전송하고 `TX_HEX` evidence를 남긴다.
 - `serial.read_bytes`: 지정한 byte 수를 읽고 `RX_HEX` evidence와 `data_hex` 값을 남긴다.

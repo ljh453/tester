@@ -8,13 +8,21 @@ public sealed record WorkbenchSerialDeviceSettings(
     int Baudrate,
     string Parity,
     double StopBits,
-    int ByteSize);
+    int ByteSize,
+    string LineEnding,
+    bool WriteFlush,
+    string Dtr,
+    string Rts);
 
 public sealed record WorkbenchSerialDeviceSettingsUpdate(
     string Name,
     string Parity,
     double StopBits,
-    int ByteSize);
+    int ByteSize,
+    string LineEnding,
+    bool WriteFlush,
+    string Dtr,
+    string Rts);
 
 public sealed record WorkbenchCommandDefaultSettings(
     string ProfileName,
@@ -111,7 +119,11 @@ public static class WorkbenchToolProfileSettingsEditor
                     ParseInt(values.GetValueOrDefault("baudrate"), 9600),
                     NormalizeParity(values.GetValueOrDefault("parity", "none")),
                     ParseDouble(values.GetValueOrDefault("stop_bits"), 1.0),
-                    ParseInt(values.GetValueOrDefault("byte_size"), 8)));
+                    ParseInt(values.GetValueOrDefault("byte_size"), 8),
+                    NormalizeLineEnding(values.GetValueOrDefault("line_ending", "lf")),
+                    ParseBool(values.GetValueOrDefault("write_flush"), true),
+                    NormalizeOptionalBool(values.GetValueOrDefault("dtr")),
+                    NormalizeOptionalBool(values.GetValueOrDefault("rts"))));
             index = blockEnd - 1;
         }
 
@@ -329,7 +341,11 @@ public static class WorkbenchToolProfileSettingsEditor
             var propertyIndent = ResolvePropertyIndent(lines, index + 1, blockEnd, indent + 2);
             SetScalar(lines, index + 1, blockEnd, propertyIndent, "parity", NormalizeParity(update.Parity), out blockEnd);
             SetScalar(lines, index + 1, blockEnd, propertyIndent, "stop_bits", FormatDouble(update.StopBits), out blockEnd);
-            SetScalar(lines, index + 1, blockEnd, propertyIndent, "byte_size", update.ByteSize.ToString(CultureInfo.InvariantCulture), out _);
+            SetScalar(lines, index + 1, blockEnd, propertyIndent, "byte_size", update.ByteSize.ToString(CultureInfo.InvariantCulture), out blockEnd);
+            SetScalar(lines, index + 1, blockEnd, propertyIndent, "line_ending", NormalizeLineEnding(update.LineEnding), out blockEnd);
+            SetScalar(lines, index + 1, blockEnd, propertyIndent, "write_flush", FormatBool(update.WriteFlush), out blockEnd);
+            SetScalar(lines, index + 1, blockEnd, propertyIndent, "dtr", NormalizeOptionalBool(update.Dtr), out blockEnd);
+            SetScalar(lines, index + 1, blockEnd, propertyIndent, "rts", NormalizeOptionalBool(update.Rts), out _);
             return;
         }
     }
@@ -747,8 +763,49 @@ public static class WorkbenchToolProfileSettingsEditor
         };
     }
 
+    private static string NormalizeLineEnding(string? value)
+    {
+        var normalized = (value ?? "lf").Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "\\n" => "lf",
+            "\\r\\n" => "crlf",
+            "\\r" => "cr",
+            "lf" or "crlf" or "cr" or "none" => normalized,
+            _ => "lf"
+        };
+    }
+
+    private static bool ParseBool(string? value, bool defaultValue)
+    {
+        var normalized = (value ?? "").Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "1" or "true" or "on" or "yes" => true,
+            "0" or "false" or "off" or "no" => false,
+            _ => defaultValue
+        };
+    }
+
+    private static string NormalizeOptionalBool(string? value)
+    {
+        var normalized = (value ?? "default").Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "1" or "true" or "on" or "yes" => "true",
+            "0" or "false" or "off" or "no" => "false",
+            "" or "none" or "auto" or "default" => "default",
+            _ => "default"
+        };
+    }
+
     private static string FormatDouble(double value)
     {
         return value.ToString("0.###", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatBool(bool value)
+    {
+        return value ? "true" : "false";
     }
 }

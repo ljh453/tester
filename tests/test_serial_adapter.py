@@ -15,8 +15,13 @@ def test_serial_write_records_tx_and_raw_evidence(tmp_path):
     assert result.success is True
     assert port.tx_lines == ["OUT 1 ON"]
     assert result.values["tx"] == "OUT 1 ON"
+    assert result.values["bytes_written"] == len("OUT 1 ON\n")
+    assert result.values["tx_hex"] == "4F55542031204F4E0A"
     assert result.raw_evidence_ref == "raw-logs/serial/serial-run/case.log"
-    assert (tmp_path / result.raw_evidence_ref).read_text(encoding="utf-8") == "TX OUT 1 ON\n"
+    assert (tmp_path / result.raw_evidence_ref).read_text(encoding="utf-8") == (
+        "TX OUT 1 ON\n"
+        "TX_HEX 4F55542031204F4E0A\n"
+    )
 
 
 def test_serial_read_returns_rx_and_records_raw_evidence(tmp_path):

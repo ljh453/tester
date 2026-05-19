@@ -31,6 +31,11 @@ class SerialPortSettings:
     parity: str = "none"
     stop_bits: float = 1.0
     byte_size: int = 8
+    line_ending: str = "\n"
+    encoding: str = "utf-8"
+    write_flush: bool = True
+    dtr: Optional[bool] = None
+    rts: Optional[bool] = None
     device_type: str = "generic_serial"
     command_profile: str = "raw_line"
 
@@ -53,20 +58,28 @@ class PySerialPort:
             stopbits=float(settings.stop_bits),
             bytesize=int(settings.byte_size),
         )
+        self._line_ending = _normalize_line_ending(settings.line_ending)
+        self._encoding = settings.encoding
+        self._write_flush = settings.write_flush
+        self.last_tx_payload: Optional[bytes] = None
+        if settings.dtr is not None:
+            self._serial.dtr = settings.dtr
+        if settings.rts is not None:
+            self._serial.rts = settings.rts
 
     def write_line(self, text: str) -> int:
-        payload = f"{text}\n".encode("utf-8")
-        return int(self._serial.write(payload))
+        payload = f"{text}{self._line_ending}".encode(self._encoding)
+        return self._write_payload(payload)
 
     def read_line(self, timeout_ms: int) -> str:
         self._serial.timeout = timeout_ms / 1000
         data = self._serial.readline()
         if not data:
             raise TimeoutError(f"Serial read timed out after {timeout_ms} ms.")
-        return data.decode("utf-8", errors="replace").rstrip("\r\n")
+        return data.decode(self._encoding, errors="replace").rstrip("\r\n")
 
     def write_bytes(self, payload: bytes) -> int:
-        return int(self._serial.write(payload))
+        return self._write_payload(bytes(payload))
 
     def read_bytes(self, count: int, timeout_ms: int) -> bytes:
         self._serial.timeout = timeout_ms / 1000
@@ -77,17 +90,37 @@ class PySerialPort:
             )
         return data
 
+    def _write_payload(self, payload: bytes) -> int:
+        self.last_tx_payload = payload
+        bytes_written = int(self._serial.write(payload))
+        if self._write_flush and hasattr(self._serial, "flush"):
+            self._serial.flush()
+        return bytes_written
+
 
 class FakeSerialPort:
-    def __init__(self, rx_lines: Iterable[str], rx_bytes: Iterable[bytes] = ()):
+    def __init__(
+        self,
+        rx_lines: Iterable[str],
+        rx_bytes: Iterable[bytes] = (),
+        line_ending: str = "\n",
+        encoding: str = "utf-8",
+    ):
         self.rx_lines: List[str] = list(rx_lines)
         self.rx_bytes: List[bytes] = list(rx_bytes)
         self.tx_lines: List[str] = []
         self.tx_bytes: List[bytes] = []
+        self.tx_payloads: List[bytes] = []
+        self.line_ending = _normalize_line_ending(line_ending)
+        self.encoding = encoding
+        self.last_tx_payload: Optional[bytes] = None
 
     def write_line(self, text: str) -> int:
         self.tx_lines.append(text)
-        return len(text)
+        payload = f"{text}{self.line_ending}".encode(self.encoding)
+        self.tx_payloads.append(payload)
+        self.last_tx_payload = payload
+        return len(payload)
 
     def read_line(self, timeout_ms: int) -> str:
         if not self.rx_lines:
@@ -97,6 +130,7 @@ class FakeSerialPort:
     def write_bytes(self, payload: bytes) -> int:
         data = bytes(payload)
         self.tx_bytes.append(data)
+        self.last_tx_payload = data
         return len(data)
 
     def read_bytes(self, count: int, timeout_ms: int) -> bytes:
@@ -145,16 +179,22 @@ class SerialAdapter:
         text = _required_text(args, "text")
         port = self._get_port(port_name)
         bytes_written = port.write_line(text)
-        evidence_ref = self._append_evidence(context, f"TX {text}\n")
+        tx_hex = _last_tx_payload_hex(port)
+        values = {
+            "port": port_name,
+            "tx": text,
+            "bytes_written": bytes_written,
+        }
+        evidence = f"TX {text}\n"
+        if tx_hex is not None:
+            values["tx_hex"] = tx_hex
+            evidence += f"TX_HEX {tx_hex}\n"
+        evidence_ref = self._append_evidence(context, evidence)
         return AdapterResult(
             success=True,
             status="passed",
             message=f"Wrote to serial port '{port_name}'.",
-            values={
-                "port": port_name,
-                "tx": text,
-                "bytes_written": bytes_written,
-            },
+            values=values,
             raw_evidence_ref=evidence_ref,
         )
 
@@ -299,6 +339,37 @@ def _pyserial_parity(value: str) -> str:
             "Serial parity must be one of none, even, odd, mark, or space."
         )
     return aliases[normalized]
+
+
+def _normalize_line_ending(value: str) -> str:
+    raw = str(value)
+    aliases = {
+        "": "",
+        "\n": "\n",
+        "\r\n": "\r\n",
+        "\r": "\r",
+        "\\n": "\n",
+        "\\r\\n": "\r\n",
+        "\\r": "\r",
+        "lf": "\n",
+        "crlf": "\r\n",
+        "cr": "\r",
+        "none": "",
+        "no": "",
+    }
+    if raw in aliases:
+        return aliases[raw]
+    normalized = raw.strip().lower()
+    if normalized in aliases:
+        return aliases[normalized]
+    return raw
+
+
+def _last_tx_payload_hex(port: SerialPort) -> Optional[str]:
+    payload = getattr(port, "last_tx_payload", None)
+    if isinstance(payload, (bytes, bytearray)):
+        return bytes(payload).hex().upper()
+    return None
 
 
 def _safe_segment(value: str) -> str:

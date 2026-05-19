@@ -7,8 +7,10 @@ serial:
       parity: none
       stop_bits: 1
       byte_size: 8
+      line_ending: lf
+      write_flush: true
       command_profile: vupower_k_usb
-      notes: "VuPower K Series USB-to-Serial SCPI-style protocol."
+      notes: "VuPower K Series USB-to-Serial SCPI-style protocol. If the PSU does not receive commands, try line_ending: crlf and optional dtr/rts settings."
     sent_usb:
       device_type: mach_systems_sent_usb
       port: COM4

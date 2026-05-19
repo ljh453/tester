@@ -15,6 +15,21 @@ public partial class SettingsWindow : Window
         "space"
     };
 
+    private static readonly HashSet<string> AllowedLineEndings = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "lf",
+        "crlf",
+        "cr",
+        "none"
+    };
+
+    private static readonly HashSet<string> AllowedOptionalBools = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "default",
+        "true",
+        "false"
+    };
+
     public static IReadOnlyList<string> ParityOptions { get; } = new[]
     {
         "none",
@@ -27,6 +42,21 @@ public partial class SettingsWindow : Window
     public static IReadOnlyList<double> StopBitsOptions { get; } = new[] { 1.0, 1.5, 2.0 };
 
     public static IReadOnlyList<int> ByteSizeOptions { get; } = new[] { 5, 6, 7, 8 };
+
+    public static IReadOnlyList<string> LineEndingOptions { get; } = new[]
+    {
+        "lf",
+        "crlf",
+        "cr",
+        "none"
+    };
+
+    public static IReadOnlyList<string> OptionalBoolOptions { get; } = new[]
+    {
+        "default",
+        "true",
+        "false"
+    };
 
     private readonly ObservableCollection<SerialDeviceSettingsRow> _serialDeviceRows;
     private readonly ObservableCollection<CommandDefaultSettingsRow> _commandDefaultRows;
@@ -59,7 +89,11 @@ public partial class SettingsWindow : Window
                     row.Name,
                     row.Parity.Trim().ToLowerInvariant(),
                     row.StopBits,
-                    row.ByteSize))
+                    row.ByteSize,
+                    row.LineEnding.Trim().ToLowerInvariant(),
+                    row.WriteFlush,
+                    row.Dtr.Trim().ToLowerInvariant(),
+                    row.Rts.Trim().ToLowerInvariant()))
                 .ToArray(),
             _commandDefaultRows
                 .Select(row => new WorkbenchCommandDefaultSettingsUpdate(
@@ -116,6 +150,39 @@ public partial class SettingsWindow : Window
                     MessageBoxImage.Warning);
                 return false;
             }
+
+            if (!AllowedLineEndings.Contains(row.LineEnding.Trim()))
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    $"Serial device '{row.Name}' line ending must be one of lf, crlf, cr, or none.",
+                    "Invalid Serial Setting",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
+
+            if (!AllowedOptionalBools.Contains(row.Dtr.Trim()))
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    $"Serial device '{row.Name}' DTR must be default, true, or false.",
+                    "Invalid Serial Setting",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
+
+            if (!AllowedOptionalBools.Contains(row.Rts.Trim()))
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    $"Serial device '{row.Name}' RTS must be default, true, or false.",
+                    "Invalid Serial Setting",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return false;
+            }
         }
 
         return true;
@@ -158,6 +225,14 @@ public sealed class SerialDeviceSettingsRow
 
     public int ByteSize { get; set; } = 8;
 
+    public string LineEnding { get; set; } = "lf";
+
+    public bool WriteFlush { get; set; } = true;
+
+    public string Dtr { get; set; } = "default";
+
+    public string Rts { get; set; } = "default";
+
     public static SerialDeviceSettingsRow FromSettings(WorkbenchSerialDeviceSettings settings)
     {
         return new SerialDeviceSettingsRow
@@ -167,7 +242,11 @@ public sealed class SerialDeviceSettingsRow
             Baudrate = settings.Baudrate,
             Parity = settings.Parity,
             StopBits = settings.StopBits,
-            ByteSize = settings.ByteSize
+            ByteSize = settings.ByteSize,
+            LineEnding = settings.LineEnding,
+            WriteFlush = settings.WriteFlush,
+            Dtr = settings.Dtr,
+            Rts = settings.Rts
         };
     }
 }

@@ -1511,6 +1511,10 @@ static async Task RunWorkbenchToolProfileSettingsEditorTest()
               parity: odd
               stop_bits: 1.5
               byte_size: 7
+              line_ending: crlf
+              write_flush: false
+              dtr: true
+              rts: false
               command_profile: sent_usb_line
         command_defaults:
           serial.write:
@@ -1536,6 +1540,10 @@ static async Task RunWorkbenchToolProfileSettingsEditorTest()
     AssertEqual("odd", sentUsb.Parity, "settings editor parity");
     AssertEqual(1.5, sentUsb.StopBits, "settings editor stop bits");
     AssertEqual(7, sentUsb.ByteSize, "settings editor byte size");
+    AssertEqual("crlf", sentUsb.LineEnding, "settings editor line ending");
+    AssertFalse(sentUsb.WriteFlush, "settings editor write flush");
+    AssertEqual("true", sentUsb.Dtr, "settings editor dtr");
+    AssertEqual("false", sentUsb.Rts, "settings editor rts");
     AssertEqual(
         "3",
         defaults.Single(row =>
@@ -1555,8 +1563,8 @@ static async Task RunWorkbenchToolProfileSettingsEditorTest()
         profileText,
         new[]
         {
-            new WorkbenchSerialDeviceSettingsUpdate("psu", "even", 2, 7),
-            new WorkbenchSerialDeviceSettingsUpdate("sent_usb", "none", 1, 8)
+            new WorkbenchSerialDeviceSettingsUpdate("psu", "even", 2, 7, "crlf", true, "true", "false"),
+            new WorkbenchSerialDeviceSettingsUpdate("sent_usb", "none", 1, 8, "lf", true, "default", "default")
         });
     var updated = await WorkbenchToolProfileSettingsEditor.UpdateCommandDefaultsAsync(
         serialUpdated,
@@ -1597,6 +1605,10 @@ static async Task RunWorkbenchToolProfileSettingsEditorTest()
     AssertTrue(updated.Contains("parity: even", StringComparison.Ordinal), "settings editor inserts parity");
     AssertTrue(updated.Contains("stop_bits: 2", StringComparison.Ordinal), "settings editor inserts stop bits");
     AssertTrue(updated.Contains("byte_size: 8", StringComparison.Ordinal), "settings editor updates byte size");
+    AssertTrue(updated.Contains("line_ending: crlf", StringComparison.Ordinal), "settings editor inserts line ending");
+    AssertTrue(updated.Contains("write_flush: true", StringComparison.Ordinal), "settings editor inserts write flush");
+    AssertTrue(updated.Contains("dtr: true", StringComparison.Ordinal), "settings editor inserts dtr");
+    AssertTrue(updated.Contains("rts: false", StringComparison.Ordinal), "settings editor inserts rts");
     AssertTrue(updated.Contains("timeout_ms: 1500", StringComparison.Ordinal), "settings editor inserts command default");
     AssertTrue(updated.Contains("timeout_ms: 1750", StringComparison.Ordinal), "settings editor updates global command default");
     AssertTrue(updated.Contains("fallback: true", StringComparison.Ordinal), "settings editor inserts global command default");
@@ -1647,6 +1659,10 @@ static async Task RunMainWorkbenchViewModelSettingsSnapshotTest()
     AssertEqual("none", snapshot.SerialDevices.Single().Parity, "settings snapshot default parity");
     AssertEqual(1.0, snapshot.SerialDevices.Single().StopBits, "settings snapshot default stop bits");
     AssertEqual(8, snapshot.SerialDevices.Single().ByteSize, "settings snapshot default byte size");
+    AssertEqual("lf", snapshot.SerialDevices.Single().LineEnding, "settings snapshot default line ending");
+    AssertTrue(snapshot.SerialDevices.Single().WriteFlush, "settings snapshot default write flush");
+    AssertEqual("default", snapshot.SerialDevices.Single().Dtr, "settings snapshot default dtr");
+    AssertEqual("default", snapshot.SerialDevices.Single().Rts, "settings snapshot default rts");
     AssertEqual(
         "3",
         snapshot.CommandDefaults.Single(row =>
@@ -1657,7 +1673,7 @@ static async Task RunMainWorkbenchViewModelSettingsSnapshotTest()
 
     await viewModel.ApplySettingsAsync(new WorkbenchSettingsUpdate(
         WorkbenchThemeMode.Dark,
-        new[] { new WorkbenchSerialDeviceSettingsUpdate("sent_usb", "even", 2, 7) },
+        new[] { new WorkbenchSerialDeviceSettingsUpdate("sent_usb", "even", 2, 7, "crlf", false, "true", "false") },
         new[]
         {
             new WorkbenchCommandDefaultSettingsUpdate(
@@ -1672,6 +1688,10 @@ static async Task RunMainWorkbenchViewModelSettingsSnapshotTest()
     AssertTrue(updatedProfile.Contains("parity: even", StringComparison.Ordinal), "settings apply parity");
     AssertTrue(updatedProfile.Contains("stop_bits: 2", StringComparison.Ordinal), "settings apply stop bits");
     AssertTrue(updatedProfile.Contains("byte_size: 7", StringComparison.Ordinal), "settings apply byte size");
+    AssertTrue(updatedProfile.Contains("line_ending: crlf", StringComparison.Ordinal), "settings apply line ending");
+    AssertTrue(updatedProfile.Contains("write_flush: false", StringComparison.Ordinal), "settings apply write flush");
+    AssertTrue(updatedProfile.Contains("dtr: true", StringComparison.Ordinal), "settings apply dtr");
+    AssertTrue(updatedProfile.Contains("rts: false", StringComparison.Ordinal), "settings apply rts");
     AssertTrue(updatedProfile.Contains("timeout_ms: 2000", StringComparison.Ordinal), "settings apply command default");
 }
 

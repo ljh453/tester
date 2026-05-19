@@ -119,6 +119,14 @@ def _serial_settings_from_device(
         parity=str(device_config.get("parity", "none")),
         stop_bits=float(device_config.get("stop_bits", 1.0)),
         byte_size=int(device_config.get("byte_size", 8)),
+        line_ending=str(device_config.get("line_ending", "\n")),
+        encoding=str(device_config.get("encoding", "utf-8")),
+        write_flush=_bool_setting(
+            device_config.get("write_flush", True),
+            "write_flush",
+        ),
+        dtr=_optional_bool_setting(device_config.get("dtr"), "dtr"),
+        rts=_optional_bool_setting(device_config.get("rts"), "rts"),
         device_type=str(device_config.get("device_type", "generic_serial")),
         command_profile=str(device_config.get("command_profile", "raw_line")),
     )
@@ -127,3 +135,23 @@ def _serial_settings_from_device(
 def _has_serial_devices(tool_profile_snapshot: Mapping[str, Any]) -> bool:
     serial_section = tool_profile_snapshot.get("serial")
     return isinstance(serial_section, Mapping) and bool(serial_section.get("devices"))
+
+
+def _bool_setting(value: Any, field_name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "on", "yes"}:
+        return True
+    if normalized in {"0", "false", "off", "no"}:
+        return False
+    raise ValueError(f"Serial setting '{field_name}' must be a boolean value.")
+
+
+def _optional_bool_setting(value: Any, field_name: str) -> Optional[bool]:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"", "none", "auto", "default"}:
+        return None
+    return _bool_setting(value, field_name)
