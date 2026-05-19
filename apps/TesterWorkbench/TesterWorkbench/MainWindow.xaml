@@ -338,7 +338,7 @@
                 <Button Content="■"
                         Click="Stop_Click"
                         Style="{StaticResource IdeToolbarButtonStyle}"
-                        ToolTip="Stop run safely" />
+                        ToolTip="Stop" />
                 <Button Content="●"
                         Click="ToggleBreakpoint_Click"
                         Style="{StaticResource IdeToolbarButtonStyle}"

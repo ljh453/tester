@@ -11,6 +11,14 @@ public enum WorkbenchProjectExplorerNodeRole
     Referenced
 }
 
+public enum WorkbenchSelectionOrigin
+{
+    None,
+    YamlEditor,
+    GuiEditor,
+    ExecutionTrace
+}
+
 public sealed class MainWorkbenchViewModel
 {
     public const string AvailableBreakpointMarker = "\u25A1";
@@ -106,6 +114,8 @@ public sealed class MainWorkbenchViewModel
     public WorkbenchGuiTestcase? SelectedGuiTestcase { get; private set; }
 
     public WorkbenchCommandBlock? SelectedGuiCommand { get; private set; }
+
+    public WorkbenchSelectionOrigin ActiveSelectionOrigin { get; private set; } = WorkbenchSelectionOrigin.None;
 
     public IReadOnlyList<string> SelectedGuiTestcaseRunNames => SelectedGuiTestcaseRunNamesInFileOrder();
 
@@ -780,8 +790,17 @@ public sealed class MainWorkbenchViewModel
         EditorFontSize = Math.Max(MinimumEditorFontSize, EditorFontSize - EditorFontSizeStep);
     }
 
-    public void SelectExecutionTraceEvent(EngineRunEvent? runEvent)
+    public void SelectExecutionTraceEvent(
+        EngineRunEvent? runEvent,
+        bool makeActiveSelection = true)
     {
+        if (makeActiveSelection)
+        {
+            ActiveSelectionOrigin = runEvent is null
+                ? WorkbenchSelectionOrigin.None
+                : WorkbenchSelectionOrigin.ExecutionTrace;
+        }
+
         if (runEvent is null)
         {
             Variables = LatestLocalVariablesOrRunVariables();
@@ -800,8 +819,13 @@ public sealed class MainWorkbenchViewModel
         UpdateGuiCurrentExecutionBlock();
     }
 
-    public void SelectGuiCommand(WorkbenchCommandBlock? commandBlock)
+    public void SelectGuiCommand(
+        WorkbenchCommandBlock? commandBlock,
+        WorkbenchSelectionOrigin origin = WorkbenchSelectionOrigin.GuiEditor)
     {
+        ActiveSelectionOrigin = commandBlock is null
+            ? WorkbenchSelectionOrigin.None
+            : origin;
         SelectedGuiCommand = commandBlock;
         if (commandBlock is null)
         {
@@ -947,6 +971,7 @@ public sealed class MainWorkbenchViewModel
         }
 
         SelectGuiCommandForBulkAction(commandBlock, replaceSelection: true);
+        ActiveSelectionOrigin = WorkbenchSelectionOrigin.YamlEditor;
         CurrentSourceFile = SelectedFilePath ?? string.Empty;
         CurrentLineNumber = lineNumber;
         CurrentLocationText = $"Line {lineNumber} - {commandBlock.CommandType}";
@@ -1413,7 +1438,7 @@ public sealed class MainWorkbenchViewModel
         }
 
         ExecutionTrace = events;
-        SelectExecutionTraceEvent(runEvent);
+        SelectExecutionTraceEvent(runEvent, makeActiveSelection: false);
         AppendLogEvent(runEvent);
     }
 

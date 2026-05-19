@@ -233,7 +233,9 @@ public partial class MainWindow : Window
             TraceFollowLatestCheckBox.IsChecked = false;
         }
 
-        _viewModel.SelectExecutionTraceEvent(runEvent);
+        _viewModel.SelectExecutionTraceEvent(
+            runEvent,
+            makeActiveSelection: !_isUpdatingTraceSelection && !_isRefreshingTraceGrid);
         VariablesGrid.ItemsSource = _viewModel.Variables;
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         FocusYamlLine(_viewModel.CurrentLineNumber);

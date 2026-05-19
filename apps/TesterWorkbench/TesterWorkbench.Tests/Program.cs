@@ -44,6 +44,7 @@ await RunWorkbenchGuiModelBuilderAutocompleteSuggestionTest();
 await RunWorkbenchGuiModelBuilderComplexArgumentTest();
 await RunMainWorkbenchViewModelRefreshesGuiModelTest();
 await RunMainWorkbenchViewModelSelectsGuiCommandFromYamlLineTest();
+await RunWorkbenchTracksActiveSelectionOriginTest();
 await RunMainWorkbenchViewModelLoadsToolProfileArgumentSuggestionsTest();
 await RunWorkbenchCommandCatalogTest();
 await RunWorkbenchYamlCommandArgumentUpdaterTest();
@@ -2289,6 +2290,68 @@ static Task RunMainWorkbenchViewModelSelectsGuiCommandFromYamlLineTest()
     AssertEqual(1, viewModel.SelectedGuiCommandCount, "YAML line selection leaves one GUI command selected");
     AssertEqual(7, viewModel.CurrentLineNumber, "current line follows YAML caret line");
     AssertEqual("Line 7 - delay", viewModel.CurrentLocationText, "current location follows YAML command");
+
+    return Task.CompletedTask;
+}
+
+static Task RunWorkbenchTracksActiveSelectionOriginTest()
+{
+    var viewModel = new MainWorkbenchViewModel(
+        new WorkspaceScanner(),
+        new TesterEngineBridge(
+            "python",
+            TestPaths.CreateWorkspace(),
+            new FakeEngineProcessRunner(Array.Empty<EngineProcessResult>())));
+
+    viewModel.UpdateEditorText(
+        """
+        testcases:
+          - name: origin_case
+            steps:
+              - log.text:
+                  text: hello
+        """);
+
+    AssertTrue(viewModel.SelectGuiCommandAtLine(4), "select gui command from YAML line");
+    AssertEqual(
+        WorkbenchSelectionOrigin.YamlEditor,
+        viewModel.ActiveSelectionOrigin,
+        "YAML editor selection origin");
+
+    viewModel.SelectGuiCommand(viewModel.SelectedGuiCommand);
+    AssertEqual(
+        WorkbenchSelectionOrigin.GuiEditor,
+        viewModel.ActiveSelectionOrigin,
+        "GUI selection origin");
+
+    viewModel.SelectExecutionTraceEvent(new EngineRunEvent(
+        "origin_case",
+        "steps",
+        "log.text",
+        "passed",
+        "testcases[0].steps[0]",
+        "origin.yaml",
+        4,
+        Array.Empty<EngineVariableValue>(),
+        false,
+        "",
+        "hello",
+        "hello",
+        "{}",
+        "{}",
+        "",
+        "log.text: 1 ms"));
+
+    AssertEqual(
+        WorkbenchSelectionOrigin.ExecutionTrace,
+        viewModel.ActiveSelectionOrigin,
+        "Trace selection origin");
+
+    viewModel.SelectExecutionTraceEvent(null);
+    AssertEqual(
+        WorkbenchSelectionOrigin.None,
+        viewModel.ActiveSelectionOrigin,
+        "cleared selection origin");
 
     return Task.CompletedTask;
 }
