@@ -429,3 +429,16 @@ def test_primary_panes_have_docking_ready_headers():
         "GuiPropertiesPaneHeader",
         "BottomInspectorPaneHeader",
     } <= names
+
+
+def test_properties_pane_separates_required_optional_and_insert_sections():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    names = {
+        element.attrib.get(f"{XAML}Name")
+        for element in root.iter()
+    }
+
+    assert "GuiRequiredArgumentsPanel" in names
+    assert "GuiOptionalArgumentsPanel" in names
+    assert "GuiInsertCommandPanel" in names

@@ -888,62 +888,65 @@
                                             <TextBlock x:Name="GuiCommandValidationText"
                                                        TextWrapping="Wrap"
                                                        Margin="0,3,0,8" />
-                                            <Grid>
-                                                <TextBlock Text="Arguments"
-                                                           Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
-                                                <CheckBox x:Name="ShowOptionalArgumentsCheckBox"
-                                                          Content="Show optional"
-                                                          HorizontalAlignment="Right"
-                                                          Click="ShowOptionalArgumentsCheckBox_Click" />
-                                            </Grid>
-                                            <ItemsControl x:Name="GuiCommandArgumentsControl"
-                                                          Margin="0,3,0,8" />
-                                            <TextBlock Text="Complex Arguments" Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
-                                            <ItemsControl x:Name="GuiCommandComplexArgumentsControl"
-                                                          Margin="0,3,0,0">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate DataType="{x:Type vm:WorkbenchCommandArgument}">
-                                                        <StackPanel Margin="0,0,0,8">
-                                                            <Grid Margin="0,0,0,3">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="*" />
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                </Grid.ColumnDefinitions>
-                                                                <TextBlock Text="{Binding Name}"
-                                                                           Foreground="{DynamicResource Workbench.Brush.TextSecondary}" />
-                                                                <TextBlock Grid.Column="1"
-                                                                           Text="{Binding RequirementText}"
-                                                                           Foreground="{DynamicResource Workbench.Brush.TextMuted}"
-                                                                           FontSize="11" />
-                                                            </Grid>
-                                                            <TextBox Text="{Binding Value, Mode=OneWay}"
-                                                                     Tag="{Binding}"
-                                                                     MinHeight="72"
-                                                                     AcceptsReturn="True"
-                                                                     TextWrapping="NoWrap"
-                                                                     HorizontalScrollBarVisibility="Auto"
-                                                                     VerticalScrollBarVisibility="Auto"
-                                                                     LostFocus="GuiCommandComplexArgumentTextBox_LostFocus">
-                                                                <TextBox.Style>
-                                                                    <Style TargetType="{x:Type TextBox}">
-                                                                        <Setter Property="IsReadOnly" Value="True" />
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsComplexEditable}" Value="True">
-                                                                                <Setter Property="IsReadOnly" Value="False" />
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBox.Style>
-                                                            </TextBox>
-                                                        </StackPanel>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                                            <StackPanel x:Name="GuiRequiredArgumentsPanel">
+                                                <Grid x:Name="GuiOptionalArgumentsPanel">
+                                                    <TextBlock Text="Arguments"
+                                                               Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                                                    <CheckBox x:Name="ShowOptionalArgumentsCheckBox"
+                                                              Content="Show optional"
+                                                              HorizontalAlignment="Right"
+                                                              Click="ShowOptionalArgumentsCheckBox_Click" />
+                                                </Grid>
+                                                <ItemsControl x:Name="GuiCommandArgumentsControl"
+                                                              Margin="0,3,0,8" />
+                                                <TextBlock Text="Complex Arguments" Foreground="{DynamicResource Workbench.Brush.TextMuted}" />
+                                                <ItemsControl x:Name="GuiCommandComplexArgumentsControl"
+                                                              Margin="0,3,0,0">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type vm:WorkbenchCommandArgument}">
+                                                            <StackPanel Margin="0,0,0,8">
+                                                                <Grid Margin="0,0,0,3">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="{Binding Name}"
+                                                                               Foreground="{DynamicResource Workbench.Brush.TextSecondary}" />
+                                                                    <TextBlock Grid.Column="1"
+                                                                               Text="{Binding RequirementText}"
+                                                                               Foreground="{DynamicResource Workbench.Brush.TextMuted}"
+                                                                               FontSize="11" />
+                                                                </Grid>
+                                                                <TextBox Text="{Binding Value, Mode=OneWay}"
+                                                                         Tag="{Binding}"
+                                                                         MinHeight="72"
+                                                                         AcceptsReturn="True"
+                                                                         TextWrapping="NoWrap"
+                                                                         HorizontalScrollBarVisibility="Auto"
+                                                                         VerticalScrollBarVisibility="Auto"
+                                                                         LostFocus="GuiCommandComplexArgumentTextBox_LostFocus">
+                                                                    <TextBox.Style>
+                                                                        <Style TargetType="{x:Type TextBox}">
+                                                                            <Setter Property="IsReadOnly" Value="True" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsComplexEditable}" Value="True">
+                                                                                    <Setter Property="IsReadOnly" Value="False" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBox.Style>
+                                                                </TextBox>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>
 
-                                <Border BorderBrush="{DynamicResource Workbench.Brush.Border}"
+                                <Border x:Name="GuiInsertCommandPanel"
+                                        BorderBrush="{DynamicResource Workbench.Brush.Border}"
                                         BorderThickness="1"
                                         Background="{DynamicResource Workbench.Brush.PanelBackgroundAlt}"
                                         CornerRadius="4"
