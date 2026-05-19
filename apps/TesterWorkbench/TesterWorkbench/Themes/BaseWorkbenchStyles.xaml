@@ -31,6 +31,28 @@
         <Setter Property="Background" Value="{DynamicResource Workbench.Brush.Border}" />
     </Style>
 
+    <Style x:Key="WorkbenchContextStripStyle" TargetType="{x:Type Border}">
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ContextStripBackground}" />
+    </Style>
+
+    <Style x:Key="WorkbenchStatusChipTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Margin" Value="8,0,0,0" />
+        <Setter Property="Padding" Value="8,2" />
+        <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.StatusChipBackground}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="WorkbenchPaneHeaderStyle" TargetType="{x:Type Border}">
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
+    </Style>
+
     <Style TargetType="{x:Type Button}">
         <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackground}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />

@@ -3,6 +3,8 @@
     <SolidColorBrush x:Key="Workbench.Brush.AppBackground" Color="#F3F4F6" />
     <SolidColorBrush x:Key="Workbench.Brush.PanelBackground" Color="#FFFFFF" />
     <SolidColorBrush x:Key="Workbench.Brush.PanelBackgroundAlt" Color="#F9FAFB" />
+    <SolidColorBrush x:Key="Workbench.Brush.ContextStripBackground" Color="#F3F6FA" />
+    <SolidColorBrush x:Key="Workbench.Brush.StatusChipBackground" Color="#E8EEF6" />
     <SolidColorBrush x:Key="Workbench.Brush.TabSelectedBackground" Color="#FFFFFF" />
     <SolidColorBrush x:Key="Workbench.Brush.TabSelectedText" Color="#111827" />
     <SolidColorBrush x:Key="Workbench.Brush.ControlBackground" Color="#FFFFFF" />
@@ -17,6 +19,8 @@
     <SolidColorBrush x:Key="Workbench.Brush.EditorGutter" Color="#F3F4F6" />
     <SolidColorBrush x:Key="Workbench.Brush.EditorSelection" Color="#F59E0B" />
     <SolidColorBrush x:Key="Workbench.Brush.CurrentLine" Color="#FBBF24" />
+    <SolidColorBrush x:Key="Workbench.Brush.LinkedHighlight" Color="#7C5FD6" />
+    <SolidColorBrush x:Key="Workbench.Brush.ExecutionCurrentBackground" Color="#DCEBFF" />
     <SolidColorBrush x:Key="Workbench.Brush.BadgeBackground" Color="#111827" />
     <SolidColorBrush x:Key="Workbench.Brush.BadgeText" Color="#FFFFFF" />
     <SolidColorBrush x:Key="Workbench.Brush.Accent" Color="#0284C7" />

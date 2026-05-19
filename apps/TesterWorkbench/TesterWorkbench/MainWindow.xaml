@@ -24,20 +24,6 @@
             <Setter Property="BorderThickness" Value="1" />
         </Style>
 
-        <Style x:Key="WorkbenchContextStripStyle" TargetType="{x:Type Border}">
-            <Setter Property="Padding" Value="8,4" />
-            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
-            <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
-        </Style>
-
-        <Style x:Key="WorkbenchStatusChipTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="Margin" Value="8,0,0,0" />
-            <Setter Property="Padding" Value="8,2" />
-            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
-
         <Style x:Key="IdeToolbarButtonStyle"
                TargetType="{x:Type Button}"
                BasedOn="{StaticResource {x:Type Button}}">
@@ -102,12 +88,12 @@
                                     <Setter Property="Opacity" Value="1" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsCurrentExecution}" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ExecutionCurrentBackground}" />
                                     <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
                                     <Setter Property="Opacity" Value="1" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsLinkedSelection}" Value="True">
-                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.TextSecondary}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.LinkedHighlight}" />
                                     <Setter Property="BorderThickness" Value="4,1,1,1" />
                                     <Setter Property="Opacity" Value="0.96" />
                                 </DataTrigger>

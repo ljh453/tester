@@ -387,3 +387,28 @@ def test_execution_trace_has_inspector_controls_for_follow_and_pin():
     assert "TraceFollowLatestCheckBox" in names
     assert "TracePinSelectedButton" in names
     assert "TraceSelectedEventText" in names
+
+
+def test_a_shell_uses_shared_theme_styles():
+    base = _load("apps/TesterWorkbench/TesterWorkbench/Themes/BaseWorkbenchStyles.xaml")
+    dark = _load("apps/TesterWorkbench/TesterWorkbench/Themes/DarkTheme.xaml")
+    light = _load("apps/TesterWorkbench/TesterWorkbench/Themes/LightTheme.xaml")
+
+    style_keys = {
+        element.attrib.get(f"{XAML}Key")
+        for element in base.iter(f"{PRESENTATION}Style")
+    }
+    dark_brushes = {
+        element.attrib.get(f"{XAML}Key")
+        for element in dark.iter(f"{PRESENTATION}SolidColorBrush")
+    }
+    light_brushes = {
+        element.attrib.get(f"{XAML}Key")
+        for element in light.iter(f"{PRESENTATION}SolidColorBrush")
+    }
+
+    assert "WorkbenchContextStripStyle" in style_keys
+    assert "WorkbenchStatusChipTextStyle" in style_keys
+    assert "WorkbenchPaneHeaderStyle" in style_keys
+    assert "Workbench.Brush.LinkedHighlight" in dark_brushes
+    assert "Workbench.Brush.LinkedHighlight" in light_brushes
