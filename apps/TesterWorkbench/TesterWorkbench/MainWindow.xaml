@@ -24,6 +24,20 @@
             <Setter Property="BorderThickness" Value="1" />
         </Style>
 
+        <Style x:Key="WorkbenchContextStripStyle" TargetType="{x:Type Border}">
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Border}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Background" Value="{DynamicResource Workbench.Brush.PanelBackgroundAlt}" />
+        </Style>
+
+        <Style x:Key="WorkbenchStatusChipTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="Foreground" Value="{DynamicResource Workbench.Brush.TextPrimary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
         <Style x:Key="IdeToolbarButtonStyle"
                TargetType="{x:Type Button}"
                BasedOn="{StaticResource {x:Type Button}}">
@@ -339,6 +353,40 @@
                           ToolTip="Show or hide GUI Editor"
                           VerticalAlignment="Center" />
         </ToolBar>
+
+        <Border x:Name="WorkbenchContextStrip"
+                DockPanel.Dock="Top"
+                Style="{StaticResource WorkbenchContextStripStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="ContextSelectedYamlText"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="Currently opened YAML file." />
+                <TextBlock x:Name="ContextRunTargetText"
+                           Grid.Column="1"
+                           Style="{StaticResource WorkbenchStatusChipTextStyle}"
+                           ToolTip="Testcases selected for the next run." />
+                <TextBlock x:Name="ContextSaveStateText"
+                           Grid.Column="2"
+                           Style="{StaticResource WorkbenchStatusChipTextStyle}"
+                           ToolTip="Saved or unsaved editor state." />
+                <TextBlock x:Name="ContextRunStateText"
+                           Grid.Column="3"
+                           Style="{StaticResource WorkbenchStatusChipTextStyle}"
+                           ToolTip="Current runtime state." />
+                <TextBlock x:Name="ContextCurrentLineText"
+                           Grid.Column="4"
+                           Style="{StaticResource WorkbenchStatusChipTextStyle}"
+                           ToolTip="Current editor, GUI, or execution line." />
+            </Grid>
+        </Border>
 
         <Grid x:Name="WorkbenchRootGrid">
             <Grid.ColumnDefinitions>

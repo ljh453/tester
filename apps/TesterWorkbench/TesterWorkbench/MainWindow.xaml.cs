@@ -239,6 +239,7 @@ public partial class MainWindow : Window
         FocusYamlLine(_viewModel.CurrentLineNumber);
         HighlightCurrentExecutionLine();
         RefreshSelectedTraceDetails();
+        RefreshWorkbenchContextStrip();
     }
 
     private void EditorBox_SelectionChanged(object sender, RoutedEventArgs e)
@@ -257,6 +258,7 @@ public partial class MainWindow : Window
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         RefreshGuiCommandProperties();
         UpdateCurrentExecutionLineMarker();
+        RefreshWorkbenchContextStrip();
     }
 
     private void GuiTestcaseComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -296,6 +298,7 @@ public partial class MainWindow : Window
         CurrentLineText.Text = _viewModel.CurrentLocationText;
         FocusYamlLine(commandBlock.SourceLineStart);
         UpdateCurrentExecutionLineMarker();
+        RefreshWorkbenchContextStrip();
     }
 
     private void GuiExpandAll_Click(object sender, RoutedEventArgs e)
@@ -856,6 +859,7 @@ public partial class MainWindow : Window
         SyncLineNumberScroll();
         SelectedFileText.Text = _viewModel.SelectedFileDisplayText;
         SaveStatusTextBlock.Text = _viewModel.SaveStatusText;
+        RefreshWorkbenchContextStrip();
         RefreshGuiEditor();
         UpdateCurrentExecutionLineMarker();
     }
@@ -956,6 +960,7 @@ public partial class MainWindow : Window
         BreakpointsTextBlock.Text = _viewModel.BreakpointsText;
         RefreshRuntimeViews();
         SyncLineNumberScroll();
+        RefreshWorkbenchContextStrip();
     }
 
     private void RefreshRuntimeViews(bool selectLatestTrace = true)
@@ -988,6 +993,16 @@ public partial class MainWindow : Window
         RefreshSelectedTraceDetails();
         RefreshConsole();
         HighlightCurrentExecutionLine();
+        RefreshWorkbenchContextStrip();
+    }
+
+    private void RefreshWorkbenchContextStrip()
+    {
+        ContextSelectedYamlText.Text = _viewModel.ContextSelectedYamlText;
+        ContextRunTargetText.Text = _viewModel.ContextRunTargetText;
+        ContextSaveStateText.Text = _viewModel.ContextSaveStateText;
+        ContextRunStateText.Text = _viewModel.ContextRunStateText;
+        ContextCurrentLineText.Text = _viewModel.ContextCurrentLineText;
     }
 
     private void RefreshSelectedTraceDetails()
@@ -1161,6 +1176,7 @@ public partial class MainWindow : Window
     private void RefreshGuiRunSelectionText()
     {
         GuiRunTestcaseSelectionText.Text = _viewModel.SelectedGuiTestcaseRunText;
+        RefreshWorkbenchContextStrip();
     }
 
     private void RefreshGuiCommandProperties()

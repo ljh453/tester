@@ -319,3 +319,29 @@ def test_execution_trace_detail_regions_explain_resolved_runtime_data():
     assert detail_tooltips["TraceOutputsBox"]
     assert detail_tooltips["TraceEvidenceBox"]
     assert detail_tooltips["TraceErrorBox"]
+
+
+def test_workbench_has_a_shell_context_strip():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    strip = next(
+        (
+            element
+            for element in root.iter(f"{PRESENTATION}Border")
+            if element.attrib.get(f"{XAML}Name") == "WorkbenchContextStrip"
+        ),
+        None,
+    )
+    text_names = {
+        element.attrib.get(f"{XAML}Name")
+        for element in root.iter(f"{PRESENTATION}TextBlock")
+    }
+
+    assert strip is not None
+    assert {
+        "ContextSelectedYamlText",
+        "ContextRunTargetText",
+        "ContextSaveStateText",
+        "ContextRunStateText",
+        "ContextCurrentLineText",
+    } <= text_names

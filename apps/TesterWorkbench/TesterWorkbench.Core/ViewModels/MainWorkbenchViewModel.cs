@@ -61,6 +61,20 @@ public sealed class MainWorkbenchViewModel
             ? $"{SelectedFilePath} *"
             : SelectedFilePath;
 
+    public string ContextSelectedYamlText => string.IsNullOrWhiteSpace(SelectedFilePath)
+        ? "Current YAML: none"
+        : $"Current YAML: {Path.GetFileName(SelectedFilePath)}";
+
+    public string ContextRunTargetText => SelectedGuiTestcaseRunText;
+
+    public string ContextSaveStateText => IsDirty ? "Unsaved" : SaveStatusText;
+
+    public string ContextRunStateText => $"Run: {RunStatus}";
+
+    public string ContextCurrentLineText => CurrentLineNumber > 0
+        ? CurrentLocationText
+        : "Line: none";
+
     public string EditorLineNumbersText { get; private set; } = "1";
 
     public IReadOnlyCollection<int> BreakpointLineNumbers => _breakpointLineNumbers;
