@@ -106,6 +106,17 @@
                                     <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
                                     <Setter Property="Opacity" Value="1" />
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding IsLinkedSelection}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.TextSecondary}" />
+                                    <Setter Property="BorderThickness" Value="4,1,1,1" />
+                                    <Setter Property="Opacity" Value="0.96" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsActiveSelection}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundPressed}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />
+                                    <Setter Property="BorderThickness" Value="4,2,2,2" />
+                                    <Setter Property="Opacity" Value="1" />
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding IsDragInsertionTarget}" Value="True">
                                     <Setter Property="Background" Value="{DynamicResource Workbench.Brush.ControlBackgroundHover}" />
                                     <Setter Property="BorderBrush" Value="{DynamicResource Workbench.Brush.Accent}" />

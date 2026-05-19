@@ -361,3 +361,16 @@ def test_toolbar_commands_are_grouped_by_intent():
         "RunToolbarGroup",
         "ViewToolbarGroup",
     } <= group_names
+
+
+def test_gui_blocks_have_distinct_active_and_linked_visual_states():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    data_triggers = [
+        trigger.attrib.get("Binding")
+        for trigger in root.iter(f"{PRESENTATION}DataTrigger")
+    ]
+
+    assert "{Binding IsActiveSelection}" in data_triggers
+    assert "{Binding IsLinkedSelection}" in data_triggers
+    assert "{Binding IsCurrentExecution}" in data_triggers

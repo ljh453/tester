@@ -235,6 +235,8 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
     private bool _isCurrentExecution;
     private bool _isBreakpoint;
     private bool _isSelectedForBulkAction;
+    private bool _isActiveSelection;
+    private bool _isLinkedSelection;
 
     public WorkbenchCommandBlock(
         string displayIndex,
@@ -315,6 +317,18 @@ public sealed class WorkbenchCommandBlock : WorkbenchDragInsertionPreviewTarget
     {
         get => _isSelectedForBulkAction;
         set => SetField(ref _isSelectedForBulkAction, value);
+    }
+
+    public bool IsActiveSelection
+    {
+        get => _isActiveSelection;
+        set => SetField(ref _isActiveSelection, value);
+    }
+
+    public bool IsLinkedSelection
+    {
+        get => _isLinkedSelection;
+        set => SetField(ref _isLinkedSelection, value);
     }
 
     public string BreakpointMarker => IsBreakpoint ? MainWorkbenchViewModel.ActiveBreakpointMarker : string.Empty;

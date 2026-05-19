@@ -805,6 +805,7 @@ public sealed class MainWorkbenchViewModel
         {
             Variables = LatestLocalVariablesOrRunVariables();
             ClearCurrentExecutionLocation();
+            RefreshGuiSelectionVisualState();
             return;
         }
 
@@ -816,7 +817,13 @@ public sealed class MainWorkbenchViewModel
         CurrentLocationText = runEvent.SourceLine > 0
             ? $"Line {runEvent.SourceLine} - {runEvent.CommandType}"
             : runEvent.CommandType;
+        if (makeActiveSelection)
+        {
+            SelectedGuiCommand = FindGuiCommandAtLine(runEvent.SourceLine);
+        }
+
         UpdateGuiCurrentExecutionBlock();
+        RefreshGuiSelectionVisualState();
     }
 
     public void SelectGuiCommand(
@@ -829,11 +836,13 @@ public sealed class MainWorkbenchViewModel
         SelectedGuiCommand = commandBlock;
         if (commandBlock is null)
         {
+            RefreshGuiSelectionVisualState();
             return;
         }
 
         CurrentLineNumber = commandBlock.SourceLineStart;
         CurrentLocationText = $"Line {commandBlock.SourceLineStart} - {commandBlock.CommandType}";
+        RefreshGuiSelectionVisualState();
     }
 
     public void SelectGuiCommandForBulkAction(
@@ -976,6 +985,7 @@ public sealed class MainWorkbenchViewModel
         CurrentLineNumber = lineNumber;
         CurrentLocationText = $"Line {lineNumber} - {commandBlock.CommandType}";
         UpdateGuiCurrentExecutionBlock();
+        RefreshGuiSelectionVisualState();
         return true;
     }
 
@@ -1547,6 +1557,37 @@ public sealed class MainWorkbenchViewModel
             commandBlock.IsSelectedForBulkAction =
                 _selectedGuiCommandLineNumbers.Contains(commandBlock.SourceLineStart);
         }
+
+        RefreshGuiSelectionVisualState();
+    }
+
+    private void RefreshGuiSelectionVisualState()
+    {
+        foreach (var commandBlock in AllGuiCommandBlocks())
+        {
+            var isSelectedCommand = commandBlock == SelectedGuiCommand;
+            commandBlock.IsActiveSelection = isSelectedCommand
+                && ActiveSelectionOrigin is WorkbenchSelectionOrigin.GuiEditor or WorkbenchSelectionOrigin.YamlEditor;
+            commandBlock.IsLinkedSelection = isSelectedCommand
+                && ActiveSelectionOrigin == WorkbenchSelectionOrigin.ExecutionTrace;
+        }
+    }
+
+    private WorkbenchCommandBlock? FindGuiCommandAtLine(int lineNumber)
+    {
+        if (lineNumber <= 0 || SelectedGuiTestcase is null)
+        {
+            return null;
+        }
+
+        return SelectedGuiTestcase.Phases
+            .SelectMany(phase => FlattenCommands(phase.Blocks))
+            .Where(candidate =>
+                lineNumber >= candidate.SourceLineStart
+                && lineNumber <= candidate.SourceLineEnd)
+            .OrderByDescending(candidate => candidate.Depth)
+            .ThenByDescending(candidate => candidate.SourceLineStart)
+            .FirstOrDefault();
     }
 
     private IEnumerable<WorkbenchCommandBlock> AllGuiCommandBlocks()
