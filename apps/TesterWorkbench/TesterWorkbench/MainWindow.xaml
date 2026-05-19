@@ -308,50 +308,59 @@
             <TextBlock Text="Workspace" VerticalAlignment="Center" Margin="8,0,4,0" />
             <TextBox x:Name="WorkspacePathBox" Width="420" />
             <Separator />
-            <Button Content="💾"
-                    Click="Save_Click"
-                    Style="{StaticResource IdeToolbarButtonStyle}"
-                    ToolTip="Save YAML file" />
+            <StackPanel x:Name="FileToolbarGroup" Orientation="Horizontal">
+                <Button Content="💾"
+                        Click="Save_Click"
+                        Style="{StaticResource IdeToolbarButtonStyle}"
+                        ToolTip="Save YAML file" />
+            </StackPanel>
             <Separator />
-            <Button Content="✓"
-                    Click="Compile_Click"
-                    Style="{StaticResource IdeToolbarButtonStyle}"
-                    ToolTip="Compile" />
-            <Button Content="▶"
-                    Click="Run_Click"
-                    Style="{StaticResource IdeToolbarButtonStyle}"
-                    ToolTip="Run" />
-            <Button Content="⏸"
-                    Click="Pause_Click"
-                    Style="{StaticResource IdeToolbarButtonStyle}"
-                    ToolTip="Pause" />
-            <Button Content="▌▶"
-                    Click="Resume_Click"
-                    Style="{StaticResource IdeToolbarButtonStyle}"
-                    ToolTip="Resume" />
-            <Button Content="■"
-                    Click="Stop_Click"
-                    Style="{StaticResource IdeToolbarButtonStyle}"
-                    ToolTip="Stop" />
-            <Button Content="●"
-                    Click="ToggleBreakpoint_Click"
-                    Style="{StaticResource IdeToolbarButtonStyle}"
-                    ToolTip="Toggle breakpoint at caret line" />
+            <StackPanel x:Name="BuildToolbarGroup" Orientation="Horizontal">
+                <Button Content="✓"
+                        Click="Compile_Click"
+                        Style="{StaticResource IdeToolbarButtonStyle}"
+                        ToolTip="Compile current YAML" />
+            </StackPanel>
+            <Separator />
+            <StackPanel x:Name="RunToolbarGroup" Orientation="Horizontal">
+                <Button Content="▶"
+                        Click="Run_Click"
+                        Style="{StaticResource IdeToolbarButtonStyle}"
+                        ToolTip="Run selected YAML or selected GUI testcases" />
+                <Button Content="⏸"
+                        Click="Pause_Click"
+                        Style="{StaticResource IdeToolbarButtonStyle}"
+                        ToolTip="Pause at next command boundary" />
+                <Button Content="▌▶"
+                        Click="Resume_Click"
+                        Style="{StaticResource IdeToolbarButtonStyle}"
+                        ToolTip="Resume paused run" />
+                <Button Content="■"
+                        Click="Stop_Click"
+                        Style="{StaticResource IdeToolbarButtonStyle}"
+                        ToolTip="Stop run safely" />
+                <Button Content="●"
+                        Click="ToggleBreakpoint_Click"
+                        Style="{StaticResource IdeToolbarButtonStyle}"
+                        ToolTip="Toggle breakpoint at caret or selected command line" />
+            </StackPanel>
             <TextBlock x:Name="RunStatusText" Text="Idle" VerticalAlignment="Center" Margin="14,0,0,0" />
             <Separator />
-            <CheckBox x:Name="AutoFocusLineCheckBox"
-                      Content="Auto Focus Line"
-                      Checked="AutoFocusLine_Changed"
-                      Unchecked="AutoFocusLine_Changed"
-                      VerticalAlignment="Center" />
-            <Separator />
-            <ToggleButton x:Name="GuiEditorToggleButton"
-                          Content="◨"
-                          IsChecked="True"
-                          Click="GuiEditorToggle_Click"
-                          Style="{StaticResource IdeToggleButtonStyle}"
-                          ToolTip="Show or hide GUI Editor"
+            <StackPanel x:Name="ViewToolbarGroup" Orientation="Horizontal">
+                <CheckBox x:Name="AutoFocusLineCheckBox"
+                          Content="Auto Focus Line"
+                          Checked="AutoFocusLine_Changed"
+                          Unchecked="AutoFocusLine_Changed"
                           VerticalAlignment="Center" />
+                <ToggleButton x:Name="GuiEditorToggleButton"
+                              Content="◨"
+                              IsChecked="True"
+                              Click="GuiEditorToggle_Click"
+                              Style="{StaticResource IdeToggleButtonStyle}"
+                              ToolTip="Show or hide GUI Editor"
+                              VerticalAlignment="Center"
+                              Margin="8,0,0,0" />
+            </StackPanel>
         </ToolBar>
 
         <Border x:Name="WorkbenchContextStrip"

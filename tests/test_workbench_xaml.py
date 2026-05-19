@@ -345,3 +345,19 @@ def test_workbench_has_a_shell_context_strip():
         "ContextRunStateText",
         "ContextCurrentLineText",
     } <= text_names
+
+
+def test_toolbar_commands_are_grouped_by_intent():
+    root = _load("apps/TesterWorkbench/TesterWorkbench/MainWindow.xaml")
+
+    group_names = {
+        element.attrib.get(f"{XAML}Name")
+        for element in root.iter(f"{PRESENTATION}StackPanel")
+    }
+
+    assert {
+        "FileToolbarGroup",
+        "BuildToolbarGroup",
+        "RunToolbarGroup",
+        "ViewToolbarGroup",
+    } <= group_names
